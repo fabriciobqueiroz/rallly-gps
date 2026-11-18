@@ -1,12 +1,13 @@
 import { useEffect, useState, useCallback } from 'react';
 import {
-  Alert, Linking, Platform, ScrollView, Share, StyleSheet, Text, TouchableOpacity, View,
+  Alert, Linking, Platform, ScrollView, Share, StyleSheet, Text, TextInput, TouchableOpacity, View,
 } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import * as Location from 'expo-location';
 import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
 import { TASK } from './src/gpsTask';
 import { begin, clear, getState, subscribe, summarize, toCsv } from './src/store';
+import { cumulative, newStage, startStage, status, markPc, fmtDur, fmtSigned, pcsToText } from './src/rally';
 
 const fmtTime = (ms) => {
   const s = Math.floor(ms / 1000);
@@ -19,6 +20,9 @@ export default function App() {
   const [running, setRunning] = useState(false);
   const [keepOn, setKeepOn] = useState(false);
   const [now, setNow] = useState(Date.now());
+  const [stage, setStage] = useState(newStage());
+  const [factor, setFactor] = useState(1);
+  const [kmhTxt, setKmhTxt] = useState('');
 
   useEffect(() => subscribe(() => setTick((x) => x + 1)), []);
   useEffect(() => {
@@ -83,6 +87,19 @@ export default function App() {
   const sinceLast = last ? Math.round((now - last.t) / 1000) : null;
   const elapsed = startedAt ? (running ? now : (last?.t ?? startedAt)) - startedAt : 0;
 
+  const cum = cumulative(points);
+  const rs = status(stage, points, cum, factor);
+  const needPoints = () => Alert.alert('Sem GPS', 'Inicie a gravação e espere os primeiros pontos.');
+  const onStage = () => (points.length ? setStage(startStage(stage, points, cum, factor)) : needPoints());
+  const onPc = () => (rs ? setStage(markPc(stage, points, cum, factor)) : Alert.alert('Inicie o trecho', 'Toque em "Zerar / iniciar trecho" antes.'));
+  const onKmh = (txt) => {
+    setKmhTxt(txt);
+    const v = parseFloat(txt.replace(',', '.'));
+    setStage((x) => ({ ...x, targetKmh: v > 0 ? v : 0 }));
+  };
+  const adj = (m) => setStage((x) => ({ ...x, adjust: x.adjust + m }));
+  const ahead = rs && rs.aheadSec != null ? rs.aheadSec : null;
+
   return (
     <ScrollView style={st.root} contentContainerStyle={st.wrap}>
       <StatusBar style="light" />
@@ -105,6 +122,48 @@ export default function App() {
         <Line k="Maior buraco sem pontos" v={s.n > 1 ? `${(s.maxGap / 1000).toFixed(0)} s` : '—'} />
         <Line k="Velocidade média" v={s.n > 1 ? `${s.avgKmh.toFixed(1)} km/h` : '—'} />
         <Line k="Pontos simulados (mock)" v={String(points.filter((p) => p.mocked).length)} />
+      </View>
+
+      <View style={st.card}>
+        <Text style={st.tip}>Odômetro de rally</Text>
+        <View style={st.row}>
+          <Big label="Parcial" value={rs ? (rs.dist / 1000).toFixed(3) : '—'} unit="km" />
+          <Big label="Tempo do trecho" value={rs ? fmtDur(rs.elapsed) : '—'} />
+        </View>
+        <View style={st.row}>
+          <Big label="Média" value={rs ? rs.avgKmh.toFixed(1) : '—'} unit="km/h" />
+          <View style={st.big}>
+            <Text style={st.bigL}>Vs ideal</Text>
+            <Text style={[st.bigV, ahead != null && { color: Math.abs(ahead) < 1 ? '#4caf50' : ahead > 0 ? '#ffb300' : '#ff5252' }]}>
+              {ahead != null ? fmtSigned(ahead) : '—'}
+            </Text>
+            <Text style={st.bigU}>{ahead == null ? 'defina a média alvo' : ahead > 0 ? 'adiantado' : 'atrasado'}</Text>
+          </View>
+        </View>
+        <View style={st.line}>
+          <Text style={st.k}>Média alvo do trecho (km/h)</Text>
+          <TextInput style={st.input} value={kmhTxt} onChangeText={onKmh} keyboardType="decimal-pad" placeholder="ex: 30" placeholderTextColor="#666" />
+        </View>
+        <View style={st.row}>
+          <TouchableOpacity style={st.btn2} onPress={() => adj(-10)}><Text style={st.btn2Tx}>−10 m</Text></TouchableOpacity>
+          <TouchableOpacity style={st.btn2} onPress={() => adj(10)}><Text style={st.btn2Tx}>+10 m</Text></TouchableOpacity>
+          <TouchableOpacity style={st.btn2} onPress={() => setFactor((f) => f - 0.001)}><Text style={st.btn2Tx}>Calib −0,1%</Text></TouchableOpacity>
+          <TouchableOpacity style={st.btn2} onPress={() => setFactor((f) => f + 0.001)}><Text style={st.btn2Tx}>+0,1%</Text></TouchableOpacity>
+        </View>
+        <Text style={st.tipTx}>Calibração: x{factor.toFixed(4)} (ajuste até bater com o hodômetro da organização)</Text>
+        <TouchableOpacity style={[st.btn, { marginTop: 10 }]} onPress={onStage}><Text style={st.btnTx}>Zerar / iniciar trecho</Text></TouchableOpacity>
+        <TouchableOpacity style={[st.btn, { backgroundColor: '#2e7d32' }]} onPress={onPc}><Text style={[st.btnTx, { color: '#fff' }]}>Marcar PC</Text></TouchableOpacity>
+        {stage.pcs.map((p) => (
+          <View key={p.n} style={st.line}>
+            <Text style={st.k}>PC{p.n} · {(p.dist / 1000).toFixed(3)} km · {fmtDur(p.elapsed)}</Text>
+            <Text style={st.v}>{p.diff != null ? `${p.diff > 0 ? 'atrasado' : 'adiantado'} ${Math.abs(p.diff).toFixed(1)} s` : `${p.avgKmh.toFixed(1)} km/h`}</Text>
+          </View>
+        ))}
+        {stage.pcs.length > 0 && (
+          <TouchableOpacity style={[st.btn2, { marginTop: 8 }]} onPress={() => Share.share({ message: pcsToText(stage, factor) })}>
+            <Text style={st.btn2Tx}>Compartilhar PCs</Text>
+          </TouchableOpacity>
+        )}
       </View>
 
       <TouchableOpacity style={[st.btn, running && st.btnStop]} onPress={running ? stop : start}>
@@ -152,6 +211,7 @@ const st = StyleSheet.create({
   btnTx: { color: '#0c1014', fontWeight: '800', fontSize: 16 },
   btn2: { flex: 1, borderWidth: 1, borderColor: '#ff7a2e', borderRadius: 12, padding: 12, alignItems: 'center' },
   btn2Tx: { color: '#ff7a2e', fontWeight: '700', fontSize: 13 },
+  input: { color: '#f5f5f5', borderWidth: 1, borderColor: '#262b32', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 4, minWidth: 80, textAlign: 'right', fontWeight: '700' },
   tip: { color: '#f5f5f5', fontWeight: '800', marginBottom: 6 },
   tipTx: { color: '#a8a8a8', lineHeight: 22 },
 });
