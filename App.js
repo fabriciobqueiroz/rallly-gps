@@ -1,13 +1,15 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
 import {
-  Alert, Linking, Platform, ScrollView, Share, StyleSheet, Text, TextInput, TouchableOpacity, View,
+  Alert, Linking, Platform, ScrollView, Share, StyleSheet, Text, TextInput, TouchableOpacity, Vibration, View,
 } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import * as Location from 'expo-location';
+import * as Sharing from 'expo-sharing';
 import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
 import { TASK } from './src/gpsTask';
+import { loadRoteiro, saveRoteiro, recFile } from './src/persist';
 import { begin, clear, getState, subscribe, summarize, toCsv } from './src/store';
-import { cumulative, newStage, startStage, status, markPc, fmtDur, fmtSigned, pcsToText } from './src/rally';
+import { cumulative, newStage, startStage, status, markPc, parseRoteiro, fmtDur, fmtSigned, pcsToText } from './src/rally';
 
 const fmtTime = (ms) => {
   const s = Math.floor(ms / 1000);
@@ -23,6 +25,8 @@ export default function App() {
   const [stage, setStage] = useState(newStage());
   const [factor, setFactor] = useState(1);
   const [kmhTxt, setKmhTxt] = useState('');
+  const [rotTxt, setRotTxt] = useState(() => loadRoteiro());
+  const warned = useRef({ idx: -2, w100: false, w0: false });
 
   useEffect(() => subscribe(() => setTick((x) => x + 1)), []);
   useEffect(() => {
@@ -74,10 +78,14 @@ export default function App() {
     else { await activateKeepAwakeAsync(); setKeepOn(true); }
   };
 
-  const exportCsv = () => {
+  const exportCsv = async () => {
     const { points } = getState();
     if (!points.length) return Alert.alert('Sem dados', 'Grave um percurso primeiro.');
-    Share.share({ message: toCsv(points), title: 'percurso-rally.csv' });
+    try {
+      await Sharing.shareAsync(recFile().uri, { mimeType: 'text/csv', dialogTitle: 'Gravação do rally' });
+    } catch {
+      Share.share({ message: toCsv(points), title: 'percurso-rally.csv' });
+    }
   };
 
   const { points, startedAt } = getState();
@@ -90,8 +98,25 @@ export default function App() {
   const cum = cumulative(points);
   const rs = status(stage, points, cum, factor);
   const needPoints = () => Alert.alert('Sem GPS', 'Inicie a gravação e espere os primeiros pontos.');
-  const onStage = () => (points.length ? setStage(startStage(stage, points, cum, factor)) : needPoints());
-  const onPc = () => (rs ? setStage(markPc(stage, points, cum, factor)) : Alert.alert('Inicie o trecho', 'Toque em "Zerar / iniciar trecho" antes.'));
+  const rot = parseRoteiro(rotTxt);
+  const goTrecho = (base, i, keepPcs) => {
+    const t = rot.trechos[i];
+    setKmhTxt(String(t.kmh));
+    warned.current = { idx: i, w100: false, w0: false };
+    return startStage(base, points, cum, factor, { keepPcs, targetKmh: t.kmh, km: t.km, idx: i });
+  };
+  const onStage = () => {
+    if (!points.length) return needPoints();
+    setStage(rot.trechos.length ? goTrecho(stage, 0, false) : startStage(stage, points, cum, factor));
+  };
+  const onPc = () => {
+    if (!rs) return Alert.alert('Inicie o trecho', 'Toque em "Zerar / iniciar trecho" antes.');
+    const marked = markPc(stage, points, cum, factor);
+    if (stage.idx >= 0 && stage.idx + 1 < rot.trechos.length) setStage(goTrecho(marked, stage.idx + 1, true));
+    else if (stage.idx >= 0) { Vibration.vibrate(600); setStage({ ...marked, active: false }); }
+    else setStage(marked);
+  };
+  const onRot = (txt) => { setRotTxt(txt); saveRoteiro(txt); };
   const onKmh = (txt) => {
     setKmhTxt(txt);
     const v = parseFloat(txt.replace(',', '.'));
@@ -99,12 +124,19 @@ export default function App() {
   };
   const adj = (m) => setStage((x) => ({ ...x, adjust: x.adjust + m }));
   const ahead = rs && rs.aheadSec != null ? rs.aheadSec : null;
+  const remain = rs ? rs.remain : null;
+  useEffect(() => {
+    const w = warned.current;
+    if (remain == null || w.idx !== stage.idx) return;
+    if (!w.w100 && remain <= 100) { w.w100 = true; Vibration.vibrate(200); }
+    if (!w.w0 && remain <= 0) { w.w0 = true; Vibration.vibrate([0, 300, 150, 300]); }
+  }, [remain, stage.idx]);
 
   return (
     <ScrollView style={st.root} contentContainerStyle={st.wrap}>
       <StatusBar style="light" />
       <Text style={st.h1}>Rally GPS · Teste</Text>
-      <Text style={st.sub}>{running ? '● Gravando' : '○ Parado'}{Platform.OS === 'android' ? '' : ' (somente Android)'}</Text>
+      <Text style={st.sub}>{running ? '● Gravando' : points.length ? `○ Parado · ${points.length} pontos salvos` : '○ Parado'}{Platform.OS === 'android' ? '' : ' (somente Android)'}</Text>
 
       <View style={st.row}>
         <Big label="Velocidade" value={kmh != null ? kmh.toFixed(0) : '—'} unit="km/h" />
@@ -140,6 +172,13 @@ export default function App() {
             <Text style={st.bigU}>{ahead == null ? 'defina a média alvo' : ahead > 0 ? 'adiantado' : 'atrasado'}</Text>
           </View>
         </View>
+        {stage.idx >= 0 && rs && (
+          <View style={st.line}>
+            <Text style={st.k}>Trecho {stage.idx + 1}/{rot.trechos.length} · {stage.km} km</Text>
+            <Text style={[st.v, remain <= 100 && { color: '#ffb300' }]}>{remain > 0 ? `faltam ${Math.round(remain)} m` : 'CHEGOU — marque o PC'}</Text>
+          </View>
+        )}
+        {stage.idx >= 0 && !stage.active && stage.pcs.length > 0 && <Text style={st.tip}>Roteiro concluído</Text>}
         <View style={st.line}>
           <Text style={st.k}>Média alvo do trecho (km/h)</Text>
           <TextInput style={st.input} value={kmhTxt} onChangeText={onKmh} keyboardType="decimal-pad" placeholder="ex: 30" placeholderTextColor="#666" />
@@ -164,6 +203,13 @@ export default function App() {
             <Text style={st.btn2Tx}>Compartilhar PCs</Text>
           </TouchableOpacity>
         )}
+      </View>
+
+      <View style={st.card}>
+        <Text style={st.tip}>Roteiro da prova</Text>
+        <Text style={st.tipTx}>Uma linha por trecho: distância em km e média alvo. Ex.: 4,2 30</Text>
+        <TextInput style={st.area} value={rotTxt} onChangeText={onRot} multiline placeholder={'4,2 30\n3,5 25\n6 40'} placeholderTextColor="#666" autoCapitalize="none" />
+        <Text style={st.tipTx}>{rot.trechos.length} trecho(s){rot.erros.length ? ` · linha(s) com erro: ${rot.erros.join(', ')}` : ''}. Com roteiro, "Marcar PC" já inicia o próximo trecho.</Text>
       </View>
 
       <TouchableOpacity style={[st.btn, running && st.btnStop]} onPress={running ? stop : start}>
@@ -212,6 +258,7 @@ const st = StyleSheet.create({
   btn2: { flex: 1, borderWidth: 1, borderColor: '#ff7a2e', borderRadius: 12, padding: 12, alignItems: 'center' },
   btn2Tx: { color: '#ff7a2e', fontWeight: '700', fontSize: 13 },
   input: { color: '#f5f5f5', borderWidth: 1, borderColor: '#262b32', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 4, minWidth: 80, textAlign: 'right', fontWeight: '700' },
+  area: { color: '#f5f5f5', borderWidth: 1, borderColor: '#262b32', borderRadius: 8, padding: 10, minHeight: 90, marginVertical: 8, textAlignVertical: 'top' },
   tip: { color: '#f5f5f5', fontWeight: '800', marginBottom: 6 },
   tipTx: { color: '#a8a8a8', lineHeight: 22 },
 });

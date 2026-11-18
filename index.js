@@ -1,5 +1,6 @@
 import { registerRootComponent } from 'expo';
-import './src/gpsTask'; // registra a tarefa de GPS antes de abrir o app
+import './src/persist';
+import './src/gpsTask';
 import App from './App';
 
 registerRootComponent(App);
