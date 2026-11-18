@@ -1,0 +1,157 @@
+import { useEffect, useState, useCallback } from 'react';
+import {
+  Alert, Linking, Platform, ScrollView, Share, StyleSheet, Text, TouchableOpacity, View,
+} from 'react-native';
+import { StatusBar } from 'expo-status-bar';
+import * as Location from 'expo-location';
+import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
+import { TASK } from './src/gpsTask';
+import { begin, clear, getState, subscribe, summarize, toCsv } from './src/store';
+
+const fmtTime = (ms) => {
+  const s = Math.floor(ms / 1000);
+  const p = (x) => String(x).padStart(2, '0');
+  return `${p(Math.floor(s / 3600))}:${p(Math.floor((s % 3600) / 60))}:${p(s % 60)}`;
+};
+
+export default function App() {
+  const [, setTick] = useState(0);
+  const [running, setRunning] = useState(false);
+  const [keepOn, setKeepOn] = useState(false);
+  const [now, setNow] = useState(Date.now());
+
+  useEffect(() => subscribe(() => setTick((x) => x + 1)), []);
+  useEffect(() => {
+    Location.hasStartedLocationUpdatesAsync(TASK).then(setRunning).catch(() => {});
+    const id = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, []);
+
+  const start = useCallback(async () => {
+    const fg = await Location.requestForegroundPermissionsAsync();
+    if (fg.status !== 'granted') {
+      Alert.alert('Permissão necessária', 'Permita o acesso à localização para gravar o percurso.');
+      return;
+    }
+    const bg = await Location.requestBackgroundPermissionsAsync();
+    if (bg.status !== 'granted') {
+      Alert.alert(
+        'Localização "o tempo todo"',
+        'Para gravar com a tela apagada, abra as configurações do app e escolha "Permitir o tempo todo" em Localização.',
+        [{ text: 'Abrir configurações', onPress: () => Linking.openSettings() }, { text: 'Agora não' }]
+      );
+      return;
+    }
+    try {
+      await Location.startLocationUpdatesAsync(TASK, {
+        accuracy: Location.Accuracy.BestForNavigation,
+        timeInterval: 1000,
+        distanceInterval: 0,
+        foregroundService: {
+          notificationTitle: 'Rally GPS gravando',
+          notificationBody: 'Gravando o percurso da prova',
+          notificationColor: '#e8590c',
+        },
+      });
+      begin();
+      setRunning(true);
+    } catch (e) {
+      Alert.alert('Não foi possível iniciar', String(e?.message || e));
+    }
+  }, []);
+
+  const stop = useCallback(async () => {
+    try { await Location.stopLocationUpdatesAsync(TASK); } catch {}
+    setRunning(false);
+  }, []);
+
+  const toggleKeep = async () => {
+    if (keepOn) { deactivateKeepAwake(); setKeepOn(false); }
+    else { await activateKeepAwakeAsync(); setKeepOn(true); }
+  };
+
+  const exportCsv = () => {
+    const { points } = getState();
+    if (!points.length) return Alert.alert('Sem dados', 'Grave um percurso primeiro.');
+    Share.share({ message: toCsv(points), title: 'percurso-rally.csv' });
+  };
+
+  const { points, startedAt } = getState();
+  const s = summarize(points);
+  const last = points[points.length - 1];
+  const kmh = last && last.spd != null && last.spd >= 0 ? last.spd * 3.6 : null;
+  const sinceLast = last ? Math.round((now - last.t) / 1000) : null;
+  const elapsed = startedAt ? (running ? now : (last?.t ?? startedAt)) - startedAt : 0;
+
+  return (
+    <ScrollView style={st.root} contentContainerStyle={st.wrap}>
+      <StatusBar style="light" />
+      <Text style={st.h1}>Rally GPS · Teste</Text>
+      <Text style={st.sub}>{running ? '● Gravando' : '○ Parado'}{Platform.OS === 'android' ? '' : ' (somente Android)'}</Text>
+
+      <View style={st.row}>
+        <Big label="Velocidade" value={kmh != null ? kmh.toFixed(0) : '—'} unit="km/h" />
+        <Big label="Distância" value={(s.dist / 1000).toFixed(2)} unit="km" />
+      </View>
+      <View style={st.row}>
+        <Big label="Tempo" value={fmtTime(elapsed)} />
+        <Big label="Pontos" value={String(s.n)} />
+      </View>
+
+      <View style={st.card}>
+        <Line k="Precisão do último ponto" v={last?.acc != null ? `${last.acc.toFixed(0)} m` : '—'} />
+        <Line k="Segundos desde o último ponto" v={sinceLast != null ? `${sinceLast} s` : '—'} />
+        <Line k="Intervalo médio entre pontos" v={s.n > 1 ? `${(s.avgInterval / 1000).toFixed(1)} s` : '—'} />
+        <Line k="Maior buraco sem pontos" v={s.n > 1 ? `${(s.maxGap / 1000).toFixed(0)} s` : '—'} />
+        <Line k="Velocidade média" v={s.n > 1 ? `${s.avgKmh.toFixed(1)} km/h` : '—'} />
+        <Line k="Pontos simulados (mock)" v={String(points.filter((p) => p.mocked).length)} />
+      </View>
+
+      <TouchableOpacity style={[st.btn, running && st.btnStop]} onPress={running ? stop : start}>
+        <Text style={st.btnTx}>{running ? 'Parar gravação' : 'Iniciar gravação'}</Text>
+      </TouchableOpacity>
+      <View style={st.row}>
+        <TouchableOpacity style={st.btn2} onPress={exportCsv}><Text style={st.btn2Tx}>Exportar CSV</Text></TouchableOpacity>
+        <TouchableOpacity style={st.btn2} onPress={toggleKeep}><Text style={st.btn2Tx}>{keepOn ? 'Tela: ligada' : 'Tela: normal'}</Text></TouchableOpacity>
+        <TouchableOpacity style={st.btn2} onPress={() => { if (!running) clear(); else Alert.alert('Pare a gravação antes de limpar.'); }}><Text style={st.btn2Tx}>Limpar</Text></TouchableOpacity>
+      </View>
+
+      <View style={st.card}>
+        <Text style={st.tip}>Roteiro do teste</Text>
+        <Text style={st.tipTx}>1. Toque em Iniciar e permita "o tempo todo".{'\n'}2. Bloqueie a tela e ande ou dirija por 10 a 15 minutos.{'\n'}3. Volte ao app e olhe "Maior buraco sem pontos": quanto menor, melhor (ideal: 2 a 3 s).{'\n'}4. Compare a distância com o hodômetro do carro ou com o Kraken.</Text>
+      </View>
+    </ScrollView>
+  );
+}
+
+const Big = ({ label, value, unit }) => (
+  <View style={st.big}>
+    <Text style={st.bigL}>{label}</Text>
+    <Text style={st.bigV}>{value}{unit ? <Text style={st.bigU}> {unit}</Text> : null}</Text>
+  </View>
+);
+const Line = ({ k, v }) => (
+  <View style={st.line}><Text style={st.k}>{k}</Text><Text style={st.v}>{v}</Text></View>
+);
+
+const st = StyleSheet.create({
+  root: { flex: 1, backgroundColor: '#0c1014' },
+  wrap: { padding: 16, paddingTop: 56, paddingBottom: 40 },
+  h1: { color: '#f5f5f5', fontSize: 24, fontWeight: '800' },
+  sub: { color: '#a8a8a8', marginBottom: 14, marginTop: 2 },
+  row: { flexDirection: 'row', gap: 10, marginBottom: 10 },
+  big: { flex: 1, backgroundColor: '#151a20', borderRadius: 14, padding: 14, borderWidth: 1, borderColor: '#262b32' },
+  bigL: { color: '#a8a8a8', fontSize: 12, textTransform: 'uppercase', letterSpacing: 1 },
+  bigV: { color: '#f5f5f5', fontSize: 30, fontWeight: '800', marginTop: 4 },
+  bigU: { fontSize: 14, color: '#a8a8a8', fontWeight: '400' },
+  card: { backgroundColor: '#151a20', borderRadius: 14, padding: 14, marginBottom: 12, borderWidth: 1, borderColor: '#262b32' },
+  line: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 5 },
+  k: { color: '#a8a8a8', flex: 1 }, v: { color: '#f5f5f5', fontWeight: '700' },
+  btn: { backgroundColor: '#ff7a2e', borderRadius: 12, padding: 16, alignItems: 'center', marginBottom: 10 },
+  btnStop: { backgroundColor: '#c0392b' },
+  btnTx: { color: '#0c1014', fontWeight: '800', fontSize: 16 },
+  btn2: { flex: 1, borderWidth: 1, borderColor: '#ff7a2e', borderRadius: 12, padding: 12, alignItems: 'center' },
+  btn2Tx: { color: '#ff7a2e', fontWeight: '700', fontSize: 13 },
+  tip: { color: '#f5f5f5', fontWeight: '800', marginBottom: 6 },
+  tipTx: { color: '#a8a8a8', lineHeight: 22 },
+});
