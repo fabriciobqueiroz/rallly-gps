@@ -4,7 +4,7 @@ import { grupoIdx } from './rally';
 import { DesenhoSvg } from './Desenho';
 import Svg, { Circle, Line, Polygon, Rect, Text as SvgText } from 'react-native-svg';
 
-const km2 = (m) => (m / 1000).toFixed(2).replace('.', ',');
+const km2 = (m) => (m / 1000).toFixed(3).replace('.', ',');
 
 export function Tulipa({ e, size = 96 }) {
   if (e.dw && e.dw.length) return <DesenhoSvg items={e.dw} size={size} />;
@@ -28,7 +28,7 @@ export function Tulipa({ e, size = 96 }) {
       {b.map((ang, j) => {
         const [x, y] = pt(rot(ang), R);
         const isIn = j === e.i, isOut = j === e.o;
-        return <Line key={j} x1={c} y1={c} x2={x} y2={y} stroke={isIn || isOut ? '#111' : '#9a9a9a'} strokeWidth={isIn || isOut ? 7 : 3} strokeLinecap="round" />;
+        return <Line key={j} x1={c} y1={c} x2={x} y2={y} stroke={isIn || isOut ? '#111' : '#666'} strokeWidth={isIn || isOut ? 7 : 2} strokeLinecap="round" />;
       })}
       {round && <Circle cx={c} cy={c} r="13" fill="#fff" stroke="#111" strokeWidth="3" />}
       {round && e.ex ? <SvgText x={c} y={c + 5} fontSize="15" fontWeight="bold" fill="#111" textAnchor="middle">{String(e.ex)}</SvgText> : null}

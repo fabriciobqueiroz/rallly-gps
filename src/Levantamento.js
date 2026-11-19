@@ -8,11 +8,12 @@ import MapaWeb from './MapaWeb';
 import { Tulipa } from './Tulipa';
 import { DesenhoSvg } from './Desenho';
 import EditorDesenho from './EditorDesenho';
-import { loadJson, saveJson } from './persist';
+import { loadJson, saveJson, apagarJson } from './persist';
 import { cumulative } from './rally';
 import { getState } from './store';
+import { detectarCruzamento, dist, rumo, satUrl } from './osm';
 
-const km2 = (m) => (m / 1000).toFixed(2).replace('.', ',');
+const km2 = (m) => (m / 1000).toFixed(3).replace('.', ',');
 const CORES = ['#ff7a2e', '#ffe600', '#00e5ff', '#ff1744', '#76ff03'];
 const KIND = { L: 'Largada', T: 'Tulipa', P: 'PC', C: 'Chegada', R: 'REF' };
 const COR = { L: '#4caf50', T: '#ff7a2e', P: '#ff5a1f', C: '#c0392b', R: '#ffe600' };
@@ -29,7 +30,7 @@ export function entradaDe(m, p) {
   return e;
 }
 
-function EditorTulipa({ st, m, onChange, onDesenhar }) {
+function EditorTulipa({ st, m, onChange, onDesenhar, onDetectar }) {
   const arms = m.arms || [];
   const toggle = (a) => {
     const has = arms.includes(a);
@@ -47,6 +48,7 @@ function EditorTulipa({ st, m, onChange, onDesenhar }) {
       <View style={{ flexDirection: 'row', gap: 12 }}>
         {m.dw && m.dw.length ? <DesenhoSvg items={m.dw} size={110} /> : <Tulipa e={e} size={110} />}
         <View style={{ flex: 1 }}>
+          <TouchableOpacity style={[st.btn, { marginBottom: 6, paddingVertical: 10, backgroundColor: '#1565c0' }]} onPress={onDetectar}><Text style={[st.btnTx, { color: '#fff' }]}>Detectar cruzamento (mapa)</Text></TouchableOpacity>
           <Text style={st.tipTx}>1) Toque as ruas que existem no cruzamento (você chega por baixo).</Text>
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
             {ANG.map(([a, t]) => <Chip key={a} on={arms.includes(a)} tx={t} onPress={() => toggle(a)} />)}
@@ -76,7 +78,62 @@ function EditorTulipa({ st, m, onChange, onDesenhar }) {
   );
 }
 
-export default function Levantamento({ st, prova, last, onAplicar }) {
+const slugProva = (p) => String(p).trim().toUpperCase().replace(/[^A-Z0-9]+/g, '');
+
+// Lista das provas levantadas neste celular (nome, código, marcas): abrir, renomear e apagar.
+function MinhasProvas({ st, atual, onAbrir, onApagou, versao }) {
+  const [lista, setLista] = useState(() => loadJson('lev_index', []));
+  const [edit, setEdit] = useState(null);
+  const [nome, setNome] = useState('');
+  const salvaLista = (l) => { setLista(l); saveJson('lev_index', l); };
+  const items = loadJson('lev_index', lista);
+  const ver = versao;
+  const apagar = (it) => Alert.alert('Apagar levantamento', `Apagar "${it.nome || it.code}" (${it.code}) e todas as marcas deste celular? Não afeta a prova já publicada.`, [
+    { text: 'Cancelar', style: 'cancel' },
+    { text: 'Apagar', style: 'destructive', onPress: () => {
+      (loadJson('lev_' + slugProva(it.code), { marks: [] }).marks || []).forEach((m) => { try { if (m.foto && String(m.foto).includes('foto_')) new File(m.foto).delete(); } catch {} });
+      apagarJson('lev_' + slugProva(it.code));
+      salvaLista(items.filter((x) => x.code !== it.code));
+      onApagou(it.code);
+    } },
+  ]);
+  const renomear = (it) => {
+    const n = nome.trim().slice(0, 60);
+    const l = items.map((x) => (x.code === it.code ? { ...x, nome: n } : x));
+    const d = loadJson('lev_' + slugProva(it.code), null);
+    if (d) saveJson('lev_' + slugProva(it.code), { ...d, nome: n });
+    salvaLista(l); setEdit(null); onApagou(null, it.code, n);
+  };
+  if (!items.length) return null;
+  return (
+    <View style={st.card} key={ver}>
+      <Text style={st.tip}>Provas levantadas neste celular</Text>
+      {items.map((it) => (
+        <View key={it.code} style={{ borderTopWidth: 1, borderTopColor: '#262b32', paddingVertical: 8 }}>
+          <Text style={st.v}>{it.nome || '(sem nome)'}{it.code === atual ? ' · atual' : ''}</Text>
+          <Text style={st.tipTx}>Código {it.code} · {it.marcas || 0} marca(s) · {(it.km / 1000).toFixed(3).replace('.', ',')} km</Text>
+          {edit === it.code ? (
+            <View>
+              <TextInput style={st.field} value={nome} onChangeText={setNome} placeholder="Nome da prova" placeholderTextColor="#666" />
+              <View style={[st.row, { marginTop: 6, marginBottom: 0 }]}>
+                <TouchableOpacity style={st.btn2} onPress={() => renomear(it)}><Text style={st.btn2Tx}>Salvar nome</Text></TouchableOpacity>
+                <TouchableOpacity style={st.btn2} onPress={() => setEdit(null)}><Text style={st.btn2Tx}>Cancelar</Text></TouchableOpacity>
+              </View>
+            </View>
+          ) : (
+            <View style={[st.row, { marginTop: 6, marginBottom: 0 }]}>
+              {it.code !== atual && onAbrir ? <TouchableOpacity style={st.btn2} onPress={() => onAbrir(it.code)}><Text style={st.btn2Tx}>Abrir / editar</Text></TouchableOpacity> : null}
+              <TouchableOpacity style={st.btn2} onPress={() => { setEdit(it.code); setNome(it.nome || ''); }}><Text style={st.btn2Tx}>Renomear</Text></TouchableOpacity>
+              <TouchableOpacity style={st.btn2} onPress={() => apagar(it)}><Text style={[st.btn2Tx, { color: '#ff5252' }]}>Apagar</Text></TouchableOpacity>
+            </View>
+          )}
+        </View>
+      ))}
+    </View>
+  );
+}
+
+export default function Levantamento({ st, prova, last, onAplicar, onProva }) {
   const chave = 'lev_' + String(prova).trim().toUpperCase().replace(/[^A-Z0-9]+/g, '');
   const [lev, setLevRaw] = useState(() => loadJson(chave, { iniT: null, marks: [] }));
   const [aberta, setAberta] = useState(null);
@@ -86,7 +143,21 @@ export default function Levantamento({ st, prova, last, onAplicar }) {
   const [dash, setDash] = useState(false);
   const [rc, setRc] = useState('#ff7a2e');
   const [editorId, setEditorId] = useState(null);
-  const setLev = (fn) => setLevRaw((o) => { const n = typeof fn === 'function' ? fn(o) : fn; saveJson(chave, n); return n; });
+  const [vers, setVers] = useState(0);
+  const setLev = (fn) => setLevRaw((o) => {
+    const n = typeof fn === 'function' ? fn(o) : fn;
+    saveJson(chave, n);
+    try {
+      const cod = String(prova).trim().toUpperCase();
+      const idx = loadJson('lev_index', []).filter((x) => x.code !== cod);
+      const pts = getState().points;
+      const ini = n.iniT != null ? pts.findIndex((p) => p.t >= n.iniT) : -1;
+      const ult = (n.marks || []).length;
+      const kmx = ini >= 0 && pts.length ? Math.max(0, cumulative(pts)[pts.length - 1] - cumulative(pts)[ini]) : (loadJson('lev_index', []).find((x) => x.code === cod)?.km || 0);
+      if (n.nome || ult) saveJson('lev_index', [{ code: cod, nome: n.nome || '', marcas: ult, km: Math.round(kmx), ts: Date.now() }, ...idx]);
+    } catch {}
+    return n;
+  });
 
   const { points } = getState();
   const cum = cumulative(points);
@@ -146,6 +217,27 @@ export default function Levantamento({ st, prova, last, onAplicar }) {
       try { const dest = new File(Paths.document, `foto_${id}.jpg`); new File(uri).copy(dest); uri = dest.uri; } catch {}
       upd(id, { foto: uri });
     } catch (e) { Alert.alert('Não abriu a foto', String(e?.message || e)); }
+  };
+  const apagarFoto = (id) => {
+    const m = lev.marks.find((x) => x.id === id);
+    try { if (m?.foto && String(m.foto).includes('foto_')) new File(m.foto).delete(); } catch {}
+    upd(id, { foto: null });
+  };
+  // rumo do trecho logo depois da marca (35 m à frente no rastro gravado), se o carro já passou dali
+  const saidaRumo = (m) => {
+    const pts = getState().points;
+    let bi = -1, bd = 1e9;
+    pts.forEach((p, i) => { const d = dist([m.lat, m.lon], [p.lat, p.lon]); if (d < bd) { bd = d; bi = i; } });
+    if (bi < 0 || bd > 30) return null;
+    for (let j = bi + 1; j < pts.length; j++) if (dist([m.lat, m.lon], [pts[j].lat, pts[j].lon]) >= 35) return rumo([m.lat, m.lon], [pts[j].lat, pts[j].lon]);
+    return null;
+  };
+  const detectar = async (m) => {
+    try {
+      const r = await detectarCruzamento(m, saidaRumo(m));
+      upd(m.id, { arms: r.arms, out: r.out, rot: r.rot, ex: r.ex, dw: null });
+      Alert.alert('Cruzamento detectado', `${r.arms.length + 1} ruas${r.rot ? ' (rotatória)' : ''}. ${r.out != null ? 'Saída marcada pelo seu rastro.' : 'Agora toque no passo 2 a rua por onde você sai.'} Confira com o satélite e ajuste se precisar.`);
+    } catch (e) { Alert.alert('Não detectou', String(e?.message || e)); }
   };
   const fotoRapida = () => {
     const u = lev.marks[lev.marks.length - 1];
@@ -209,6 +301,8 @@ export default function Levantamento({ st, prova, last, onAplicar }) {
         </View>
       )}
       <View style={st.card}>
+        <Text style={st.tip}>Nome da prova</Text>
+        <TextInput style={st.field} value={lev.nome || ''} onChangeText={(v) => setLev((o) => ({ ...o, nome: v.slice(0, 60) }))} placeholder="Ex.: Rally dos Ipês 2026" placeholderTextColor="#666" />
         <Text style={st.tip}>Levantar a prova dirigindo</Text>
         <Text style={st.tipTx}>Ligue a gravação na aba Gravar, toque LARGADA e dirija o percurso. Marque tulipas e PCs conforme passa, com observação e foto. Ao chegar, toque CHEGADA e edite cada tulipa com calma. As fotos ficam só no seu celular.</Text>
         {!fechado && (
@@ -233,10 +327,12 @@ export default function Levantamento({ st, prova, last, onAplicar }) {
       </View>
 
       {(() => { const em = ordenadas.find((x) => x.id === editorId); return em ? (
-        <EditorDesenho visible foto={em.foto} inicial={em.dw && em.dw.length ? em.dw : em.arms && em.arms.length ? [{ k: 'tpl', arms: em.arms, out: em.out ?? null, x: 50, y: 55, s: 0.85, r: 0 }] : []}
+        <EditorDesenho visible foto={em.foto} sat={satUrl(em.lat, em.lon)} hdg={em.hdg || 0} onApagarFoto={() => apagarFoto(em.id)} inicial={em.dw && em.dw.length ? em.dw : em.arms && em.arms.length ? [{ k: 'tpl', arms: em.arms, out: em.out ?? null, x: 50, y: 55, s: 0.85, r: 0 }] : []}
           onCancel={() => setEditorId(null)} onSave={(it) => { upd(em.id, { dw: it }); setEditorId(null); }} />
       ) : null; })()}
 
+      <MinhasProvas st={st} atual={String(prova).trim().toUpperCase()} versao={vers} onAbrir={onProva}
+        onApagou={(code) => { if (code && code === String(prova).trim().toUpperCase()) setLevRaw({ iniT: null, marks: [] }); setVers((v) => v + 1); }} />
       {ordenadas.length > 0 && (
         <View style={st.card}>
           <Text style={st.tip}>{fechado ? 'Editar marcas' : 'Marcas (toque para anotar e fotografar)'}</Text>
@@ -256,10 +352,11 @@ export default function Levantamento({ st, prova, last, onAplicar }) {
                     <TextInput style={st.field} value={m.nota} onChangeText={(v) => upd(m.id, { nota: v })} placeholder="Observação (só para você)" placeholderTextColor="#666" multiline />
                     <View style={[st.row, { marginTop: 8, marginBottom: 0 }]}>
                       <TouchableOpacity style={st.btn2} onPress={() => foto(m.id)}><Text style={st.btn2Tx}>{m.foto ? 'Trocar foto' : 'Tirar foto'}</Text></TouchableOpacity>
+                      {m.foto ? <TouchableOpacity style={st.btn2} onPress={() => apagarFoto(m.id)}><Text style={[st.btn2Tx, { color: '#ff5252' }]}>Apagar foto</Text></TouchableOpacity> : null}
                       {m.k !== 'L' && <TouchableOpacity style={st.btn2} onPress={() => del(m.id)}><Text style={[st.btn2Tx, { color: '#ff5252' }]}>Apagar marca</Text></TouchableOpacity>}
                     </View>
                     {m.foto ? <Image source={{ uri: m.foto }} style={{ width: '100%', height: 180, borderRadius: 10, marginTop: 8 }} resizeMode="cover" /> : null}
-                    {m.k === 'T' && <EditorTulipa st={st} m={m} onChange={(p) => upd(m.id, p)} onDesenhar={() => setEditorId(m.id)} />}
+                    {m.k === 'T' && <EditorTulipa st={st} m={m} onChange={(p) => upd(m.id, p)} onDesenhar={() => setEditorId(m.id)} onDetectar={() => detectar(m)} />}
                     {m.k === 'P' && (
                       <TouchableOpacity style={[st.btn2, { marginTop: 8 }]} onPress={() => upd(m.id, { n: !m.n })}><Text style={st.btn2Tx}>{m.n ? 'Neutro ligado (toque para tirar)' : 'Marcar como PC neutro (N)'}</Text></TouchableOpacity>
                     )}

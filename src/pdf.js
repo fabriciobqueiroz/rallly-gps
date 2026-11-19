@@ -3,7 +3,7 @@ import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
 import { desenhoSvgStr } from './Desenho';
 
-const km2 = (m) => (m / 1000).toFixed(2).replace('.', ',');
+const km2 = (m) => (m / 1000).toFixed(3).replace('.', ',');
 const mmss = (sec) => `${Math.floor(sec / 60)}:${String(Math.round(sec % 60)).padStart(2, '0')}`;
 
 function tulSvg(e, size) {

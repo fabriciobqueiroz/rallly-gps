@@ -1,12 +1,13 @@
 // Painéis do organizador: categorias e médias, inscrições com largada, liberações, gravação dirigindo e resultado oficial.
 import { useEffect, useRef, useState } from 'react';
+import { loadJson, saveJson } from './persist';
 import { Alert, Switch, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { atualizarInscricao, enviarResultado, inscrever, ouvirDataloggers, ouvirRanking, removerInscricao, salvarProva } from './firebase';
 import { compartilharResultadosPdf } from './pdf';
 import { cumulative, oficialDeTrilha, pcsDoLogger, pontos, rank } from './rally';
 import { getState } from './store';
 
-export const CATS_PADRAO = [{ nome: 'GRADUADO', g: 0 }, { nome: 'MOTO', g: 0 }, { nome: 'AMADOR', g: 1 }];
+export const CATS_PADRAO = [{ nome: 'TURISMO LIGHT', g: 0 }, { nome: 'TURISMO', g: 0 }, { nome: 'GRADUADO', g: 0 }, { nome: 'MASTER', g: 0 }];
 const LETRAS = 'ABCDEF';
 const p2 = (x) => String(x).padStart(2, '0');
 export const parseHMS = (t) => { const m = /^(\d{1,2}):(\d{2})(?::(\d{2}))?$/.exec(String(t || '').trim()); return m ? +m[1] * 3600 + +m[2] * 60 + (+m[3] || 0) : null; };
@@ -42,7 +43,7 @@ export function OrgCategorias({ st, prova, categorias }) {
   return (
     <View style={st.card}>
       <Text style={st.tip}>Categorias e grupos de média</Text>
-      <Text style={st.tipTx}>Categorias do mesmo grupo (mesma letra) usam a mesma média em cada trecho. Ex.: Graduado e Moto no grupo A, Amador no B. Os competidores escolhem a categoria na inscrição.</Text>
+      <Text style={st.tipTx}>Categorias do mesmo grupo (mesma letra) usam a mesma média em cada trecho. Ex.: todas no grupo A, ou separe as que terão média diferente. Os competidores escolhem a categoria na inscrição.</Text>
       {cats.map((c) => (
         <View key={c.nome} style={{ borderTopWidth: 1, borderTopColor: '#262b32', paddingVertical: 8 }}>
           <View style={st.line}>
@@ -71,8 +72,10 @@ export function OrgCategorias({ st, prova, categorias }) {
 // ---------- Inscrições, largada e sorteio ----------
 export function OrgInscricoes({ st, prova, inscritos, categorias }) {
   const cats = (categorias.length ? categorias : CATS_PADRAO).map((c) => c.nome);
-  const [base, setBase] = useState('09:00:00');
-  const [iv, setIv] = useState('60');
+  const bk = 'base_' + String(prova).trim().toUpperCase().replace(/[^A-Z0-9]+/g, '');
+  const [base, setBaseRaw] = useState(() => loadJson(bk, { h: '09:00:00' }).h);
+  const setBase = (v) => { setBaseRaw(v); saveJson(bk, { h: v }); };
+  const iv = '60'; // intervalo fixo entre carros: 60 s
   const [f, setF] = useState({ numero: '', piloto: '', navegador: '', email: '', classe: cats[0] });
   const [edit, setEdit] = useState({});
   const ordenados = [...cats, ...inscritos.map((p) => p.classe).filter((c) => !cats.includes(c))];
@@ -108,7 +111,7 @@ export function OrgInscricoes({ st, prova, inscritos, categorias }) {
         <Text style={st.tip}>Largada e sorteio</Text>
         <View style={st.row}>
           <TextInput style={[st.field, { flex: 1 }]} value={base} onChangeText={setBase} placeholder="Primeiro carro HH:MM:SS" placeholderTextColor="#666" keyboardType="numbers-and-punctuation" />
-          <TextInput style={[st.field, { flex: 1 }]} value={iv} onChangeText={setIv} placeholder="Intervalo (s)" placeholderTextColor="#666" keyboardType="number-pad" />
+          <View style={[st.field, { flex: 1, justifyContent: 'center' }]}><Text style={st.v}>Intervalo: 60 s</Text></View>
         </View>
         <View style={st.row}>
           <TouchableOpacity style={st.btn2} onPress={sortearTudo}><Text style={st.btn2Tx}>Sortear tudo</Text></TouchableOpacity>

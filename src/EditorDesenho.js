@@ -6,11 +6,12 @@ import { CRUZAMENTOS, DesenhoSvg, SIMBOLOS, centro, mover } from './Desenho';
 
 const COR = '#ff7a2e';
 
-export default function EditorDesenho({ visible, inicial, foto, onCancel, onSave }) {
+export default function EditorDesenho({ visible, inicial, foto, sat, hdg = 0, onApagarFoto, onCancel, onSave }) {
   const { width } = useWindowDimensions();
   const S = Math.min(width - 24, 380);
   const [items, setItems] = useState(inicial || []);
   const [aba, setAba] = useState('cruz');
+  const [fundo, setFundo] = useState(foto ? 'foto' : sat ? 'sat' : 'nada');
   const [sel, setSel] = useState(null);
   const [live, setLive] = useState(null);
   const [grosso, setGrosso] = useState(3);
@@ -82,14 +83,21 @@ export default function EditorDesenho({ visible, inicial, foto, onCancel, onSave
           </View>
         </View>
         <View style={{ alignSelf: 'center', width: S, height: S, backgroundColor: '#fff', borderRadius: 4, overflow: 'hidden' }}>
-          {foto ? <Image source={{ uri: foto }} style={{ position: 'absolute', width: S, height: S, opacity: 0.35 }} resizeMode="cover" /> : null}
+          {fundo === 'foto' && foto ? <Image source={{ uri: foto }} style={{ position: 'absolute', width: S, height: S, opacity: 0.4 }} resizeMode="cover" /> : null}
+          {fundo === 'sat' && sat ? <Image source={{ uri: sat }} style={{ position: 'absolute', width: S, height: S, opacity: 0.55, transform: [{ rotate: `${-hdg}deg` }, { scale: 1.42 }] }} resizeMode="cover" /> : null}
           <View style={{ position: 'absolute' }}>
-            <DesenhoSvg items={live ? [...items, { k: 'pen', p: live, w: grosso }] : items} size={S} fundo={!foto}>{realce}</DesenhoSvg>
+            <DesenhoSvg items={live ? [...items, { k: 'pen', p: live, w: grosso }] : items} size={S} fundo={fundo === 'nada'}>{realce}</DesenhoSvg>
           </View>
           <View style={{ position: 'absolute', width: S, height: S }} {...pan.panHandlers} />
         </View>
+        <View style={{ flexDirection: 'row', gap: 6, paddingHorizontal: 12, marginTop: 6 }}>
+          {foto ? <Btn flex={1} on={fundo === 'foto'} tx="Foto" press={() => setFundo('foto')} /> : null}
+          {sat ? <Btn flex={1} on={fundo === 'sat'} tx="Satélite" press={() => setFundo('sat')} /> : null}
+          <Btn flex={1} on={fundo === 'nada'} tx="Sem fundo" press={() => setFundo('nada')} />
+          {foto && onApagarFoto ? <Btn flex={1} cor="#ff5252" tx="Apagar foto" press={() => { setFundo(sat ? 'sat' : 'nada'); onApagarFoto(); }} /> : null}
+        </View>
         <Text style={{ color: '#a8a8a8', textAlign: 'center', fontSize: 12, marginTop: 4 }}>
-          {aba === 'pen' ? 'Desenhe com o dedo no quadro.' : foto ? 'Foto como fundo só para decalcar (não vai no roadbook). Toque numa peça para mover.' : 'Toque numa peça para selecioná-la e arraste para mover.'}
+          {aba === 'pen' ? 'Desenhe com o dedo no quadro.' : fundo !== 'nada' ? 'O fundo é só para decalcar: NÃO aparece no roadbook nem para o competidor. Toque numa peça para mover.' : 'Toque numa peça para selecioná-la e arraste para mover.'}
         </Text>
         {it0 && it0.k !== 'pen' && (
           <View style={{ flexDirection: 'row', gap: 6, paddingHorizontal: 12, marginTop: 6 }}>

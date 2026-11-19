@@ -25,6 +25,8 @@ export const SIMBOLOS = {
   pare: { nome: 'Pare', p: [{ t: 'g', p: [-5, -12, 5, -12, 12, -5, 12, 5, 5, 12, -5, 12, -12, 5, -12, -5], f: '#fff', w: 2.5 }, { t: 't', x: 0, y: 4, s: 11, tx: 'PARE' }] },
   rotatoria: { nome: 'Rotatória', p: [{ t: 'c', x: 0, y: 0, r: 14, f: 'none', w: 4 }, { t: 'c', x: 0, y: 0, r: 3, f: '#000', w: 1 }] },
   lombada: { nome: 'Lombada', p: [{ t: 'l', p: [-18, 8, -8, 8, -4, 0, 4, 0, 8, 8, 18, 8], w: 3 }] },
+  porteira: { nome: 'Porteira', p: [{ t: 'l', p: [-16, -14, -16, 14], w: 4 }, { t: 'l', p: [16, -14, 16, 14], w: 4 }, { t: 'l', p: [-16, -6, 16, -6], w: 2.5 }, { t: 'l', p: [-16, 4, 16, 4], w: 2.5 }, { t: 'l', p: [-16, 4, 16, -6], w: 2 }] },
+  entrada: { nome: 'Entrada', p: [{ t: 'l', p: [-18, 8, -4, 8, 6, -6], w: 2.5, ar: true }, { t: 'l', p: [-18, 14, -4, 14], w: 1.5 }] },
   poste: { nome: 'Poste', p: [{ t: 'l', p: [0, -18, 0, 18], w: 3 }, { t: 'l', p: [0, -18, 10, -18], w: 3 }, { t: 'c', x: 12, y: -16, r: 3, f: '#000', w: 1 }] },
 };
 
@@ -34,7 +36,7 @@ function localCruzamento(arms, out) {
   (arms || []).forEach((a) => {
     const x = Math.sin(rad(a)), y = -Math.cos(rad(a));
     const isOut = a === out, len = isOut ? 42 : 36;
-    P.push({ t: 'l', p: [0, 0, r1(x * len), r1(y * len)], w: isOut ? 6 : 3, ar: isOut });
+    P.push({ t: 'l', p: [0, 0, r1(x * len), r1(y * len)], w: isOut ? 6 : 2, ar: isOut });
   });
   return P;
 }

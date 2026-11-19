@@ -24,7 +24,7 @@ export const comTipos = (tul, trechos) => tul.map((e) => {
   return e;
 });
 
-export default function Organizador({ st, prova, provaMap, last, onOrg }) {
+export default function Organizador({ st, prova, provaMap, last, onOrg, onProva }) {
   const [org, setOrg] = useState(() => loadJson('org', null));
   const [pin, setPin] = useState('');
   const [wps, setWps] = useState([]);
@@ -58,6 +58,7 @@ export default function Organizador({ st, prova, provaMap, last, onOrg }) {
   }, [logado, provaMap]);
 
   useEffect(() => {
+    setInscritos([]);
     if (!logado || !prova.trim()) return;
     return ouvirInscritos(prova, setInscritos, () => {});
   }, [logado, prova]);
@@ -120,6 +121,7 @@ export default function Organizador({ st, prova, provaMap, last, onOrg }) {
         legs: rota.legs.map((k) => Math.round(k * 1000) / 1000),
         tul: JSON.parse(JSON.stringify(tulT)),
         refs,
+        nome: (loadJson('lev_' + String(prova).trim().toUpperCase().replace(/[^A-Z0-9]+/g, ''), {}).nome || '').slice(0, 60),
         publicadoEm: Date.now(),
       });
       Alert.alert('Prova publicada', 'Planilha e roadbook enviados. Os celulares com este código recebem sozinhos.');
@@ -152,9 +154,9 @@ export default function Organizador({ st, prova, provaMap, last, onOrg }) {
       <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 10 }}>
         {SEC.map(([k, n]) => <TouchableOpacity key={k} style={chip(sec === k)} onPress={() => setSec(k)}><Text style={[st.btn2Tx, sec === k && { color: '#0c1014' }]}>{n}</Text></TouchableOpacity>)}
       </View>
-      {sec === 'levantar' && <Levantamento st={st} prova={org.prova} last={last} onAplicar={aplicarLevantamento} />}
+      {sec === 'levantar' && <Levantamento key={org.prova} st={st} onProva={onProva} prova={org.prova} last={last} onAplicar={aplicarLevantamento} />}
       {sec === 'categorias' && <OrgCategorias st={st} prova={org.prova} categorias={cats} />}
-      {sec === 'inscricoes' && <OrgInscricoes st={st} prova={org.prova} inscritos={inscritos} categorias={cats} />}
+      {sec === 'inscricoes' && <OrgInscricoes key={org.prova} st={st} prova={org.prova} inscritos={inscritos} categorias={cats} />}
       {sec === 'liberacao' && <OrgLiberacao st={st} prova={org.prova} lib={provaMap.lib || {}} />}
       {sec === 'resultados' && <OrgResultados st={st} prova={org.prova} provaMap={provaMap} grupos={grupos} inscritos={inscritos} categorias={cats} />}
       {sec === 'planilha' && (

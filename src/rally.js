@@ -25,8 +25,8 @@ export function cumulative(points) {
 // Resolve um trecho publicado pelo organizador para a classe do competidor.
 // V = média por classe (Graduado e Moto usam a mesma; Amador tem a sua), D = deslocamento (tempo limite, sem pontos).
 // nt = segundos de neutro no fim do trecho (parada obrigatória no PC).
-export const GRUPOS_PADRAO = [{ nome: 'A', cats: ['GRADUADO', 'MOTO'] }, { nome: 'B', cats: ['AMADOR'] }];
-// categorias = [{nome, g}] (g = índice do grupo de média). Sem categorias, usa o padrão Graduado/Moto + Amador.
+export const GRUPOS_PADRAO = [{ nome: 'A', cats: ['TURISMO LIGHT', 'TURISMO', 'GRADUADO', 'MASTER'] }];
+// categorias = [{nome, g}] (g = índice do grupo de média). Sem categorias, usa o padrão: as 4 categorias no grupo A.
 export function gruposDe(cats) {
   if (!cats || !cats.length) return GRUPOS_PADRAO;
   const n = Math.max(...cats.map((c) => c.g || 0)) + 1;
