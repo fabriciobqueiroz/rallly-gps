@@ -22,8 +22,16 @@ export function cumulative(points) {
   return cum;
 }
 
+// Resolve um trecho publicado pelo organizador para a classe do competidor.
+// V = média por classe (Graduado e Moto usam a mesma; Amador tem a sua), D = deslocamento (tempo limite, sem pontos).
+// nt = segundos de neutro no fim do trecho (parada obrigatória no PC).
+export function resolverTrecho(t, classe) {
+  if (t.t === 'D') return { tipo: 'D', km: t.km, kmh: t.min > 0 ? t.km / (t.min / 60) : 0, min: t.min, nt: t.nt || 0 };
+  return { tipo: 'V', km: t.km, kmh: classe === 'AMADOR' ? t.ka : t.kg, nt: t.nt || 0 };
+}
+
 // Estado do trecho: começa vazio. Distâncias em metros já calibradas.
-export const newStage = () => ({ active: false, t0: 0, d0: 0, adjust: 0, targetKmh: 0, km: 0, idx: -1, pcs: [] });
+export const newStage = () => ({ active: false, t0: 0, d0: 0, adjust: 0, targetKmh: 0, km: 0, idx: -1, tipo: 'V', min: 0, pcs: [] });
 
 // Roteiro: uma linha por trecho, "distância_km média_kmh" (ex.: "4,2 30" ou "4.2; 30").
 // Linhas vazias e que começam com # são ignoradas.
@@ -34,7 +42,7 @@ export function parseRoteiro(text) {
     const line = raw.trim();
     if (!line || line.startsWith('#')) return;
     const nums = line.split(/[;\s]+/).map((x) => parseFloat(x.replace(',', '.')));
-    if (nums.length >= 2 && nums[0] > 0 && nums[1] > 0) trechos.push({ km: nums[0], kmh: nums[1] });
+    if (nums.length >= 2 && nums[0] > 0 && nums[1] > 0) trechos.push({ tipo: 'V', km: nums[0], kmh: nums[1], nt: 0 });
     else erros.push(i + 1);
   });
   return { trechos, erros };
@@ -42,14 +50,27 @@ export function parseRoteiro(text) {
 
 // Inicia (ou zera) o trecho no ponto mais recente.
 // extra: { keepPcs, targetKmh, km, idx } para iniciar um trecho do roteiro.
+// Distância acumulada (m) no instante t, interpolando entre os dois pontos vizinhos.
+export function distAt(points, cum, t) {
+  const n = points.length;
+  if (!n) return 0;
+  if (t <= points[0].t) return cum[0];
+  if (t >= points[n - 1].t) return cum[n - 1];
+  let i = 0;
+  while (i < n - 2 && points[i + 1].t <= t) i++;
+  const a = points[i], b = points[i + 1];
+  const f = b.t > a.t ? (t - a.t) / (b.t - a.t) : 0;
+  return cum[i] + (cum[i + 1] - cum[i]) * f;
+}
+
 export function startStage(stage, points, cum, factor, extra = {}) {
   const n = points.length;
-  const { keepPcs, ...rest } = extra;
+  const { keepPcs, tAt, ...rest } = extra;
   return {
     ...stage,
     active: n > 0,
-    t0: n ? points[n - 1].t : 0,
-    d0: n ? cum[n - 1] * factor : 0,
+    t0: tAt != null ? tAt : n ? points[n - 1].t : 0,
+    d0: n ? (tAt != null ? distAt(points, cum, tAt) : cum[n - 1]) * factor : 0,
     adjust: 0,
     pcs: keepPcs ? stage.pcs : [],
     ...rest,
@@ -81,9 +102,9 @@ export function markPc(stage, points, cum, factor) {
   const v = stage.targetKmh / 3.6;
   // Com roteiro, o ideal é o tempo da distância planejada do trecho; sem roteiro, usa a distância medida.
   const refDist = stage.km > 0 ? stage.km * 1000 : s.dist;
-  const idealTime = v > 0 ? refDist / v : null;
+  const idealTime = stage.tipo === 'D' && stage.min > 0 ? stage.min * 60 : v > 0 ? refDist / v : null;
   const diff = idealTime != null ? s.elapsed - idealTime : null; // positivo = demorou mais (atrasado)
-  const pc = { n: stage.pcs.length + 1, trecho: stage.idx >= 0 ? stage.idx + 1 : null, elapsed: s.elapsed, dist: s.dist, avgKmh: s.avgKmh, idealTime, diff };
+  const pc = { n: stage.pcs.length + 1, tipo: stage.tipo || 'V', trecho: stage.idx >= 0 ? stage.idx + 1 : null, elapsed: s.elapsed, dist: s.dist, avgKmh: s.avgKmh, idealTime, diff };
   return { ...stage, pcs: [...stage.pcs, pc] };
 }
 
@@ -100,13 +121,13 @@ export function pcsToText(stage, factor) {
   const rows = stage.pcs.map(
     (p) =>
       `PC${p.n}${p.trecho ? ` (trecho ${p.trecho})` : ''}: ${(p.dist / 1000).toFixed(3)} km em ${fmtDur(p.elapsed)} (${p.avgKmh.toFixed(1)} km/h)` +
-      (p.diff != null ? ` | ideal ${fmtDur(p.idealTime)} | ${p.diff > 0 ? 'atrasado' : 'adiantado'} ${Math.abs(p.diff).toFixed(1)} s` : '')
+      (p.tipo === 'D' ? ` | deslocamento (sem pontos)` : p.diff != null ? ` | ideal ${fmtDur(p.idealTime)} | ${p.diff > 0 ? 'atrasado' : 'adiantado'} ${Math.abs(p.diff).toFixed(1)} s` : '')
   );
   return [head, ...rows].join('\n');
 }
 
 // Pontuação: 1 ponto por segundo de diferença (adiantado ou atrasado) em cada PC.
-export const pontos = (pcs) => pcs.reduce((a, p) => a + (p.diff != null ? Math.abs(p.diff) : 0), 0);
+export const pontos = (pcs) => pcs.reduce((a, p) => a + (p.diff != null && p.tipo !== 'D' ? Math.abs(p.diff) : 0), 0);
 
 // Ordena o ranking: mais PCs feitos primeiro, depois menos pontos.
 export function rank(results) {
