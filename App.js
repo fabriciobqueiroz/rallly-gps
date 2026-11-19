@@ -7,9 +7,10 @@ import * as Location from 'expo-location';
 import * as Sharing from 'expo-sharing';
 import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
 import { TASK } from './src/gpsTask';
-import { loadRoteiro, saveRoteiro, recFile } from './src/persist';
+import { loadRoteiro, saveRoteiro, recFile, loadJson, saveJson } from './src/persist';
+import { enviarResultado, ouvirRanking } from './src/firebase';
 import { begin, clear, getState, subscribe, summarize, toCsv } from './src/store';
-import { cumulative, newStage, startStage, status, markPc, parseRoteiro, fmtDur, fmtSigned, pcsToText } from './src/rally';
+import { cumulative, newStage, startStage, status, markPc, parseRoteiro, pontos, rank, fmtDur, fmtSigned, pcsToText } from './src/rally';
 
 const fmtTime = (ms) => {
   const s = Math.floor(ms / 1000);
@@ -26,6 +27,12 @@ export default function App() {
   const [factor, setFactor] = useState(1);
   const [kmhTxt, setKmhTxt] = useState('');
   const [rotTxt, setRotTxt] = useState(() => loadRoteiro());
+  const [tab, setTab] = useState('gravar');
+  const [piloto, setPiloto] = useState(() => loadJson('piloto', { nome: '', numero: '', prova: '' }));
+  const [hist, setHist] = useState([]);
+  const [ranking, setRanking] = useState([]);
+  const [rankErr, setRankErr] = useState('');
+  const [enviando, setEnviando] = useState(false);
   const warned = useRef({ idx: -2, w100: false, w0: false });
 
   useEffect(() => subscribe(() => setTick((x) => x + 1)), []);
@@ -107,15 +114,43 @@ export default function App() {
   };
   const onStage = () => {
     if (!points.length) return needPoints();
+    setHist([]);
     setStage(rot.trechos.length ? goTrecho(stage, 0, false) : startStage(stage, points, cum, factor));
   };
   const onPc = () => {
     if (!rs) return Alert.alert('Inicie o trecho', 'Toque em "Zerar / iniciar trecho" antes.');
     const marked = markPc(stage, points, cum, factor);
+    setHist((h) => [...h, stage]);
     if (stage.idx >= 0 && stage.idx + 1 < rot.trechos.length) setStage(goTrecho(marked, stage.idx + 1, true));
-    else if (stage.idx >= 0) { Vibration.vibrate(600); setStage({ ...marked, active: false }); }
+    else if (stage.idx >= 0) { Vibration.vibrate([0, 500, 200, 500]); setStage({ ...marked, active: false }); }
     else setStage(marked);
   };
+  const onUndo = () => {
+    if (!hist.length) return;
+    const prev = hist[hist.length - 1];
+    setHist(hist.slice(0, -1));
+    warned.current = { idx: prev.idx, w100: true, w0: true };
+    setKmhTxt(prev.targetKmh ? String(prev.targetKmh) : '');
+    setStage(prev);
+  };
+  const setP = (k) => (v) => { const n = { ...piloto, [k]: v }; setPiloto(n); saveJson('piloto', n); };
+  const onEnviar = async () => {
+    if (!piloto.nome.trim() || !piloto.numero.trim() || !piloto.prova.trim()) return Alert.alert('Falta preencher', 'Informe nome, número e código da prova.');
+    if (!stage.pcs.length) return Alert.alert('Sem PCs', 'Marque ao menos um PC antes de enviar.');
+    setEnviando(true);
+    try {
+      await enviarResultado({ ...piloto, pcs: stage.pcs, pontos: pontos(stage.pcs) });
+      Alert.alert('Enviado', `${stage.pcs.length} PC(s), ${pontos(stage.pcs).toFixed(1)} pontos. Veja na aba Ranking.`);
+    } catch (e) {
+      Alert.alert('Não enviou', 'Confira a internet e tente de novo. ' + String(e?.message || e));
+    }
+    setEnviando(false);
+  };
+  useEffect(() => {
+    if (tab !== 'ranking' || !piloto.prova.trim()) return;
+    setRankErr('');
+    return ouvirRanking(piloto.prova, (rows) => setRanking(rank(rows)), (e) => setRankErr(String(e?.message || e)));
+  }, [tab, piloto.prova]);
   const onRot = (txt) => { setRotTxt(txt); saveRoteiro(txt); };
   const onKmh = (txt) => {
     setKmhTxt(txt);
@@ -125,11 +160,15 @@ export default function App() {
   const adj = (m) => setStage((x) => ({ ...x, adjust: x.adjust + m }));
   const ahead = rs && rs.aheadSec != null ? rs.aheadSec : null;
   const remain = rs ? rs.remain : null;
+  const acc = last?.acc;
+  const stale = sinceLast != null && sinceLast > 5;
+  const gpsColor = !last || stale || acc > 15 ? '#ff5252' : acc > 6 ? '#ffb300' : '#4caf50';
+  const gpsTxt = !last ? 'GPS: sem pontos' : stale ? `GPS: sem sinal há ${sinceLast} s` : acc > 6 ? `GPS: aguarde (${acc.toFixed(0)} m)` : `GPS pronto (${acc.toFixed(1)} m)`;
   useEffect(() => {
     const w = warned.current;
     if (remain == null || w.idx !== stage.idx) return;
-    if (!w.w100 && remain <= 100) { w.w100 = true; Vibration.vibrate(200); }
-    if (!w.w0 && remain <= 0) { w.w0 = true; Vibration.vibrate([0, 300, 150, 300]); }
+    if (!w.w100 && remain <= 100) { w.w100 = true; Vibration.vibrate(150); }
+    if (!w.w0 && remain <= 0) { w.w0 = true; Vibration.vibrate([0, 500, 200, 500]); }
   }, [remain, stage.idx]);
 
   return (
@@ -138,6 +177,36 @@ export default function App() {
       <Text style={st.h1}>Rally GPS · Teste</Text>
       <Text style={st.sub}>{running ? '● Gravando' : points.length ? `○ Parado · ${points.length} pontos salvos` : '○ Parado'}{Platform.OS === 'android' ? '' : ' (somente Android)'}</Text>
 
+      <View style={st.row}>
+        <View style={[st.gps, { borderColor: gpsColor }]}>
+          <Text style={[st.gpsTx, { color: gpsColor }]}>{gpsTxt}</Text>
+        </View>
+      </View>
+      <View style={st.row}>
+        {['gravar', 'ranking'].map((t) => (
+          <TouchableOpacity key={t} style={[st.tab, tab === t && st.tabOn]} onPress={() => setTab(t)}>
+            <Text style={[st.tabTx, tab === t && { color: '#0c1014' }]}>{t === 'gravar' ? 'Gravar' : 'Ranking'}</Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+      {tab === 'ranking' ? (
+        <View>
+          <View style={st.card}>
+            <Text style={st.tip}>Prova: {piloto.prova.trim() || '—'}</Text>
+            {!piloto.prova.trim() && <Text style={st.tipTx}>Preencha o código da prova na aba Gravar.</Text>}
+            {rankErr ? <Text style={[st.tipTx, { color: '#ff5252' }]}>{rankErr}</Text> : null}
+            {ranking.length === 0 && piloto.prova.trim() && !rankErr ? <Text style={st.tipTx}>Nenhum resultado enviado ainda.</Text> : null}
+            {ranking.map((r, i) => (
+              <View key={r.numero} style={st.line}>
+                <Text style={st.k}>{i + 1}º  #{r.numero} {r.nome} · {r.npcs} PC</Text>
+                <Text style={st.v}>{Number(r.pontos).toFixed(1)} pts</Text>
+              </View>
+            ))}
+            <Text style={[st.tipTx, { marginTop: 8 }]}>Pontos: 1 por segundo de diferença em cada PC (menos é melhor).</Text>
+          </View>
+        </View>
+      ) : (
+      <>
       <View style={st.row}>
         <Big label="Velocidade" value={kmh != null ? kmh.toFixed(0) : '—'} unit="km/h" />
         <Big label="Distância" value={(s.dist / 1000).toFixed(2)} unit="km" />
@@ -192,6 +261,9 @@ export default function App() {
         <Text style={st.tipTx}>Calibração: x{factor.toFixed(4)} (ajuste até bater com o hodômetro da organização)</Text>
         <TouchableOpacity style={[st.btn, { marginTop: 10 }]} onPress={onStage}><Text style={st.btnTx}>Zerar / iniciar trecho</Text></TouchableOpacity>
         <TouchableOpacity style={[st.btn, { backgroundColor: '#2e7d32' }]} onPress={onPc}><Text style={[st.btnTx, { color: '#fff' }]}>Marcar PC</Text></TouchableOpacity>
+        {hist.length > 0 && (
+          <TouchableOpacity style={[st.btn2, { marginBottom: 8 }]} onPress={onUndo}><Text style={st.btn2Tx}>Desfazer último PC</Text></TouchableOpacity>
+        )}
         {stage.pcs.map((p) => (
           <View key={p.n} style={st.line}>
             <Text style={st.k}>PC{p.n} · {(p.dist / 1000).toFixed(3)} km · {fmtDur(p.elapsed)}</Text>
@@ -203,6 +275,16 @@ export default function App() {
             <Text style={st.btn2Tx}>Compartilhar PCs</Text>
           </TouchableOpacity>
         )}
+      </View>
+
+      <View style={st.card}>
+        <Text style={st.tip}>Piloto e prova</Text>
+        <TextInput style={st.field} value={piloto.nome} onChangeText={setP('nome')} placeholder="Nome (piloto/dupla)" placeholderTextColor="#666" />
+        <TextInput style={st.field} value={piloto.numero} onChangeText={setP('numero')} placeholder="Número do carro" placeholderTextColor="#666" keyboardType="number-pad" />
+        <TextInput style={st.field} value={piloto.prova} onChangeText={setP('prova')} placeholder="Código da prova (ex: TESTE1)" placeholderTextColor="#666" autoCapitalize="characters" />
+        <TouchableOpacity style={[st.btn, { backgroundColor: '#1565c0', marginTop: 8, marginBottom: 0 }]} onPress={onEnviar} disabled={enviando}>
+          <Text style={[st.btnTx, { color: '#fff' }]}>{enviando ? 'Enviando…' : 'Enviar resultado'}</Text>
+        </TouchableOpacity>
       </View>
 
       <View style={st.card}>
@@ -225,6 +307,8 @@ export default function App() {
         <Text style={st.tip}>Roteiro do teste</Text>
         <Text style={st.tipTx}>1. Toque em Iniciar e permita "o tempo todo".{'\n'}2. Bloqueie a tela e ande ou dirija por 10 a 15 minutos.{'\n'}3. Volte ao app e olhe "Maior buraco sem pontos": quanto menor, melhor (ideal: 2 a 3 s).{'\n'}4. Compare a distância com o hodômetro do carro ou com o Kraken.</Text>
       </View>
+      </>
+      )}
     </ScrollView>
   );
 }
@@ -259,6 +343,12 @@ const st = StyleSheet.create({
   btn2Tx: { color: '#ff7a2e', fontWeight: '700', fontSize: 13 },
   input: { color: '#f5f5f5', borderWidth: 1, borderColor: '#262b32', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 4, minWidth: 80, textAlign: 'right', fontWeight: '700' },
   area: { color: '#f5f5f5', borderWidth: 1, borderColor: '#262b32', borderRadius: 8, padding: 10, minHeight: 90, marginVertical: 8, textAlignVertical: 'top' },
+  gps: { flex: 1, borderWidth: 1, borderRadius: 12, padding: 10, alignItems: 'center' },
+  gpsTx: { fontWeight: '800' },
+  tab: { flex: 1, borderWidth: 1, borderColor: '#ff7a2e', borderRadius: 12, padding: 10, alignItems: 'center' },
+  tabOn: { backgroundColor: '#ff7a2e' },
+  tabTx: { color: '#ff7a2e', fontWeight: '800' },
+  field: { color: '#f5f5f5', borderWidth: 1, borderColor: '#262b32', borderRadius: 8, padding: 10, marginTop: 8 },
   tip: { color: '#f5f5f5', fontWeight: '800', marginBottom: 6 },
   tipTx: { color: '#a8a8a8', lineHeight: 22 },
 });
