@@ -79,7 +79,9 @@ export function markPc(stage, points, cum, factor) {
   const s = status(stage, points, cum, factor);
   if (!s) return stage;
   const v = stage.targetKmh / 3.6;
-  const idealTime = v > 0 ? s.dist / v : null; // tempo que seria o ideal para essa distância
+  // Com roteiro, o ideal é o tempo da distância planejada do trecho; sem roteiro, usa a distância medida.
+  const refDist = stage.km > 0 ? stage.km * 1000 : s.dist;
+  const idealTime = v > 0 ? refDist / v : null;
   const diff = idealTime != null ? s.elapsed - idealTime : null; // positivo = demorou mais (atrasado)
   const pc = { n: stage.pcs.length + 1, trecho: stage.idx >= 0 ? stage.idx + 1 : null, elapsed: s.elapsed, dist: s.dist, avgKmh: s.avgKmh, idealTime, diff };
   return { ...stage, pcs: [...stage.pcs, pc] };
@@ -101,4 +103,12 @@ export function pcsToText(stage, factor) {
       (p.diff != null ? ` | ideal ${fmtDur(p.idealTime)} | ${p.diff > 0 ? 'atrasado' : 'adiantado'} ${Math.abs(p.diff).toFixed(1)} s` : '')
   );
   return [head, ...rows].join('\n');
+}
+
+// Pontuação: 1 ponto por segundo de diferença (adiantado ou atrasado) em cada PC.
+export const pontos = (pcs) => pcs.reduce((a, p) => a + (p.diff != null ? Math.abs(p.diff) : 0), 0);
+
+// Ordena o ranking: mais PCs feitos primeiro, depois menos pontos.
+export function rank(results) {
+  return [...results].sort((a, b) => (b.npcs - a.npcs) || (a.pontos - b.pontos));
 }

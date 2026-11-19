@@ -39,3 +39,7 @@ setPersistence({
   },
   reset() { writeNew(recFile(), CSV_HEAD + '\n'); },
 });
+
+const jsonFile = (name) => new File(Paths.document, name + '.json');
+export const loadJson = (name, fallback) => { try { return JSON.parse(loadText(jsonFile(name))) || fallback; } catch { return fallback; } };
+export const saveJson = (name, obj) => { try { writeNew(jsonFile(name), JSON.stringify(obj)); } catch {} };
