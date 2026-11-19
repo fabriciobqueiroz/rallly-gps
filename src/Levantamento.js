@@ -13,6 +13,7 @@ import { cumulative } from './rally';
 import { getState } from './store';
 
 const km2 = (m) => (m / 1000).toFixed(2).replace('.', ',');
+const CORES = ['#ff7a2e', '#ffe600', '#00e5ff', '#ff1744', '#76ff03'];
 const KIND = { L: 'Largada', T: 'Tulipa', P: 'PC', C: 'Chegada', R: 'REF' };
 const COR = { L: '#4caf50', T: '#ff7a2e', P: '#ff5a1f', C: '#c0392b', R: '#ffe600' };
 const PRESETS = [
@@ -79,6 +80,11 @@ export default function Levantamento({ st, prova, last, onAplicar }) {
   const chave = 'lev_' + String(prova).trim().toUpperCase().replace(/[^A-Z0-9]+/g, '');
   const [lev, setLevRaw] = useState(() => loadJson(chave, { iniT: null, marks: [] }));
   const [aberta, setAberta] = useState(null);
+  const [seguir, setSeguir] = useState(true);
+  const [ctr, setCtr] = useState(0);
+  const [rw, setRw] = useState(5);
+  const [dash, setDash] = useState(false);
+  const [rc, setRc] = useState('#ff7a2e');
   const [editorId, setEditorId] = useState(null);
   const setLev = (fn) => setLevRaw((o) => { const n = typeof fn === 'function' ? fn(o) : fn; saveJson(chave, n); return n; });
 
@@ -118,16 +124,33 @@ export default function Levantamento({ st, prova, last, onAplicar }) {
   };
   const upd = (id, patch) => setLev((o) => ({ ...o, marks: o.marks.map((m) => (m.id === id ? { ...m, ...patch } : m)) }));
   const del = (id) => setLev((o) => ({ ...o, marks: o.marks.filter((m) => m.id !== id) }));
-  const foto = async (id) => {
+  const foto = (id) => {
+    Alert.alert('Foto da referência', 'De onde vem a foto?', [
+      { text: 'Câmera', onPress: () => pegaFoto(id, true) },
+      { text: 'Galeria', onPress: () => pegaFoto(id, false) },
+      { text: 'Cancelar', style: 'cancel' },
+    ]);
+  };
+  const pegaFoto = async (id, cam) => {
     try {
-      const perm = await ImagePicker.requestCameraPermissionsAsync();
-      if (!perm.granted) return Alert.alert('Permissão', 'Permita o uso da câmera para fotografar a referência.');
-      const r = await ImagePicker.launchCameraAsync({ quality: 0.5 });
+      let r;
+      if (cam) {
+        const perm = await ImagePicker.requestCameraPermissionsAsync();
+        if (!perm.granted) return Alert.alert('Permissão', 'Permita o uso da câmera para fotografar a referência.');
+        r = await ImagePicker.launchCameraAsync({ quality: 0.5 });
+      } else {
+        r = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 0.5 });
+      }
       if (r.canceled || !r.assets?.length) return;
       let uri = r.assets[0].uri;
       try { const dest = new File(Paths.document, `foto_${id}.jpg`); new File(uri).copy(dest); uri = dest.uri; } catch {}
       upd(id, { foto: uri });
-    } catch (e) { Alert.alert('Não abriu a câmera', String(e?.message || e)); }
+    } catch (e) { Alert.alert('Não abriu a foto', String(e?.message || e)); }
+  };
+  const fotoRapida = () => {
+    const u = lev.marks[lev.marks.length - 1];
+    if (!u) return Alert.alert('Marque a largada primeiro');
+    foto(u.id);
   };
 
   const ordenadas = lev.marks;
@@ -168,6 +191,23 @@ export default function Levantamento({ st, prova, last, onAplicar }) {
 
   return (
     <View>
+      <MapaWeb wps={[]} coords={trail} marks={pinos} sat follow={seguir && !fechado} rw={rw} dash={dash} rc={rc} ctr={ctr} me={last ? [last.lat, last.lon] : null} height={380} />
+      <View style={[st.row, { marginBottom: 6 }]}>
+        <TouchableOpacity style={st.btn2} onPress={() => { setCtr((c) => c + 1); setSeguir(true); }}><Text style={st.btn2Tx}>◎ Centralizar</Text></TouchableOpacity>
+        <TouchableOpacity style={st.btn2} onPress={() => setSeguir((v) => !v)}><Text style={st.btn2Tx}>{seguir ? 'Seguindo: SIM' : 'Seguindo: NÃO'}</Text></TouchableOpacity>
+      </View>
+      <View style={[st.row, { marginBottom: 6 }]}>
+        <TouchableOpacity style={st.btn2} onPress={() => setRw((w) => (w >= 10 ? 3 : w + 2))}><Text style={st.btn2Tx}>Espessura: {rw}</Text></TouchableOpacity>
+        <TouchableOpacity style={st.btn2} onPress={() => setDash((d) => !d)}><Text style={st.btn2Tx}>{dash ? 'Pontilhado' : 'Contínuo'}</Text></TouchableOpacity>
+        <TouchableOpacity style={st.btn2} onPress={() => setRc((c) => CORES[(CORES.indexOf(c) + 1) % CORES.length])}><Text style={[st.btn2Tx, { color: rc }]}>Cor</Text></TouchableOpacity>
+      </View>
+      {!fechado && lev.marks.length > 0 && (
+        <View style={[st.row, { marginBottom: 8 }]}>
+          <B cor="#ff7a2e" tx="TULIPA" on={() => marcar('T')} />
+          <B cor="#ff5a1f" tx="PC" on={() => marcar('P')} />
+          <B cor="#1565c0" fg="#fff" tx="FOTO" on={fotoRapida} />
+        </View>
+      )}
       <View style={st.card}>
         <Text style={st.tip}>Levantar a prova dirigindo</Text>
         <Text style={st.tipTx}>Ligue a gravação na aba Gravar, toque LARGADA e dirija o percurso. Marque tulipas e PCs conforme passa, com observação e foto. Ao chegar, toque CHEGADA e edite cada tulipa com calma. As fotos ficam só no seu celular.</Text>
@@ -196,7 +236,6 @@ export default function Levantamento({ st, prova, last, onAplicar }) {
         <EditorDesenho visible foto={em.foto} inicial={em.dw && em.dw.length ? em.dw : em.arms && em.arms.length ? [{ k: 'tpl', arms: em.arms, out: em.out ?? null, x: 50, y: 55, s: 0.85, r: 0 }] : []}
           onCancel={() => setEditorId(null)} onSave={(it) => { upd(em.id, { dw: it }); setEditorId(null); }} />
       ) : null; })()}
-      <MapaWeb wps={[]} coords={trail} marks={pinos} sat follow={!fechado} me={last ? [last.lat, last.lon] : null} height={300} />
 
       {ordenadas.length > 0 && (
         <View style={st.card}>
