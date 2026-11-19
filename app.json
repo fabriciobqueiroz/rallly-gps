@@ -4,15 +4,8 @@
     "slug": "rally-gps-teste",
     "version": "0.1.0",
     "orientation": "portrait",
-    "icon": "./assets/icon.png",
     "android": {
-      "package": "br.com.rallysjrp.gpsteste",
-      "adaptiveIcon": {
-        "backgroundColor": "#1b1712",
-        "foregroundImage": "./assets/android-icon-foreground.png",
-        "backgroundImage": "./assets/android-icon-background.png",
-        "monochromeImage": "./assets/android-icon-monochrome.png"
-      }
+      "package": "br.com.rallysjrp.gpsteste"
     },
     "plugins": [
       [
@@ -25,7 +18,7 @@
       [
         "expo-image-picker",
         {
-          "cameraPermission": "Permitir que o app use a c\u00e2mera para fotografar refer\u00eancias do percurso."
+          "cameraPermission": "Permitir que o app use a câmera para fotografar referências do percurso."
         }
       ]
     ]
