@@ -10,10 +10,11 @@ import { TASK } from './src/gpsTask';
 import { loadRoteiro, saveRoteiro, recFile, loadJson, saveJson } from './src/persist';
 import { Roadbook } from './src/Tulipa';
 import Organizador from './src/Organizador';
-import { enviarResultado, ouvirRanking, salvarProva, ouvirProva, inscrever } from './src/firebase';
+import { enviarResultado, ouvirRanking, salvarProva, ouvirProva, inscrever, ouvirInscricao, enviarDatalogger } from './src/firebase';
+import { planilhaLiberada, parseHMS, CATS_PADRAO } from './src/OrgExtras';
 import { compartilharPdf } from './src/pdf';
-import { begin, clear, getState, subscribe, summarize, toCsv } from './src/store';
-import { cumulative, newStage, startStage, status, markPc, parseRoteiro, resolverTrecho, pontos, rank, fmtDur, fmtSigned, pcsToText } from './src/rally';
+import { begin, clear, getState, subscribe, summarize, toCsv, haversine } from './src/store';
+import { gruposDe, cumulative, newStage, startStage, status, markPc, parseRoteiro, resolverTrecho, pontos, rank, fmtDur, fmtSigned, pcsToText } from './src/rally';
 
 const fmtTime = (ms) => {
   const s = Math.floor(ms / 1000);
@@ -31,9 +32,12 @@ export default function App() {
   const [kmhTxt, setKmhTxt] = useState('');
   const [rotTxt, setRotTxt] = useState(() => loadRoteiro());
   const [tab, setTab] = useState('gravar');
-  const [piloto, setPiloto] = useState(() => ({ nome: '', numero: '', prova: '', navegador: '', classe: 'GRADUADO', ...loadJson('piloto', {}) }));
+  const [piloto, setPiloto] = useState(() => ({ nome: '', numero: '', prova: '', navegador: '', email: '', classe: 'GRADUADO', ...loadJson('piloto', {}) }));
   const [hist, setHist] = useState([]);
-  const [provaMap, setProvaMap] = useState({ wps: [], coords: [], legs: [], kmh: [], tul: [], trechos: [] });
+  const [provaMap, setProvaMap] = useState({ wps: [], coords: [], legs: [], kmh: [], tul: [], trechos: [], categorias: [], lib: {}, refs: [] });
+  const [orgInfo, setOrgInfo] = useState(() => loadJson('org', null));
+  const [minhaLarg, setMinhaLarg] = useState('');
+  const [enviandoDl, setEnviandoDl] = useState(false);
   const [ranking, setRanking] = useState([]);
   const [rankErr, setRankErr] = useState('');
   const [filtro, setFiltro] = useState('TODAS');
@@ -120,8 +124,12 @@ export default function App() {
   const needPoints = () => Alert.alert('Sem GPS', 'Inicie a gravação e espere os primeiros pontos.');
   rotRef.current = rotTxt;
   // Se o organizador publicou a planilha, usa os trechos da classe do competidor; senão, o roteiro digitado.
+  const grupos = gruposDe(provaMap.categorias);
+  const cats = provaMap.categorias.length ? provaMap.categorias.map((c) => c.nome) : CATS_PADRAO.map((c) => c.nome);
+  const souOrg = !!(orgInfo && orgInfo.pin && orgInfo.prova === piloto.prova.trim().toUpperCase());
+  const libOk = souOrg || planilhaLiberada(provaMap.lib);
   const rot = provaMap.trechos.length
-    ? { trechos: provaMap.trechos.map((t) => resolverTrecho(t, piloto.classe)), erros: [] }
+    ? { trechos: provaMap.trechos.map((t) => resolverTrecho(t, piloto.classe, grupos)), erros: [] }
     : parseRoteiro(rotTxt);
   const goTrecho = (base, i, keepPcs, tAt) => {
     const t = rot.trechos[i];
@@ -132,6 +140,8 @@ export default function App() {
 
   // Horário de largada deste carro (ms): base de hoje (HH:MM) + (número-1) x intervalo.
   const tStart = (() => {
+    const own = parseHMS(minhaLarg);
+    if (own != null) { const d = new Date(); d.setHours(0, 0, 0, 0); return d.getTime() + own * 1000; }
     const m = /^(\d{1,2}):(\d{2})$/.exec(largadaTxt.trim());
     if (!m) return null;
     const d = new Date();
@@ -180,9 +190,19 @@ export default function App() {
   const onInscrever = async () => {
     if (!piloto.nome.trim() || !piloto.numero.trim() || !piloto.prova.trim()) return Alert.alert('Falta preencher', 'Informe nome, número e código da prova.');
     try {
-      await inscrever({ prova: piloto.prova, numero: piloto.numero, piloto: piloto.nome, navegador: piloto.navegador, classe: piloto.classe });
+      await inscrever({ prova: piloto.prova, numero: piloto.numero, piloto: piloto.nome, navegador: piloto.navegador, classe: piloto.classe, email: piloto.email });
       Alert.alert('Inscrição feita', `#${piloto.numero} ${piloto.nome} · ${piloto.classe}`);
     } catch (e) { Alert.alert('Não inscreveu', String(e?.message || e)); }
+  };
+  const onDatalogger = async () => {
+    if (!piloto.nome.trim() || !piloto.numero.trim() || !piloto.prova.trim()) return Alert.alert('Falta preencher', 'Informe nome, número e código da prova.');
+    if (points.length < 10) return Alert.alert('Sem trilha', 'Grave o percurso antes de enviar o datalogger.');
+    setEnviandoDl(true);
+    try {
+      await enviarDatalogger({ prova: piloto.prova, numero: piloto.numero, nome: piloto.nome, classe: piloto.classe, points, pcs: stage.pcs });
+      Alert.alert('Datalogger enviado', `${points.length} pontos. O organizador calcula o resultado oficial com ele.`);
+    } catch (e) { Alert.alert('Não enviou', 'Confira a internet e tente de novo. ' + String(e?.message || e)); }
+    setEnviandoDl(false);
   };
   const onEnviar = async () => {
     if (!piloto.nome.trim() || !piloto.numero.trim() || !piloto.prova.trim()) return Alert.alert('Falta preencher', 'Informe nome, número e código da prova.');
@@ -202,9 +222,9 @@ export default function App() {
       if (Date.now() - lastEdit.current < 2500) return; // não sobrescreve o que você está digitando
       if (typeof d.roteiro === 'string' && d.roteiro !== rotRef.current) { setRotTxt(d.roteiro); saveRoteiro(d.roteiro); }
       if (typeof d.largada === 'string') setLargadaTxt(d.largada);
-      if (Array.isArray(d.wps)) {
+      {
         const pair = (a) => { const o = []; for (let i = 0; i + 1 < a.length; i += 2) o.push([a[i], a[i + 1]]); return o; };
-        setProvaMap({ wps: pair(d.wps), coords: pair(d.rota || []), legs: d.legs || [], kmh: d.kmh || [], tul: d.tul || [], trechos: d.trechos || [] });
+        setProvaMap({ wps: pair(d.wps || []), coords: pair(d.rota || []), legs: d.legs || [], kmh: d.kmh || [], tul: d.tul || [], trechos: d.trechos || [], categorias: d.categorias || [], lib: d.lib || {}, refs: d.refs || [] });
       }
       if (d.intervalo != null) setIntervalo(String(d.intervalo));
     }, () => {});
@@ -226,6 +246,12 @@ export default function App() {
       setStage(rot.trechos.length ? goTrecho(stage, 0, false, tStart) : startStage(stage, points, cum, factor, { tAt: tStart }));
     }
   }, [now]);
+  // Minha largada definida pelo organizador (horário HH:MM:SS na inscrição).
+  useEffect(() => {
+    setMinhaLarg('');
+    if (!piloto.prova.trim() || !piloto.numero.trim()) return;
+    return ouvirInscricao(piloto.prova, piloto.numero, (d) => setMinhaLarg(d?.largada || ''), () => {});
+  }, [piloto.prova, piloto.numero]);
   useEffect(() => {
     if (tab !== 'ranking' || !piloto.prova.trim()) return;
     setRankErr('');
@@ -238,6 +264,12 @@ export default function App() {
     setStage((x) => ({ ...x, targetKmh: v > 0 ? v : 0 }));
   };
   const adj = (m) => setStage((x) => ({ ...x, adjust: x.adjust + m }));
+  const refPerto = (() => {
+    if (!last || !provaMap.refs.length) return null;
+    let b = null;
+    for (const r of provaMap.refs) { const d = haversine(last, r); if (!b || d < b.d) b = { r, d }; }
+    return b && b.d <= 80 ? b : null;
+  })();
   const ahead = rs && rs.aheadSec != null ? rs.aheadSec : null;
   // Posição no percurso: distância planejada dos trechos já feitos + parcial do trecho atual.
   const feitos = stage.idx > 0 ? rot.trechos.slice(0, stage.idx).reduce((a, t) => a + t.km * 1000, 0) : 0;
@@ -280,17 +312,19 @@ export default function App() {
         ))}
       </View>
       {tab === 'organizar' ? (
-        <Organizador st={st} prova={piloto.prova} provaMap={provaMap} last={last} />
+        <Organizador st={st} prova={piloto.prova} provaMap={provaMap} last={last} onOrg={setOrgInfo} />
       ) : tab === 'tulipas' ? (
         <View style={st.card}>
           <Text style={st.tip}>Roadbook · prova {piloto.prova.trim() || '—'}</Text>
-          {provaMap.tul.length === 0 ? (
+          {!libOk ? (
+            <Text style={[st.tipTx, { color: '#ffb300' }]}>Planilha ainda não liberada pelo organizador{provaMap.lib?.ini ? ` (libera em ${provaMap.lib.ini})` : ''}.</Text>
+          ) : provaMap.tul.length === 0 ? (
             <Text style={st.tipTx}>O organizador ainda não publicou o roadbook desta prova.</Text>
           ) : (
             <Text style={st.tipTx}>Esquerda: parcial e total (km). A tulipa mostra o cruzamento: você chega pela rua de baixo e segue a seta. A entrada destacada é a próxima.</Text>
           )}
-          <Roadbook st={st} tul={provaMap.tul} classe={piloto.classe} dist={rs || stage.idx >= 0 ? globalDist : 0} />
-          {provaMap.tul.length > 0 && (
+          {libOk && <Roadbook st={st} tul={provaMap.tul} classe={piloto.classe} grupos={grupos} dist={rs || stage.idx >= 0 ? globalDist : 0} />}
+          {libOk && provaMap.tul.length > 0 && (
             <TouchableOpacity style={[st.btn2, { marginTop: 8 }]} onPress={() => compartilharPdf(piloto.prova.trim().toUpperCase(), provaMap.tul).catch((e) => Alert.alert('Não gerou o PDF', String(e?.message || e)))}>
               <Text style={st.btn2Tx}>Gerar PDF do roadbook</Text>
             </TouchableOpacity>
@@ -303,17 +337,18 @@ export default function App() {
             {!piloto.prova.trim() && <Text style={st.tipTx}>Preencha o código da prova na aba Gravar.</Text>}
             {rankErr ? <Text style={[st.tipTx, { color: '#ff5252' }]}>{rankErr}</Text> : null}
             {ranking.length === 0 && piloto.prova.trim() && !rankErr ? <Text style={st.tipTx}>Nenhum resultado enviado ainda.</Text> : null}
-            <View style={st.row}>
-              {['TODAS', 'GRADUADO', 'MOTO', 'AMADOR'].map((c) => (
-                <TouchableOpacity key={c} style={[st.btn2, { paddingHorizontal: 4, paddingVertical: 6 }, filtro === c && { backgroundColor: '#ff7a2e' }]} onPress={() => setFiltro(c)}>
-                  <Text style={[st.btn2Tx, { fontSize: 10 }, filtro === c && { color: '#0c1014' }]}>{c === 'TODAS' ? 'Todas' : c[0] + c.slice(1).toLowerCase()}</Text>
+            {!souOrg && provaMap.lib?.resultado === false ? <Text style={[st.tipTx, { color: '#ffb300' }]}>Resultado ainda não liberado pelo organizador.</Text> : null}
+            <View style={[st.row, { flexWrap: 'wrap' }]}>
+              {['TODAS', ...cats].map((c) => (
+                <TouchableOpacity key={c} style={[st.btn2, { flex: 0, paddingHorizontal: 10, paddingVertical: 6 }, filtro === c && { backgroundColor: '#ff7a2e' }]} onPress={() => setFiltro(c)}>
+                  <Text style={[st.btn2Tx, { fontSize: 11 }, filtro === c && { color: '#0c1014' }]}>{c === 'TODAS' ? 'Todas' : c[0] + c.slice(1).toLowerCase()}</Text>
                 </TouchableOpacity>
               ))}
             </View>
-            {ranking.filter((r) => filtro === 'TODAS' || r.classe === filtro).map((r, i) => (
+            {(souOrg || provaMap.lib?.resultado !== false) && ranking.filter((r) => filtro === 'TODAS' || r.classe === filtro).map((r, i) => (
               <View key={r.numero} style={st.line}>
-                <Text style={st.k}>{i + 1}º  #{r.numero} {r.nome} · {r.classe ? r.classe[0] : ''} · {r.npcs} PC</Text>
-                <Text style={st.v}>{Number(r.pontos).toFixed(1)} pts</Text>
+                <Text style={st.k}>{i + 1}º  #{r.numero} {r.nome} · {r.classe ? r.classe.slice(0, 3) : ''} · {r.npcs} PC{r.oficial ? ' ✔ oficial' : ''}</Text>
+                {(souOrg || provaMap.lib?.soma !== false) && <Text style={st.v}>{Number(r.pontos).toFixed(1)} pts</Text>}
               </View>
             ))}
             <Text style={[st.tipTx, { marginTop: 8 }]}>Pontos: 1 por segundo de diferença em cada PC (menos é melhor).</Text>
@@ -379,6 +414,12 @@ export default function App() {
           <TouchableOpacity style={st.btn2} onPress={() => setFactor((f) => f + 0.001)}><Text style={st.btn2Tx}>+0,1%</Text></TouchableOpacity>
         </View>
         <Text style={st.tipTx}>Calibração: x{factor.toFixed(4)} (ajuste até bater com o hodômetro da organização)</Text>
+        {provaMap.refs.length > 0 && (
+          <TouchableOpacity style={[st.btn2, { marginTop: 8, borderColor: refPerto ? '#ffe600' : '#262b32' }]} disabled={!refPerto}
+            onPress={() => { adj(refPerto.r.km * 1000 - globalDist); Vibration.vibrate(120); }}>
+            <Text style={[st.btn2Tx, { color: refPerto ? '#ffe600' : '#666' }]}>{refPerto ? `REF ${refPerto.r.n} aqui (${refPerto.d.toFixed(0)} m) · corrigir odômetro p/ ${refPerto.r.km.toFixed(3)} km` : 'REF: sem marco de referência por perto'}</Text>
+          </TouchableOpacity>
+        )}
         <TouchableOpacity style={[st.btn, { marginTop: 10 }]} onPress={onStage}><Text style={st.btnTx}>Zerar / iniciar trecho</Text></TouchableOpacity>
         <TouchableOpacity style={[st.btn, { backgroundColor: '#2e7d32' }]} onPress={onPc}><Text style={[st.btnTx, { color: '#fff' }]}>Marcar PC</Text></TouchableOpacity>
         {hist.length > 0 && (
@@ -402,9 +443,10 @@ export default function App() {
         <TextInput style={st.field} value={piloto.nome} onChangeText={setP('nome')} placeholder="Nome (piloto/dupla)" placeholderTextColor="#666" />
         <TextInput style={st.field} value={piloto.numero} onChangeText={setP('numero')} placeholder="Número do carro" placeholderTextColor="#666" keyboardType="number-pad" />
         <TextInput style={st.field} value={piloto.navegador} onChangeText={setP('navegador')} placeholder="Navegador (opcional)" placeholderTextColor="#666" />
-        <View style={[st.row, { marginTop: 8, marginBottom: 0 }]}>
-          {['GRADUADO', 'MOTO', 'AMADOR'].map((c) => (
-            <TouchableOpacity key={c} style={[st.btn2, { paddingHorizontal: 4, paddingVertical: 8 }, piloto.classe === c && { backgroundColor: '#ff7a2e' }]} onPress={() => setP('classe')(c)}>
+        <TextInput style={st.field} value={piloto.email} onChangeText={setP('email')} placeholder="E-mail (opcional)" placeholderTextColor="#666" autoCapitalize="none" keyboardType="email-address" />
+        <View style={[st.row, { marginTop: 8, marginBottom: 0, flexWrap: 'wrap' }]}>
+          {cats.map((c) => (
+            <TouchableOpacity key={c} style={[st.btn2, { flex: 0, paddingHorizontal: 12, paddingVertical: 8 }, piloto.classe === c && { backgroundColor: '#ff7a2e' }]} onPress={() => setP('classe')(c)}>
               <Text style={[st.btn2Tx, piloto.classe === c && { color: '#0c1014' }]}>{c[0] + c.slice(1).toLowerCase()}</Text>
             </TouchableOpacity>
           ))}
@@ -414,10 +456,13 @@ export default function App() {
           <TextInput style={[st.field, { flex: 1 }]} value={largadaTxt} onChangeText={onLargada} placeholder="Largada HH:MM" placeholderTextColor="#666" keyboardType="numbers-and-punctuation" />
           <TextInput style={[st.field, { flex: 1 }]} value={intervalo} onChangeText={onInterv} placeholder="Intervalo (s)" placeholderTextColor="#666" keyboardType="number-pad" />
         </View>
-        <Text style={st.tipTx}>Roteiro e largada são compartilhados com todos que usam o mesmo código da prova. Largada de cada carro = horário + (número − 1) × intervalo.</Text>
+        <Text style={st.tipTx}>Roteiro e largada são compartilhados com todos que usam o mesmo código da prova. Se o organizador sortear a largada, o seu horário aparece aqui sozinho{minhaLarg ? `: ${minhaLarg}` : ''}. Sem sorteio: horário + (número − 1) × intervalo.</Text>
         <TouchableOpacity style={[st.btn2, { marginTop: 8 }]} onPress={onInscrever}><Text style={st.btn2Tx}>Inscrever-se na prova</Text></TouchableOpacity>
         <TouchableOpacity style={[st.btn, { backgroundColor: '#1565c0', marginTop: 8, marginBottom: 0 }]} onPress={onEnviar} disabled={enviando}>
           <Text style={[st.btnTx, { color: '#fff' }]}>{enviando ? 'Enviando…' : 'Enviar resultado'}</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={[st.btn2, { marginTop: 8 }]} onPress={onDatalogger} disabled={enviandoDl}>
+          <Text style={st.btn2Tx}>{enviandoDl ? 'Enviando datalogger…' : 'Enviar datalogger (resultado oficial)'}</Text>
         </TouchableOpacity>
       </View>
 

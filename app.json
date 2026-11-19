@@ -1,1 +1,33 @@
-{"expo":{"name":"Rally GPS Teste","slug":"rally-gps-teste","version":"0.1.0","orientation":"portrait","android":{"package":"br.com.rallysjrp.gpsteste"},"plugins":[["expo-location",{"isAndroidBackgroundLocationEnabled":true,"isAndroidForegroundServiceEnabled":true}]]}}
+{
+  "expo": {
+    "name": "Rally GPS Teste",
+    "slug": "rally-gps-teste",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "android": {
+      "package": "br.com.rallysjrp.gpsteste",
+      "adaptiveIcon": {
+        "backgroundColor": "#1b1712",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      }
+    },
+    "plugins": [
+      [
+        "expo-location",
+        {
+          "isAndroidBackgroundLocationEnabled": true,
+          "isAndroidForegroundServiceEnabled": true
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "cameraPermission": "Permitir que o app use a c\u00e2mera para fotografar refer\u00eancias do percurso."
+        }
+      ]
+    ]
+  }
+}
