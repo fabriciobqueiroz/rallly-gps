@@ -143,6 +143,7 @@ export default function Levantamento({ st, prova, last, onAplicar, onProva }) {
   const [dash, setDash] = useState(false);
   const [rc, setRc] = useState('#ff7a2e');
   const [editorId, setEditorId] = useState(null);
+  const [cand, setCand] = useState(null);
   const [vers, setVers] = useState(0);
   const setLev = (fn) => setLevRaw((o) => {
     const n = typeof fn === 'function' ? fn(o) : fn;
@@ -273,8 +274,33 @@ export default function Levantamento({ st, prova, last, onAplicar, onProva }) {
     Alert.alert('Aplicado', 'Percurso, tulipas e trechos foram para a aba Planilha. Ajuste as médias e publique.');
   };
 
+  // Depois da chegada: toque no rastro para inserir tulipa ou PC naquele ponto (a numeração se refaz sozinha pela ordem no percurso).
+  const tocaTrilha = (lat, lon) => {
+    if (!fechado || iniIdx < 0) return;
+    let bi = -1, bd = 1e9;
+    for (let i = iniIdx; i < points.length; i++) {
+      const p = points[i];
+      if (p.acc != null && p.acc > 25) continue;
+      const d = dist([lat, lon], [p.lat, p.lon]);
+      if (d < bd) { bd = d; bi = i; }
+    }
+    if (bi < 0 || bd > 60) return Alert.alert('Longe do rastro', 'Toque mais perto da linha do percurso.');
+    const p = points[bi], a = points[Math.max(iniIdx, bi - 2)], b = points[Math.min(points.length - 1, bi + 2)];
+    const fim = lev.marks.find((x) => x.k === 'C');
+    setCand({ lat: Math.round(p.lat * 1e6) / 1e6, lon: Math.round(p.lon * 1e6) / 1e6, hdg: Math.round(rumo([a.lat, a.lon], [b.lat, b.lon])), km: Math.min(Math.round(cum[bi] - cum[iniIdx]), fim ? fim.km : 1e12) });
+  };
+  const inserir = (k, extra = {}) => {
+    if (!cand) return;
+    const m = { id: Date.now(), k, lat: cand.lat, lon: cand.lon, hdg: cand.hdg, km: cand.km, nota: '', foto: null, ...extra };
+    const ord = (x) => (x.k === 'L' ? -1 : x.k === 'C' ? 1e12 : x.km);
+    setLev((o) => ({ ...o, marks: [...o.marks, m].sort((x, y) => ord(x) - ord(y)) }));
+    setCand(null);
+    if (k === 'T' || k === 'P') setAberta(m.id);
+  };
+
   const ult = ordenadas[ordenadas.length - 1];
-  const pinos = ordenadas.map((m, i) => ({ lat: m.lat, lon: m.lon, txt: m.k === 'T' ? 'T' + ordenadas.slice(0, i + 1).filter((x) => x.k === 'T').length : m.k === 'P' ? 'PC' + ordenadas.slice(0, i + 1).filter((x) => x.k === 'P').length : KIND[m.k], cls: m.k === 'L' ? 'l' : m.k === 'C' ? 'c' : '' }));
+  const pinosBase = ordenadas.map((m, i) => ({ lat: m.lat, lon: m.lon, txt: m.k === 'T' ? 'T' + ordenadas.slice(0, i + 1).filter((x) => x.k === 'T').length : m.k === 'P' ? 'PC' + ordenadas.slice(0, i + 1).filter((x) => x.k === 'P').length : KIND[m.k], cls: m.k === 'L' ? 'l' : m.k === 'C' ? 'c' : '' }));
+  const pinos = cand ? [...pinosBase, { lat: cand.lat, lon: cand.lon, txt: 'NOVO', cls: 'c' }] : pinosBase;
   const B = ({ cor, tx, on, fg }) => (
     <TouchableOpacity style={{ flex: 1, backgroundColor: cor, borderRadius: 10, paddingVertical: 16, alignItems: 'center' }} onPress={on}>
       <Text style={{ color: fg || '#000', fontWeight: '900', fontSize: 13 }}>{tx}</Text>
@@ -283,7 +309,20 @@ export default function Levantamento({ st, prova, last, onAplicar, onProva }) {
 
   return (
     <View>
-      <MapaWeb wps={[]} coords={trail} marks={pinos} sat follow={seguir && !fechado} rw={rw} dash={dash} rc={rc} ctr={ctr} me={last ? [last.lat, last.lon] : null} height={380} />
+      <MapaWeb wps={[]} coords={trail} marks={pinos} sat editable={fechado} onTap={tocaTrilha} follow={seguir && !fechado} rw={rw} dash={dash} rc={rc} ctr={ctr} me={last ? [last.lat, last.lon] : null} height={380} />
+      {fechado && !cand && <Text style={st.tipTx}>Para incluir uma tulipa ou um PC que faltou, toque no rastro do mapa no ponto certo.</Text>}
+      {cand && (
+        <View style={st.card}>
+          <Text style={st.tip}>Novo ponto no km {km2(cand.km)}</Text>
+          <View style={[st.row, { marginTop: 6, marginBottom: 6 }]}>
+            <B cor="#ff7a2e" tx="TULIPA" on={() => inserir('T')} />
+            <B cor="#ff5a1f" tx="PC" on={() => inserir('P')} />
+            <B cor="#c0392b" fg="#fff" tx="PC N" on={() => inserir('P', { n: true })} />
+          </View>
+          <TouchableOpacity style={st.btn2} onPress={() => setCand(null)}><Text style={st.btn2Tx}>Cancelar</Text></TouchableOpacity>
+          <Text style={st.tipTx}>As marcas seguintes são renumeradas sozinhas pela ordem no percurso.</Text>
+        </View>
+      )}
       <View style={[st.row, { marginBottom: 6 }]}>
         <TouchableOpacity style={st.btn2} onPress={() => { setCtr((c) => c + 1); setSeguir(true); }}><Text style={st.btn2Tx}>◎ Centralizar</Text></TouchableOpacity>
         <TouchableOpacity style={st.btn2} onPress={() => setSeguir((v) => !v)}><Text style={st.btn2Tx}>{seguir ? 'Seguindo: SIM' : 'Seguindo: NÃO'}</Text></TouchableOpacity>
