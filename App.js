@@ -8,9 +8,12 @@ import * as Sharing from 'expo-sharing';
 import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
 import { TASK } from './src/gpsTask';
 import { loadRoteiro, saveRoteiro, recFile, loadJson, saveJson } from './src/persist';
-import { enviarResultado, ouvirRanking } from './src/firebase';
+import { Roadbook } from './src/Tulipa';
+import Organizador from './src/Organizador';
+import { enviarResultado, ouvirRanking, salvarProva, ouvirProva, inscrever } from './src/firebase';
+import { compartilharPdf } from './src/pdf';
 import { begin, clear, getState, subscribe, summarize, toCsv } from './src/store';
-import { cumulative, newStage, startStage, status, markPc, parseRoteiro, pontos, rank, fmtDur, fmtSigned, pcsToText } from './src/rally';
+import { cumulative, newStage, startStage, status, markPc, parseRoteiro, resolverTrecho, pontos, rank, fmtDur, fmtSigned, pcsToText } from './src/rally';
 
 const fmtTime = (ms) => {
   const s = Math.floor(ms / 1000);
@@ -28,11 +31,21 @@ export default function App() {
   const [kmhTxt, setKmhTxt] = useState('');
   const [rotTxt, setRotTxt] = useState(() => loadRoteiro());
   const [tab, setTab] = useState('gravar');
-  const [piloto, setPiloto] = useState(() => loadJson('piloto', { nome: '', numero: '', prova: '' }));
+  const [piloto, setPiloto] = useState(() => ({ nome: '', numero: '', prova: '', navegador: '', classe: 'GRADUADO', ...loadJson('piloto', {}) }));
   const [hist, setHist] = useState([]);
+  const [provaMap, setProvaMap] = useState({ wps: [], coords: [], legs: [], kmh: [], tul: [], trechos: [] });
   const [ranking, setRanking] = useState([]);
   const [rankErr, setRankErr] = useState('');
+  const [filtro, setFiltro] = useState('TODAS');
   const [enviando, setEnviando] = useState(false);
+  const [largadaTxt, setLargadaTxt] = useState(() => loadJson('largada', { h: '', iv: '0' }).h);
+  const [intervalo, setIntervalo] = useState(() => loadJson('largada', { h: '', iv: '0' }).iv);
+  const pend = useRef({});
+  const pushT = useRef(null);
+  const armed = useRef(false);
+  const autoGps = useRef(false);
+  const lastEdit = useRef(0);
+  const rotRef = useRef('');
   const warned = useRef({ idx: -2, w100: false, w0: false });
 
   useEffect(() => subscribe(() => setTick((x) => x + 1)), []);
@@ -105,13 +118,41 @@ export default function App() {
   const cum = cumulative(points);
   const rs = status(stage, points, cum, factor);
   const needPoints = () => Alert.alert('Sem GPS', 'Inicie a gravação e espere os primeiros pontos.');
-  const rot = parseRoteiro(rotTxt);
-  const goTrecho = (base, i, keepPcs) => {
+  rotRef.current = rotTxt;
+  // Se o organizador publicou a planilha, usa os trechos da classe do competidor; senão, o roteiro digitado.
+  const rot = provaMap.trechos.length
+    ? { trechos: provaMap.trechos.map((t) => resolverTrecho(t, piloto.classe)), erros: [] }
+    : parseRoteiro(rotTxt);
+  const goTrecho = (base, i, keepPcs, tAt) => {
     const t = rot.trechos[i];
     setKmhTxt(String(t.kmh));
     warned.current = { idx: i, w100: false, w0: false };
-    return startStage(base, points, cum, factor, { keepPcs, targetKmh: t.kmh, km: t.km, idx: i });
+    return startStage(base, points, cum, factor, { keepPcs, tAt, targetKmh: t.kmh, km: t.km, idx: i, tipo: t.tipo || 'V', min: t.min || 0 });
   };
+
+  // Horário de largada deste carro (ms): base de hoje (HH:MM) + (número-1) x intervalo.
+  const tStart = (() => {
+    const m = /^(\d{1,2}):(\d{2})$/.exec(largadaTxt.trim());
+    if (!m) return null;
+    const d = new Date();
+    d.setHours(+m[1], +m[2], 0, 0);
+    const k = Math.max(0, (parseInt(piloto.numero, 10) || 1) - 1);
+    return d.getTime() + k * (parseFloat(intervalo) || 0) * 1000;
+  })();
+  const remLarg = tStart != null && armed.current ? (tStart - now) / 1000 : null;
+
+  // Envia alterações do roteiro/largada para a nuvem (agrupadas em 0,8 s).
+  const pushProva = (patch) => {
+    lastEdit.current = Date.now();
+    Object.assign(pend.current, patch);
+    clearTimeout(pushT.current);
+    pushT.current = setTimeout(() => {
+      const data = pend.current; pend.current = {};
+      if (piloto.prova.trim()) salvarProva(piloto.prova, data).catch(() => {});
+    }, 800);
+  };
+  const onLargada = (v) => { setLargadaTxt(v); saveJson('largada', { h: v, iv: intervalo }); pushProva({ largada: v }); };
+  const onInterv = (v) => { setIntervalo(v); saveJson('largada', { h: largadaTxt, iv: v }); pushProva({ intervalo: v }); };
   const onStage = () => {
     if (!points.length) return needPoints();
     setHist([]);
@@ -121,7 +162,9 @@ export default function App() {
     if (!rs) return Alert.alert('Inicie o trecho', 'Toque em "Zerar / iniciar trecho" antes.');
     const marked = markPc(stage, points, cum, factor);
     setHist((h) => [...h, stage]);
-    if (stage.idx >= 0 && stage.idx + 1 < rot.trechos.length) setStage(goTrecho(marked, stage.idx + 1, true));
+    const nt = stage.idx >= 0 ? rot.trechos[stage.idx]?.nt || 0 : 0;
+    const liberar = nt > 0 ? points[points.length - 1].t + nt * 1000 : undefined; // neutro: o próximo trecho só começa depois da parada
+    if (stage.idx >= 0 && stage.idx + 1 < rot.trechos.length) { if (nt > 0) Vibration.vibrate(400); setStage(goTrecho(marked, stage.idx + 1, true, liberar)); }
     else if (stage.idx >= 0) { Vibration.vibrate([0, 500, 200, 500]); setStage({ ...marked, active: false }); }
     else setStage(marked);
   };
@@ -134,6 +177,13 @@ export default function App() {
     setStage(prev);
   };
   const setP = (k) => (v) => { const n = { ...piloto, [k]: v }; setPiloto(n); saveJson('piloto', n); };
+  const onInscrever = async () => {
+    if (!piloto.nome.trim() || !piloto.numero.trim() || !piloto.prova.trim()) return Alert.alert('Falta preencher', 'Informe nome, número e código da prova.');
+    try {
+      await inscrever({ prova: piloto.prova, numero: piloto.numero, piloto: piloto.nome, navegador: piloto.navegador, classe: piloto.classe });
+      Alert.alert('Inscrição feita', `#${piloto.numero} ${piloto.nome} · ${piloto.classe}`);
+    } catch (e) { Alert.alert('Não inscreveu', String(e?.message || e)); }
+  };
   const onEnviar = async () => {
     if (!piloto.nome.trim() || !piloto.numero.trim() || !piloto.prova.trim()) return Alert.alert('Falta preencher', 'Informe nome, número e código da prova.');
     if (!stage.pcs.length) return Alert.alert('Sem PCs', 'Marque ao menos um PC antes de enviar.');
@@ -147,11 +197,41 @@ export default function App() {
     setEnviando(false);
   };
   useEffect(() => {
+    if (!piloto.prova.trim()) return;
+    return ouvirProva(piloto.prova, (d) => {
+      if (Date.now() - lastEdit.current < 2500) return; // não sobrescreve o que você está digitando
+      if (typeof d.roteiro === 'string' && d.roteiro !== rotRef.current) { setRotTxt(d.roteiro); saveRoteiro(d.roteiro); }
+      if (typeof d.largada === 'string') setLargadaTxt(d.largada);
+      if (Array.isArray(d.wps)) {
+        const pair = (a) => { const o = []; for (let i = 0; i + 1 < a.length; i += 2) o.push([a[i], a[i + 1]]); return o; };
+        setProvaMap({ wps: pair(d.wps), coords: pair(d.rota || []), legs: d.legs || [], kmh: d.kmh || [], tul: d.tul || [], trechos: d.trechos || [] });
+      }
+      if (d.intervalo != null) setIntervalo(String(d.intervalo));
+    }, () => {});
+  }, [piloto.prova]);
+  // Arma a largada quando o horário ainda está no futuro.
+  useEffect(() => {
+    armed.current = tStart != null && tStart > Date.now();
+    autoGps.current = false;
+  }, [largadaTxt, intervalo, piloto.numero]);
+  // A cada segundo: liga o GPS 3 min antes e inicia o trecho 1 na hora da largada.
+  useEffect(() => {
+    if (tStart == null || !armed.current) return;
+    const rem = (tStart - Date.now()) / 1000;
+    if (rem <= 180 && !running && !autoGps.current) { autoGps.current = true; start(); }
+    if (rem <= 0 && points.length && points[points.length - 1].t >= tStart) {
+      armed.current = false;
+      Vibration.vibrate([0, 700, 200, 700]);
+      setHist([]);
+      setStage(rot.trechos.length ? goTrecho(stage, 0, false, tStart) : startStage(stage, points, cum, factor, { tAt: tStart }));
+    }
+  }, [now]);
+  useEffect(() => {
     if (tab !== 'ranking' || !piloto.prova.trim()) return;
     setRankErr('');
     return ouvirRanking(piloto.prova, (rows) => setRanking(rank(rows)), (e) => setRankErr(String(e?.message || e)));
   }, [tab, piloto.prova]);
-  const onRot = (txt) => { setRotTxt(txt); saveRoteiro(txt); };
+  const onRot = (txt) => { setRotTxt(txt); saveRoteiro(txt); pushProva({ roteiro: txt }); };
   const onKmh = (txt) => {
     setKmhTxt(txt);
     const v = parseFloat(txt.replace(',', '.'));
@@ -159,7 +239,11 @@ export default function App() {
   };
   const adj = (m) => setStage((x) => ({ ...x, adjust: x.adjust + m }));
   const ahead = rs && rs.aheadSec != null ? rs.aheadSec : null;
+  // Posição no percurso: distância planejada dos trechos já feitos + parcial do trecho atual.
+  const feitos = stage.idx > 0 ? rot.trechos.slice(0, stage.idx).reduce((a, t) => a + t.km * 1000, 0) : 0;
+  const globalDist = feitos + (rs ? rs.dist : 0);
   const remain = rs ? rs.remain : null;
+  const neutroRest = stage.active && last && stage.t0 > last.t ? (stage.t0 - last.t) / 1000 : null;
   const acc = last?.acc;
   const stale = sinceLast != null && sinceLast > 5;
   const gpsColor = !last || stale || acc > 15 ? '#ff5252' : acc > 6 ? '#ffb300' : '#4caf50';
@@ -182,23 +266,53 @@ export default function App() {
           <Text style={[st.gpsTx, { color: gpsColor }]}>{gpsTxt}</Text>
         </View>
       </View>
+      {remLarg != null && remLarg > 0 && (
+        <View style={[st.gps, { borderColor: '#ff7a2e', marginBottom: 10 }]}>
+          <Text style={[st.gpsTx, { color: '#ff7a2e', fontSize: 20 }]}>Largada em {fmtDur(remLarg)}</Text>
+          {!running && remLarg > 180 && <Text style={st.tipTx}>O GPS liga sozinho 3 min antes.</Text>}
+        </View>
+      )}
       <View style={st.row}>
-        {['gravar', 'ranking'].map((t) => (
+        {['gravar', 'ranking', 'tulipas', 'organizar'].map((t) => (
           <TouchableOpacity key={t} style={[st.tab, tab === t && st.tabOn]} onPress={() => setTab(t)}>
-            <Text style={[st.tabTx, tab === t && { color: '#0c1014' }]}>{t === 'gravar' ? 'Gravar' : 'Ranking'}</Text>
+            <Text style={[st.tabTx, tab === t && { color: '#0c1014' }]}>{{ gravar: 'Gravar', ranking: 'Ranking', tulipas: 'Tulipas', organizar: 'Organizar' }[t]}</Text>
           </TouchableOpacity>
         ))}
       </View>
-      {tab === 'ranking' ? (
+      {tab === 'organizar' ? (
+        <Organizador st={st} prova={piloto.prova} provaMap={provaMap} last={last} />
+      ) : tab === 'tulipas' ? (
+        <View style={st.card}>
+          <Text style={st.tip}>Roadbook · prova {piloto.prova.trim() || '—'}</Text>
+          {provaMap.tul.length === 0 ? (
+            <Text style={st.tipTx}>O organizador ainda não publicou o roadbook desta prova.</Text>
+          ) : (
+            <Text style={st.tipTx}>Esquerda: parcial e total (km). A tulipa mostra o cruzamento: você chega pela rua de baixo e segue a seta. A entrada destacada é a próxima.</Text>
+          )}
+          <Roadbook st={st} tul={provaMap.tul} classe={piloto.classe} dist={rs || stage.idx >= 0 ? globalDist : 0} />
+          {provaMap.tul.length > 0 && (
+            <TouchableOpacity style={[st.btn2, { marginTop: 8 }]} onPress={() => compartilharPdf(piloto.prova.trim().toUpperCase(), provaMap.tul).catch((e) => Alert.alert('Não gerou o PDF', String(e?.message || e)))}>
+              <Text style={st.btn2Tx}>Gerar PDF do roadbook</Text>
+            </TouchableOpacity>
+          )}
+        </View>
+      ) : tab === 'ranking' ? (
         <View>
           <View style={st.card}>
             <Text style={st.tip}>Prova: {piloto.prova.trim() || '—'}</Text>
             {!piloto.prova.trim() && <Text style={st.tipTx}>Preencha o código da prova na aba Gravar.</Text>}
             {rankErr ? <Text style={[st.tipTx, { color: '#ff5252' }]}>{rankErr}</Text> : null}
             {ranking.length === 0 && piloto.prova.trim() && !rankErr ? <Text style={st.tipTx}>Nenhum resultado enviado ainda.</Text> : null}
-            {ranking.map((r, i) => (
+            <View style={st.row}>
+              {['TODAS', 'GRADUADO', 'MOTO', 'AMADOR'].map((c) => (
+                <TouchableOpacity key={c} style={[st.btn2, { paddingHorizontal: 4, paddingVertical: 6 }, filtro === c && { backgroundColor: '#ff7a2e' }]} onPress={() => setFiltro(c)}>
+                  <Text style={[st.btn2Tx, { fontSize: 10 }, filtro === c && { color: '#0c1014' }]}>{c === 'TODAS' ? 'Todas' : c[0] + c.slice(1).toLowerCase()}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+            {ranking.filter((r) => filtro === 'TODAS' || r.classe === filtro).map((r, i) => (
               <View key={r.numero} style={st.line}>
-                <Text style={st.k}>{i + 1}º  #{r.numero} {r.nome} · {r.npcs} PC</Text>
+                <Text style={st.k}>{i + 1}º  #{r.numero} {r.nome} · {r.classe ? r.classe[0] : ''} · {r.npcs} PC</Text>
                 <Text style={st.v}>{Number(r.pontos).toFixed(1)} pts</Text>
               </View>
             ))}
@@ -227,6 +341,12 @@ export default function App() {
 
       <View style={st.card}>
         <Text style={st.tip}>Odômetro de rally</Text>
+        {neutroRest != null && (
+          <View style={[st.gps, { borderColor: '#ff5252', marginBottom: 8 }]}>
+            <Text style={[st.gpsTx, { color: '#ff5252', fontSize: 18 }]}>NEUTRO · PARE · liberação em {fmtDur(neutroRest)}</Text>
+          </View>
+        )}
+        {stage.active && stage.tipo === 'D' && <Text style={[st.tipTx, { color: '#ffe600' }]}>Deslocamento: limite de {stage.min}' — não vale pontos</Text>}
         <View style={st.row}>
           <Big label="Parcial" value={rs ? (rs.dist / 1000).toFixed(3) : '—'} unit="km" />
           <Big label="Tempo do trecho" value={rs ? fmtDur(rs.elapsed) : '—'} />
@@ -281,7 +401,21 @@ export default function App() {
         <Text style={st.tip}>Piloto e prova</Text>
         <TextInput style={st.field} value={piloto.nome} onChangeText={setP('nome')} placeholder="Nome (piloto/dupla)" placeholderTextColor="#666" />
         <TextInput style={st.field} value={piloto.numero} onChangeText={setP('numero')} placeholder="Número do carro" placeholderTextColor="#666" keyboardType="number-pad" />
+        <TextInput style={st.field} value={piloto.navegador} onChangeText={setP('navegador')} placeholder="Navegador (opcional)" placeholderTextColor="#666" />
+        <View style={[st.row, { marginTop: 8, marginBottom: 0 }]}>
+          {['GRADUADO', 'MOTO', 'AMADOR'].map((c) => (
+            <TouchableOpacity key={c} style={[st.btn2, { paddingHorizontal: 4, paddingVertical: 8 }, piloto.classe === c && { backgroundColor: '#ff7a2e' }]} onPress={() => setP('classe')(c)}>
+              <Text style={[st.btn2Tx, piloto.classe === c && { color: '#0c1014' }]}>{c[0] + c.slice(1).toLowerCase()}</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
         <TextInput style={st.field} value={piloto.prova} onChangeText={setP('prova')} placeholder="Código da prova (ex: TESTE1)" placeholderTextColor="#666" autoCapitalize="characters" />
+        <View style={st.row}>
+          <TextInput style={[st.field, { flex: 1 }]} value={largadaTxt} onChangeText={onLargada} placeholder="Largada HH:MM" placeholderTextColor="#666" keyboardType="numbers-and-punctuation" />
+          <TextInput style={[st.field, { flex: 1 }]} value={intervalo} onChangeText={onInterv} placeholder="Intervalo (s)" placeholderTextColor="#666" keyboardType="number-pad" />
+        </View>
+        <Text style={st.tipTx}>Roteiro e largada são compartilhados com todos que usam o mesmo código da prova. Largada de cada carro = horário + (número − 1) × intervalo.</Text>
+        <TouchableOpacity style={[st.btn2, { marginTop: 8 }]} onPress={onInscrever}><Text style={st.btn2Tx}>Inscrever-se na prova</Text></TouchableOpacity>
         <TouchableOpacity style={[st.btn, { backgroundColor: '#1565c0', marginTop: 8, marginBottom: 0 }]} onPress={onEnviar} disabled={enviando}>
           <Text style={[st.btnTx, { color: '#fff' }]}>{enviando ? 'Enviando…' : 'Enviar resultado'}</Text>
         </TouchableOpacity>
@@ -345,9 +479,9 @@ const st = StyleSheet.create({
   area: { color: '#f5f5f5', borderWidth: 1, borderColor: '#262b32', borderRadius: 8, padding: 10, minHeight: 90, marginVertical: 8, textAlignVertical: 'top' },
   gps: { flex: 1, borderWidth: 1, borderRadius: 12, padding: 10, alignItems: 'center' },
   gpsTx: { fontWeight: '800' },
-  tab: { flex: 1, borderWidth: 1, borderColor: '#ff7a2e', borderRadius: 12, padding: 10, alignItems: 'center' },
+  tab: { flex: 1, borderWidth: 1, borderColor: '#ff7a2e', borderRadius: 10, paddingVertical: 10, paddingHorizontal: 2, alignItems: 'center' },
   tabOn: { backgroundColor: '#ff7a2e' },
-  tabTx: { color: '#ff7a2e', fontWeight: '800' },
+  tabTx: { color: '#ff7a2e', fontWeight: '800', fontSize: 12 },
   field: { color: '#f5f5f5', borderWidth: 1, borderColor: '#262b32', borderRadius: 8, padding: 10, marginTop: 8 },
   tip: { color: '#f5f5f5', fontWeight: '800', marginBottom: 6 },
   tipTx: { color: '#a8a8a8', lineHeight: 22 },
