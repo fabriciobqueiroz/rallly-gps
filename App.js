@@ -43,7 +43,7 @@ export default function App() {
   const [filtro, setFiltro] = useState('TODAS');
   const [enviando, setEnviando] = useState(false);
   const [largadaTxt, setLargadaTxt] = useState(() => loadJson('largada', { h: '', iv: '0' }).h);
-  const [intervalo, setIntervalo] = useState(() => loadJson('largada', { h: '', iv: '0' }).iv);
+  const [intervalo, setIntervalo] = useState(() => loadJson('largada', { h: '', iv: '60' }).iv);
   const pend = useRef({});
   const pushT = useRef(null);
   const armed = useRef(false);
@@ -312,7 +312,7 @@ export default function App() {
         ))}
       </View>
       {tab === 'organizar' ? (
-        <Organizador st={st} prova={piloto.prova} provaMap={provaMap} last={last} onOrg={setOrgInfo} />
+        <Organizador st={st} onProva={setP('prova')} prova={piloto.prova} provaMap={provaMap} last={last} onOrg={setOrgInfo} />
       ) : tab === 'tulipas' ? (
         <View style={st.card}>
           <Text style={st.tip}>Roadbook · prova {piloto.prova.trim() || '—'}</Text>
@@ -358,7 +358,7 @@ export default function App() {
       <>
       <View style={st.row}>
         <Big label="Velocidade" value={kmh != null ? kmh.toFixed(0) : '—'} unit="km/h" />
-        <Big label="Distância" value={(s.dist / 1000).toFixed(2)} unit="km" />
+        <Big label="Distância" value={(s.dist / 1000).toFixed(3)} unit="km" />
       </View>
       <View style={st.row}>
         <Big label="Tempo" value={fmtTime(elapsed)} />
