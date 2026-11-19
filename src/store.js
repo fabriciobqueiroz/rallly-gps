@@ -28,6 +28,7 @@ const toPoint = (l) => ({
   lon: l.coords.longitude,
   acc: l.coords.accuracy,
   spd: l.coords.speed, // m/s, pode ser null
+  hdg: l.coords.heading, // graus, pode ser null
   mocked: !!l.mocked,
 });
 

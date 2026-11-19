@@ -1,0 +1,238 @@
+// Levantamento da prova dirigindo: o rastro do GPS vira o percurso, o organizador marca tulipas (com observação e foto)
+// e, ao chegar, edita cada tulipa com calma (desenho do cruzamento, nome, neutro) antes de aplicar à planilha.
+import { useState } from 'react';
+import { Alert, Image, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import * as ImagePicker from 'expo-image-picker';
+import { File, Paths } from 'expo-file-system';
+import MapaWeb from './MapaWeb';
+import { Tulipa } from './Tulipa';
+import { DesenhoSvg } from './Desenho';
+import EditorDesenho from './EditorDesenho';
+import { loadJson, saveJson } from './persist';
+import { cumulative } from './rally';
+import { getState } from './store';
+
+const km2 = (m) => (m / 1000).toFixed(2).replace('.', ',');
+const KIND = { L: 'Largada', T: 'Tulipa', P: 'PC', C: 'Chegada', R: 'REF' };
+const COR = { L: '#4caf50', T: '#ff7a2e', P: '#ff5a1f', C: '#c0392b', R: '#ffe600' };
+const PRESETS = [
+  ['Em T', [90, 270]], ['Cruzamento', [0, 90, 270]], ['Y', [45, 315]], ['Só reta', [0]],
+];
+// Entrada de tulipa (formato do roadbook) a partir da marca editada. A rua de chegada aponta sempre para baixo (180°).
+export function entradaDe(m, p) {
+  const arms = [...(m.arms || [])].sort((a, b) => a - b);
+  const b = [180, ...arms];
+  const o = m.out != null && arms.includes(m.out) ? b.indexOf(m.out) : -1;
+  const e = { t: 'T', d: m.km, p, ty: m.rot ? 'roundabout' : 'turn', mo: '', b, i: 0, o, ex: m.rot ? m.ex || 1 : 0, nm: m.nm || '', man: true };
+  if (m.dw && m.dw.length) e.dw = m.dw;
+  return e;
+}
+
+function EditorTulipa({ st, m, onChange, onDesenhar }) {
+  const arms = m.arms || [];
+  const toggle = (a) => {
+    const has = arms.includes(a);
+    onChange({ arms: has ? arms.filter((x) => x !== a) : [...arms, a], out: has && m.out === a ? null : m.out });
+  };
+  const Chip = ({ on, tx, onPress, cor }) => (
+    <TouchableOpacity style={[st.btn2, { flex: 0, paddingHorizontal: 10, paddingVertical: 6 }, on && { backgroundColor: cor || '#ff7a2e' }]} onPress={onPress}>
+      <Text style={[st.btn2Tx, on && { color: '#0c1014' }]}>{tx}</Text>
+    </TouchableOpacity>
+  );
+  const ANG = [[315, '↖'], [0, '↑'], [45, '↗'], [270, '←'], [90, '→'], [225, '↙'], [135, '↘']];
+  const e = entradaDe(m, 0);
+  return (
+    <View style={{ marginTop: 8 }}>
+      <View style={{ flexDirection: 'row', gap: 12 }}>
+        {m.dw && m.dw.length ? <DesenhoSvg items={m.dw} size={110} /> : <Tulipa e={e} size={110} />}
+        <View style={{ flex: 1 }}>
+          <Text style={st.tipTx}>1) Toque as ruas que existem no cruzamento (você chega por baixo).</Text>
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
+            {ANG.map(([a, t]) => <Chip key={a} on={arms.includes(a)} tx={t} onPress={() => toggle(a)} />)}
+          </View>
+        </View>
+      </View>
+      <View style={[st.row, { marginTop: 8, marginBottom: 0 }]}>
+        <TouchableOpacity style={[st.btn, { flex: 1, marginBottom: 0, paddingVertical: 12 }]} onPress={onDesenhar}><Text style={st.btnTx}>{m.dw && m.dw.length ? 'Editar desenho' : 'Desenhar a tulipa'}</Text></TouchableOpacity>
+        {m.dw && m.dw.length ? <TouchableOpacity style={st.btn2} onPress={() => onChange({ dw: null })}><Text style={st.btn2Tx}>Usar automática</Text></TouchableOpacity> : null}
+      </View>
+      <Text style={st.tipTx}>Atalhos (desenho automático pelas ruas)</Text>
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
+        {PRESETS.map(([n, a]) => <Chip key={n} on={false} tx={n} onPress={() => onChange({ arms: a, out: a.includes(m.out) ? m.out : null })} />)}
+      </View>
+      <Text style={st.tipTx}>2) Por qual rua você sai (seta)?</Text>
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
+        {[...arms].sort((a, b) => a - b).map((a) => <Chip key={a} cor="#4caf50" on={m.out === a} tx={ANG.find((x) => x[0] === a)?.[1] || a} onPress={() => onChange({ out: a })} />)}
+        {arms.length === 0 && <Text style={st.tipTx}>Marque ao menos uma rua.</Text>}
+      </View>
+      <View style={[st.row, { marginTop: 8, marginBottom: 0 }]}>
+        <Chip on={!!m.rot} tx="Rotatória" onPress={() => onChange({ rot: !m.rot })} />
+        {m.rot ? <TextInput style={[st.input, { minWidth: 50 }]} value={String(m.ex || 1)} onChangeText={(v) => onChange({ ex: parseInt(v, 10) || 1 })} keyboardType="number-pad" /> : null}
+        {m.rot ? <Text style={st.tipTx}>saída nº</Text> : null}
+      </View>
+      <TextInput style={st.field} value={m.nm || ''} onChangeText={(v) => onChange({ nm: v })} placeholder="Texto para o competidor (ex.: igreja à direita)" placeholderTextColor="#666" />
+    </View>
+  );
+}
+
+export default function Levantamento({ st, prova, last, onAplicar }) {
+  const chave = 'lev_' + String(prova).trim().toUpperCase().replace(/[^A-Z0-9]+/g, '');
+  const [lev, setLevRaw] = useState(() => loadJson(chave, { iniT: null, marks: [] }));
+  const [aberta, setAberta] = useState(null);
+  const [editorId, setEditorId] = useState(null);
+  const setLev = (fn) => setLevRaw((o) => { const n = typeof fn === 'function' ? fn(o) : fn; saveJson(chave, n); return n; });
+
+  const { points } = getState();
+  const cum = cumulative(points);
+  const iniIdx = lev.iniT != null ? Math.max(0, points.findIndex((p) => p.t >= lev.iniT)) : -1;
+  const kmAqui = iniIdx >= 0 && points.length ? Math.max(0, cum[points.length - 1] - cum[iniIdx]) : 0;
+  const fechado = lev.marks.some((m) => m.k === 'C');
+  // Rastro percorrido (no máximo ~700 pontos para o mapa).
+  const trail = (() => {
+    if (iniIdx < 0) return [];
+    const seg = points.slice(iniIdx).filter((p) => !(p.acc != null && p.acc > 25));
+    const step = Math.max(1, Math.ceil(seg.length / 700));
+    return seg.filter((_, i) => i % step === 0 || i === seg.length - 1).map((p) => [p.lat, p.lon]);
+  })();
+
+  const pronto = () => {
+    const l = points[points.length - 1];
+    if (!l || (l.acc != null && l.acc > 25) || Date.now() - l.t > 6000) { Alert.alert('GPS sem sinal bom', 'Inicie a gravação na aba Gravar e espere o GPS ficar verde.'); return null; }
+    return l;
+  };
+  const marcar = (k, extra = {}) => {
+    const l = pronto(); if (!l) return;
+    if (k === 'L') {
+      const novo = () => setLev({ iniT: l.t, marks: [{ id: 1, k: 'L', lat: l.lat, lon: l.lon, hdg: l.hdg ?? null, km: 0, nota: '', foto: null }] });
+      if (!lev.marks.length) return novo();
+      Alert.alert('Iniciar levantamento', 'Isso apaga o levantamento anterior desta prova. Continuar?', [
+        { text: 'Cancelar' },
+        { text: 'Iniciar', onPress: novo },
+      ]);
+      return;
+    }
+    if (iniIdx < 0) return Alert.alert('Marque a largada primeiro');
+    const m = { id: Date.now(), k, lat: Math.round(l.lat * 1e6) / 1e6, lon: Math.round(l.lon * 1e6) / 1e6, hdg: l.hdg != null && l.hdg >= 0 ? Math.round(l.hdg) : null, km: Math.round(kmAqui), nota: '', foto: null, ...extra };
+    setLev((o) => ({ ...o, marks: [...o.marks, m] }));
+    if (k === 'T' || k === 'P') setAberta(m.id);
+  };
+  const upd = (id, patch) => setLev((o) => ({ ...o, marks: o.marks.map((m) => (m.id === id ? { ...m, ...patch } : m)) }));
+  const del = (id) => setLev((o) => ({ ...o, marks: o.marks.filter((m) => m.id !== id) }));
+  const foto = async (id) => {
+    try {
+      const perm = await ImagePicker.requestCameraPermissionsAsync();
+      if (!perm.granted) return Alert.alert('Permissão', 'Permita o uso da câmera para fotografar a referência.');
+      const r = await ImagePicker.launchCameraAsync({ quality: 0.5 });
+      if (r.canceled || !r.assets?.length) return;
+      let uri = r.assets[0].uri;
+      try { const dest = new File(Paths.document, `foto_${id}.jpg`); new File(uri).copy(dest); uri = dest.uri; } catch {}
+      upd(id, { foto: uri });
+    } catch (e) { Alert.alert('Não abriu a câmera', String(e?.message || e)); }
+  };
+
+  const ordenadas = lev.marks;
+  const semArms = ordenadas.filter((m) => m.k === 'T' && !(m.dw && m.dw.length) && !(m.arms && m.arms.length && m.out != null));
+  const aplicar = () => {
+    if (!fechado) return Alert.alert('Falta a chegada', 'Toque em CHEGADA no fim do percurso.');
+    if (semArms.length) return Alert.alert('Tulipas sem desenho', `${semArms.length} tulipa(s) ainda sem ruas e saída. Elas ficam só com o texto. Continuar?`, [{ text: 'Voltar' }, { text: 'Aplicar assim', onPress: () => confirmar() }]);
+    confirmar();
+  };
+  const confirmar = () => {
+    let prev = 0, pcN = 0;
+    const tul = [], wps = [], nIdx = new Set(), refs = [], pontosKm = [];
+    ordenadas.forEach((m) => {
+      if (m.k === 'R') { refs.push({ n: refs.length + 1, lat: m.lat, lon: m.lon, hdg: m.hdg, km: Math.round(m.km) / 1000 }); return; }
+      const d = m.km, p = d - prev;
+      if (m.k === 'L') tul.push({ t: 'L', d: 0, p: 0, man: true });
+      else if (m.k === 'T') tul.push((m.arms && m.arms.length) || (m.dw && m.dw.length) ? entradaDe(m, p) : { t: 'T', d, p, ty: 'turn', mo: '', b: [180], i: 0, o: -1, ex: 0, nm: m.nm || m.nota || '', man: true });
+      else if (m.k === 'P') { pcN++; tul.push({ t: 'P', n: pcN, d, p, man: true }); }
+      else if (m.k === 'C') tul.push({ t: 'C', n: pcN + 1, d, p, man: true });
+      if (m.k === 'L' || m.k === 'P' || m.k === 'C') {
+        wps.push([m.lat, m.lon]); pontosKm.push(d / 1000);
+        if (m.k !== 'L' && m.n) nIdx.add(wps.length - 2);
+      }
+      prev = d;
+    });
+    const legs = pontosKm.slice(1).map((k, i) => Math.round((k - pontosKm[i]) * 1000) / 1000);
+    onAplicar({ wps, rota: { coords: trail, legs, tul }, nIdx, refs });
+    Alert.alert('Aplicado', 'Percurso, tulipas e trechos foram para a aba Planilha. Ajuste as médias e publique.');
+  };
+
+  const ult = ordenadas[ordenadas.length - 1];
+  const pinos = ordenadas.map((m, i) => ({ lat: m.lat, lon: m.lon, txt: m.k === 'T' ? 'T' + ordenadas.slice(0, i + 1).filter((x) => x.k === 'T').length : m.k === 'P' ? 'PC' + ordenadas.slice(0, i + 1).filter((x) => x.k === 'P').length : KIND[m.k], cls: m.k === 'L' ? 'l' : m.k === 'C' ? 'c' : '' }));
+  const B = ({ cor, tx, on, fg }) => (
+    <TouchableOpacity style={{ flex: 1, backgroundColor: cor, borderRadius: 10, paddingVertical: 16, alignItems: 'center' }} onPress={on}>
+      <Text style={{ color: fg || '#000', fontWeight: '900', fontSize: 13 }}>{tx}</Text>
+    </TouchableOpacity>
+  );
+
+  return (
+    <View>
+      <View style={st.card}>
+        <Text style={st.tip}>Levantar a prova dirigindo</Text>
+        <Text style={st.tipTx}>Ligue a gravação na aba Gravar, toque LARGADA e dirija o percurso. Marque tulipas e PCs conforme passa, com observação e foto. Ao chegar, toque CHEGADA e edite cada tulipa com calma. As fotos ficam só no seu celular.</Text>
+        {!fechado && (
+          <View style={[st.row, { marginTop: 8, marginBottom: 6 }]}>
+            {lev.marks.length === 0 ? <B cor="#4caf50" tx="LARGADA" on={() => marcar('L')} /> : (
+              <>
+                <B cor="#ff7a2e" tx="TULIPA" on={() => marcar('T')} />
+                <B cor="#ff5a1f" tx="PC" on={() => marcar('P')} />
+                <B cor="#c0392b" fg="#fff" tx="PC N" on={() => marcar('P', { n: true })} />
+                <B cor="#ffe600" tx="REF" on={() => marcar('R')} />
+              </>
+            )}
+          </View>
+        )}
+        {lev.marks.length > 0 && !fechado && (
+          <TouchableOpacity style={[st.btn, { backgroundColor: '#c0392b', marginTop: 4, marginBottom: 6 }]} onPress={() => marcar('C')}><Text style={[st.btnTx, { color: '#fff' }]}>CHEGADA (fim da prova)</Text></TouchableOpacity>
+        )}
+        <Text style={st.tipTx}>{iniIdx >= 0 ? `${km2(kmAqui)} km percorridos · ${ordenadas.filter((m) => m.k === 'T').length} tulipa(s) · ${ordenadas.filter((m) => m.k === 'P').length} PC(s)` : 'Levantamento ainda não iniciado.'}{last?.acc != null ? ` · GPS ${last.acc.toFixed(0)} m` : ''}</Text>
+        {fechado && (
+          <TouchableOpacity style={[st.btn2, { marginTop: 6 }]} onPress={() => del(ult.id)}><Text style={st.btn2Tx}>Reabrir (desfazer chegada)</Text></TouchableOpacity>
+        )}
+      </View>
+
+      {(() => { const em = ordenadas.find((x) => x.id === editorId); return em ? (
+        <EditorDesenho visible foto={em.foto} inicial={em.dw && em.dw.length ? em.dw : em.arms && em.arms.length ? [{ k: 'tpl', arms: em.arms, out: em.out ?? null, x: 50, y: 55, s: 0.85, r: 0 }] : []}
+          onCancel={() => setEditorId(null)} onSave={(it) => { upd(em.id, { dw: it }); setEditorId(null); }} />
+      ) : null; })()}
+      <MapaWeb wps={[]} coords={trail} marks={pinos} sat follow={!fechado} me={last ? [last.lat, last.lon] : null} height={300} />
+
+      {ordenadas.length > 0 && (
+        <View style={st.card}>
+          <Text style={st.tip}>{fechado ? 'Editar marcas' : 'Marcas (toque para anotar e fotografar)'}</Text>
+          {ordenadas.map((m, i) => {
+            const nT = ordenadas.slice(0, i + 1).filter((x) => x.k === 'T').length, nP = ordenadas.slice(0, i + 1).filter((x) => x.k === 'P').length;
+            const titulo = m.k === 'T' ? `Tulipa ${nT}` : m.k === 'P' ? `PC ${nP}${m.n ? ' · N' : ''}` : KIND[m.k];
+            const aberto = aberta === m.id;
+            return (
+              <View key={m.id} style={{ borderTopWidth: 1, borderTopColor: '#262b32', paddingVertical: 8 }}>
+                <TouchableOpacity onPress={() => setAberta(aberto ? null : m.id)} style={st.line}>
+                  <Text style={[st.v, { color: COR[m.k] }]}>{titulo}</Text>
+                  <Text style={st.k}>  {km2(m.km)} km{m.foto ? ' · foto' : ''}{m.nota ? ' · nota' : ''}</Text>
+                  <Text style={st.v}>{aberto ? '▲' : '▼'}</Text>
+                </TouchableOpacity>
+                {aberto && (
+                  <View>
+                    <TextInput style={st.field} value={m.nota} onChangeText={(v) => upd(m.id, { nota: v })} placeholder="Observação (só para você)" placeholderTextColor="#666" multiline />
+                    <View style={[st.row, { marginTop: 8, marginBottom: 0 }]}>
+                      <TouchableOpacity style={st.btn2} onPress={() => foto(m.id)}><Text style={st.btn2Tx}>{m.foto ? 'Trocar foto' : 'Tirar foto'}</Text></TouchableOpacity>
+                      {m.k !== 'L' && <TouchableOpacity style={st.btn2} onPress={() => del(m.id)}><Text style={[st.btn2Tx, { color: '#ff5252' }]}>Apagar marca</Text></TouchableOpacity>}
+                    </View>
+                    {m.foto ? <Image source={{ uri: m.foto }} style={{ width: '100%', height: 180, borderRadius: 10, marginTop: 8 }} resizeMode="cover" /> : null}
+                    {m.k === 'T' && <EditorTulipa st={st} m={m} onChange={(p) => upd(m.id, p)} onDesenhar={() => setEditorId(m.id)} />}
+                    {m.k === 'P' && (
+                      <TouchableOpacity style={[st.btn2, { marginTop: 8 }]} onPress={() => upd(m.id, { n: !m.n })}><Text style={st.btn2Tx}>{m.n ? 'Neutro ligado (toque para tirar)' : 'Marcar como PC neutro (N)'}</Text></TouchableOpacity>
+                    )}
+                  </View>
+                )}
+              </View>
+            );
+          })}
+          <TouchableOpacity style={[st.btn, { marginTop: 12, marginBottom: 0, backgroundColor: '#2e7d32' }]} onPress={aplicar}><Text style={[st.btnTx, { color: '#fff' }]}>Aplicar à planilha</Text></TouchableOpacity>
+          <Text style={st.tipTx}>Depois de aplicar, ajuste médias e tipos (V, D) de cada trecho na aba Planilha e publique.</Text>
+        </View>
+      )}
+    </View>
+  );
+}

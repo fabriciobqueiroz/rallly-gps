@@ -1,11 +1,13 @@
 // Gera o roadbook em PDF para imprimir (tabela com parcial, total, tulipa e tipo de trecho).
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
+import { desenhoSvgStr } from './Desenho';
 
 const km2 = (m) => (m / 1000).toFixed(2).replace('.', ',');
 const mmss = (sec) => `${Math.floor(sec / 60)}:${String(Math.round(sec % 60)).padStart(2, '0')}`;
 
 function tulSvg(e, size) {
+  if (e.dw && e.dw.length) return desenhoSvgStr(e.dw, size);
   const c = 50, R = 40, b = e.b || [];
   const base = e.i >= 0 && b[e.i] != null ? b[e.i] : 180;
   const rot = (x) => x - base + 180;
@@ -29,9 +31,9 @@ function tulSvg(e, size) {
 
 function tipo(nx) {
   if (!nx) return '';
-  return nx.t === 'D'
-    ? `<div style="background:#ffe600;padding:3px 6px;font-weight:bold">D ${nx.min}'</div>`
-    : `<div style="background:#2e7d32;color:#fff;padding:3px 6px;font-weight:bold">V ${nx.kg} (G/M) · ${nx.ka} (A)</div>`;
+  if (nx.t === 'D') return `<div style="background:#ffe600;padding:3px 6px;font-weight:bold">D ${nx.min}'</div>`;
+  const txt = Array.isArray(nx.v) ? nx.v.map((x, i) => `${String.fromCharCode(65 + i)} ${x}`).join(' · ') : `${nx.kg} (G/M) · ${nx.ka} (A)`;
+  return `<div style="background:#2e7d32;color:#fff;padding:3px 6px;font-weight:bold">V ${txt}</div>`;
 }
 
 export function roadbookHtml(prova, tul) {
@@ -43,11 +45,21 @@ export function roadbookHtml(prova, tul) {
     return `<tr><td style="width:70px"><div style="font-size:12px">${km2(e.p)}</div><div style="font-size:18px;font-weight:bold">${km2(e.d)}</div></td><td>${mid}</td></tr>`;
   }).join('');
   return `<html><body style="font-family:sans-serif;margin:16px"><h2 style="margin:0 0 8px">Roadbook · prova ${prova}</h2>
-  <div style="font-size:11px;margin-bottom:8px">Esquerda: parcial e total (km). Chegue pela rua de baixo e siga a seta. G/M = Graduado e Moto, A = Amador.</div>
+  <div style="font-size:11px;margin-bottom:8px">Esquerda: parcial e total (km). Chegue pela rua de baixo e siga a seta. Letras = grupos de média (ver categorias).</div>
   <table style="width:100%;border-collapse:collapse" border="1" cellpadding="5">${rows}</table></body></html>`;
 }
 
 export async function compartilharPdf(prova, tul) {
   const { uri } = await Print.printToFileAsync({ html: roadbookHtml(prova, tul) });
   await Sharing.shareAsync(uri, { mimeType: 'application/pdf', dialogTitle: `Roadbook ${prova}` });
+}
+
+export async function compartilharResultadosPdf(prova, linhas) {
+  const por = {};
+  linhas.forEach((r) => { (por[r.classe] = por[r.classe] || []).push(r); });
+  const html = `<html><body style="font-family:sans-serif;margin:16px"><h2>Resultado oficial · ${prova}</h2>` + Object.keys(por).map((c) =>
+    `<h3 style="background:#1b6b85;color:#fff;padding:4px 8px">${c}</h3><table style="width:100%;border-collapse:collapse" border="1" cellpadding="5">` +
+    por[c].map((r, i) => `<tr><td style="width:40px">${r.nc ? 'NC' : i + 1 + 'º'}</td><td>#${r.numero} ${r.nome}</td><td style="width:60px">${r.nc ? '' : r.npcs + ' PC'}</td><td style="width:90px;text-align:right">${r.nc ? 'N/A' : Number(r.pontos).toFixed(1) + ' pts'}</td></tr>`).join('') + '</table>').join('') + '</body></html>';
+  const { uri } = await Print.printToFileAsync({ html });
+  await Sharing.shareAsync(uri, { mimeType: 'application/pdf', dialogTitle: `Resultado ${prova}` });
 }

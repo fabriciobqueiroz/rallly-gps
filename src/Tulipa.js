@@ -1,10 +1,13 @@
 // Desenho de tulipa (cruzamento com a seta do caminho) e lista do roadbook.
 import { Text, View } from 'react-native';
+import { grupoIdx } from './rally';
+import { DesenhoSvg } from './Desenho';
 import Svg, { Circle, Line, Polygon, Rect, Text as SvgText } from 'react-native-svg';
 
 const km2 = (m) => (m / 1000).toFixed(2).replace('.', ',');
 
 export function Tulipa({ e, size = 96 }) {
+  if (e.dw && e.dw.length) return <DesenhoSvg items={e.dw} size={size} />;
   const c = 50, R = 40;
   const b = e.b || [];
   const base = e.i >= 0 && b[e.i] != null ? b[e.i] : 180;
@@ -39,16 +42,20 @@ const LABEL = { L: 'LARGADA', C: 'CHEGADA' };
 const mmss = (sec) => `${Math.floor(sec / 60)}:${String(Math.round(sec % 60)).padStart(2, '0')}`;
 
 // Texto do tipo do trecho que começa neste ponto (V por classe, ou D com tempo).
-export function rotuloNx(nx, classe) {
+export function rotuloNx(nx, classe, grupos) {
   if (!nx) return null;
   if (nx.t === 'D') return { txt: `D ${nx.min}'`, cor: '#ffe600', fg: '#000' };
+  if (Array.isArray(nx.v)) {
+    if (classe) return { txt: `V ${nx.v[grupoIdx(classe, grupos)] ?? nx.v[0]}`, cor: '#2e7d32', fg: '#fff' };
+    return { txt: 'V ' + nx.v.map((x, i) => `${String.fromCharCode(65 + i)} ${x}`).join(' · '), cor: '#2e7d32', fg: '#fff' };
+  }
   const v = classe === 'AMADOR' ? nx.ka : classe ? nx.kg : null;
   return { txt: v != null ? `V ${v}` : `V ${nx.kg} · A ${nx.ka}`, cor: '#2e7d32', fg: '#fff' };
 }
 
-export function Entrada({ e, st, destaque, faltam, classe }) {
+export function Entrada({ e, st, destaque, faltam, classe, grupos }) {
   const marcador = e.t !== 'T';
-  const nx = rotuloNx(e.nx, classe);
+  const nx = rotuloNx(e.nx, classe, grupos);
   return (
     <View style={[st.line, { alignItems: 'center', borderLeftWidth: destaque ? 4 : 0, borderLeftColor: '#ff7a2e', paddingLeft: destaque ? 8 : 0 }]}>
       <View style={{ width: 74 }}>
@@ -83,12 +90,12 @@ export function Entrada({ e, st, destaque, faltam, classe }) {
 }
 
 // Lista completa. 'dist' = posição atual no percurso (m); null = só pré-visualização.
-export function Roadbook({ st, tul, dist, classe }) {
+export function Roadbook({ st, tul, dist, classe, grupos }) {
   const atual = dist == null ? -1 : tul.findIndex((e) => e.d >= dist - 15);
   return (
     <View>
       {tul.map((e, i) => (
-        <Entrada key={i} e={e} st={st} classe={classe} destaque={i === atual} faltam={i === atual ? e.d - dist : null} />
+        <Entrada key={i} e={e} st={st} classe={classe} grupos={grupos} destaque={i === atual} faltam={i === atual ? e.d - dist : null} />
       ))}
     </View>
   );

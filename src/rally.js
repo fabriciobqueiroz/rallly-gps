@@ -25,9 +25,23 @@ export function cumulative(points) {
 // Resolve um trecho publicado pelo organizador para a classe do competidor.
 // V = média por classe (Graduado e Moto usam a mesma; Amador tem a sua), D = deslocamento (tempo limite, sem pontos).
 // nt = segundos de neutro no fim do trecho (parada obrigatória no PC).
-export function resolverTrecho(t, classe) {
+export const GRUPOS_PADRAO = [{ nome: 'A', cats: ['GRADUADO', 'MOTO'] }, { nome: 'B', cats: ['AMADOR'] }];
+// categorias = [{nome, g}] (g = índice do grupo de média). Sem categorias, usa o padrão Graduado/Moto + Amador.
+export function gruposDe(cats) {
+  if (!cats || !cats.length) return GRUPOS_PADRAO;
+  const n = Math.max(...cats.map((c) => c.g || 0)) + 1;
+  return Array.from({ length: n }, (_, i) => ({ nome: String.fromCharCode(65 + i), cats: cats.filter((c) => (c.g || 0) === i).map((c) => c.nome) }));
+}
+export function grupoIdx(classe, grupos) {
+  const g = grupos && grupos.length ? grupos : GRUPOS_PADRAO;
+  const i = g.findIndex((x) => x.cats.includes(classe));
+  return i < 0 ? 0 : i;
+}
+export function resolverTrecho(t, classe, grupos) {
   if (t.t === 'D') return { tipo: 'D', km: t.km, kmh: t.min > 0 ? t.km / (t.min / 60) : 0, min: t.min, nt: t.nt || 0 };
-  return { tipo: 'V', km: t.km, kmh: classe === 'AMADOR' ? t.ka : t.kg, nt: t.nt || 0 };
+  const idx = grupoIdx(classe, grupos);
+  const kmh = Array.isArray(t.v) ? (t.v[idx] ?? t.v[0]) : classe === 'AMADOR' ? t.ka : t.kg;
+  return { tipo: 'V', km: t.km, kmh, nt: t.nt || 0 };
 }
 
 // Estado do trecho: começa vazio. Distâncias em metros já calibradas.
@@ -104,7 +118,7 @@ export function markPc(stage, points, cum, factor) {
   const refDist = stage.km > 0 ? stage.km * 1000 : s.dist;
   const idealTime = stage.tipo === 'D' && stage.min > 0 ? stage.min * 60 : v > 0 ? refDist / v : null;
   const diff = idealTime != null ? s.elapsed - idealTime : null; // positivo = demorou mais (atrasado)
-  const pc = { n: stage.pcs.length + 1, tipo: stage.tipo || 'V', trecho: stage.idx >= 0 ? stage.idx + 1 : null, elapsed: s.elapsed, dist: s.dist, avgKmh: s.avgKmh, idealTime, diff };
+  const pc = { t: points[points.length - 1].t, t0: stage.t0, n: stage.pcs.length + 1, tipo: stage.tipo || 'V', trecho: stage.idx >= 0 ? stage.idx + 1 : null, elapsed: s.elapsed, dist: s.dist, avgKmh: s.avgKmh, idealTime, diff };
   return { ...stage, pcs: [...stage.pcs, pc] };
 }
 
@@ -132,4 +146,45 @@ export const pontos = (pcs) => pcs.reduce((a, p) => a + (p.diff != null && p.tip
 // Ordena o ranking: mais PCs feitos primeiro, depois menos pontos.
 export function rank(results) {
   return [...results].sort((a, b) => (b.npcs - a.npcs) || (a.pontos - b.pontos));
+}
+
+
+// ---- Resultado oficial a partir do datalogger (trilha completa enviada pelo competidor) ----
+// Instante em que a trilha passa mais perto do ponto (PC), a partir de fromT. null se não passou a menos de maxD metros.
+export function crossingTime(points, wp, fromT, maxD = 60) {
+  let best = null, inside = false;
+  for (const p of points) {
+    if (p.t < fromT) continue;
+    const d = haversine({ lat: wp[0], lon: wp[1] }, p);
+    if (d <= maxD) { inside = true; if (!best || d < best.d) best = { d, t: p.t }; }
+    else if (inside) break;
+  }
+  return best ? best.t : null;
+}
+
+// Refaz os PCs oficiais: cada PC vale o instante em que o carro passou pelo ponto do mapa.
+// wps = [largada, PC1, ..., chegada]; trechos = trechos publicados; t0 = instante da largada.
+export function oficialDeTrilha(points, wps, trechos, classe, grupos, t0) {
+  const cum = cumulative(points);
+  const pcs = [];
+  let tIni = t0;
+  for (let i = 0; i < trechos.length; i++) {
+    const wp = wps[i + 1];
+    if (!wp) break;
+    const tr = resolverTrecho(trechos[i], classe, grupos);
+    const tc = crossingTime(points, wp, tIni);
+    if (tc == null) break;
+    const elapsed = (tc - tIni) / 1000;
+    const dist = distAt(points, cum, tc) - distAt(points, cum, tIni);
+    const v = tr.kmh / 3.6;
+    const idealTime = tr.tipo === 'D' ? tr.min * 60 : v > 0 ? (tr.km * 1000) / v : null;
+    pcs.push({ n: i + 1, tipo: tr.tipo, trecho: i + 1, elapsed, dist, avgKmh: elapsed > 0 ? (dist / elapsed) * 3.6 : 0, idealTime, diff: idealTime != null ? elapsed - idealTime : null, t0: tIni, t: tc });
+    tIni = tr.nt > 0 ? tc + tr.nt * 1000 : tc;
+  }
+  return pcs;
+}
+
+export function pcsDoLogger(dl) {
+  const t0 = dl.t0 || 0;
+  return dl.t.map((dt, i) => ({ t: t0 + dt * 1000, lat: dl.la[i] / 1e5, lon: dl.lo[i] / 1e5, acc: null }));
 }
