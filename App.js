@@ -12,6 +12,7 @@ import { Roadbook } from './src/Tulipa';
 import Organizador from './src/Organizador';
 import { enviarResultado, ouvirRanking, salvarProva, ouvirProva, inscrever, ouvirInscricao, enviarDatalogger } from './src/firebase';
 import { planilhaLiberada, parseHMS, CATS_PADRAO } from './src/OrgExtras';
+import { NavTela, NavConfig, loadNav } from './src/Nav';
 import { compartilharPdf } from './src/pdf';
 import { begin, clear, getState, subscribe, summarize, toCsv, haversine } from './src/store';
 import { gruposDe, cumulative, newStage, startStage, status, markPc, parseRoteiro, resolverTrecho, pontos, rank, fmtDur, fmtSigned, pcsToText } from './src/rally';
@@ -32,6 +33,10 @@ export default function App() {
   const [kmhTxt, setKmhTxt] = useState('');
   const [rotTxt, setRotTxt] = useState(() => loadRoteiro());
   const [tab, setTab] = useState('gravar');
+  const [navOpen, setNavOpen] = useState(false);
+  const [cfgOpen, setCfgOpen] = useState(false);
+  const [odoBase, setOdoBase] = useState(0);
+  const [odoAdj, setOdoAdj] = useState(0);
   const [piloto, setPiloto] = useState(() => ({ nome: '', numero: '', prova: '', navegador: '', email: '', classe: 'GRADUADO', ...loadJson('piloto', {}) }));
   const [hist, setHist] = useState([]);
   const [provaMap, setProvaMap] = useState({ wps: [], coords: [], legs: [], kmh: [], tul: [], trechos: [], categorias: [], lib: {}, refs: [] });
@@ -206,7 +211,8 @@ export default function App() {
   };
   const onEnviar = async () => {
     if (!piloto.nome.trim() || !piloto.numero.trim() || !piloto.prova.trim()) return Alert.alert('Falta preencher', 'Informe nome, número e código da prova.');
-    if (!stage.pcs.length) return Alert.alert('Sem PCs', 'Marque ao menos um PC antes de enviar.');
+    // Os PCs são do organizador: sem PC marcado, a finalização envia a trilha (datalogger) e o organizador calcula o resultado oficial.
+    if (!stage.pcs.length) return onDatalogger();
     setEnviando(true);
     try {
       await enviarResultado({ ...piloto, pcs: stage.pcs, pontos: pontos(stage.pcs) });
@@ -264,6 +270,7 @@ export default function App() {
     setStage((x) => ({ ...x, targetKmh: v > 0 ? v : 0 }));
   };
   const adj = (m) => setStage((x) => ({ ...x, adjust: x.adjust + m }));
+  const adjAll = (m) => { adj(m); setOdoAdj((a) => a + m); };
   const refPerto = (() => {
     if (!last || !provaMap.refs.length) return null;
     let b = null;
@@ -307,7 +314,7 @@ export default function App() {
       <View style={st.row}>
         {['gravar', 'ranking', 'tulipas', 'organizar'].map((t) => (
           <TouchableOpacity key={t} style={[st.tab, tab === t && st.tabOn]} onPress={() => setTab(t)}>
-            <Text style={[st.tabTx, tab === t && { color: '#0c1014' }]}>{{ gravar: 'Gravar', ranking: 'Ranking', tulipas: 'Tulipas', organizar: 'Organizar' }[t]}</Text>
+            <Text style={[st.tabTx, tab === t && { color: '#0c1014' }]}>{{ gravar: 'Gravar', ranking: 'Ranking', tulipas: 'Iniciar', organizar: 'Organizar' }[t]}</Text>
           </TouchableOpacity>
         ))}
       </View>
@@ -315,7 +322,10 @@ export default function App() {
         <Organizador st={st} onProva={setP('prova')} prova={piloto.prova} provaMap={provaMap} last={last} onOrg={setOrgInfo} />
       ) : tab === 'tulipas' ? (
         <View style={st.card}>
-          <Text style={st.tip}>Roadbook · prova {piloto.prova.trim() || '—'}</Text>
+          <Text style={st.tip}>Prova {piloto.prova.trim() || '—'}</Text>
+          <TouchableOpacity style={[st.btn, { backgroundColor: '#2e7d32', marginTop: 6 }]} onPress={() => { if (!libOk) return Alert.alert('Planilha não liberada', 'Aguarde a liberação do organizador.'); setNavOpen(true); }}><Text style={[st.btnTx, { color: '#fff' }]}>INICIAR (tela do navegador)</Text></TouchableOpacity>
+          <TouchableOpacity style={st.btn2} onPress={() => setCfgOpen(true)}><Text style={st.btn2Tx}>Personalizar a tela (faça antes da prova)</Text></TouchableOpacity>
+          <Text style={[st.tip, { marginTop: 12 }]}>Roadbook</Text>
           {!libOk ? (
             <Text style={[st.tipTx, { color: '#ffb300' }]}>Planilha ainda não liberada pelo organizador{provaMap.lib?.ini ? ` (libera em ${provaMap.lib.ini})` : ''}.</Text>
           ) : provaMap.tul.length === 0 ? (
@@ -408,15 +418,15 @@ export default function App() {
           <TextInput style={st.input} value={kmhTxt} onChangeText={onKmh} keyboardType="decimal-pad" placeholder="ex: 30" placeholderTextColor="#666" />
         </View>
         <View style={st.row}>
-          <TouchableOpacity style={st.btn2} onPress={() => adj(-10)}><Text style={st.btn2Tx}>−10 m</Text></TouchableOpacity>
-          <TouchableOpacity style={st.btn2} onPress={() => adj(10)}><Text style={st.btn2Tx}>+10 m</Text></TouchableOpacity>
+          <TouchableOpacity style={st.btn2} onPress={() => adjAll(-10)}><Text style={st.btn2Tx}>−10 m</Text></TouchableOpacity>
+          <TouchableOpacity style={st.btn2} onPress={() => adjAll(10)}><Text style={st.btn2Tx}>+10 m</Text></TouchableOpacity>
           <TouchableOpacity style={st.btn2} onPress={() => setFactor((f) => f - 0.001)}><Text style={st.btn2Tx}>Calib −0,1%</Text></TouchableOpacity>
           <TouchableOpacity style={st.btn2} onPress={() => setFactor((f) => f + 0.001)}><Text style={st.btn2Tx}>+0,1%</Text></TouchableOpacity>
         </View>
         <Text style={st.tipTx}>Calibração: x{factor.toFixed(4)} (ajuste até bater com o hodômetro da organização)</Text>
         {provaMap.refs.length > 0 && (
           <TouchableOpacity style={[st.btn2, { marginTop: 8, borderColor: refPerto ? '#ffe600' : '#262b32' }]} disabled={!refPerto}
-            onPress={() => { adj(refPerto.r.km * 1000 - globalDist); Vibration.vibrate(120); }}>
+            onPress={() => { adjAll(refPerto.r.km * 1000 - globalDist); Vibration.vibrate(120); }}>
             <Text style={[st.btn2Tx, { color: refPerto ? '#ffe600' : '#666' }]}>{refPerto ? `REF ${refPerto.r.n} aqui (${refPerto.d.toFixed(0)} m) · corrigir odômetro p/ ${refPerto.r.km.toFixed(3)} km` : 'REF: sem marco de referência por perto'}</Text>
           </TouchableOpacity>
         )}
@@ -488,6 +498,13 @@ export default function App() {
       </View>
       </>
       )}
+      {navOpen && (
+        <NavTela cfg={loadNav()} stage={stage} rs={rs} last={last} globalDist={rs || stage.idx >= 0 ? globalDist : 0}
+          odoM={(points.length ? cum[points.length - 1] * factor : 0) + odoAdj - odoBase} tul={provaMap.tul} rot={rot} classe={piloto.classe} grupos={grupos}
+          aviso={remLarg != null && remLarg > 0 ? `Largada em ${fmtDur(remLarg)}` : neutroRest != null ? `NEUTRO · PARE · ${fmtDur(neutroRest)}` : stage.idx >= 0 && rs && remain != null && remain <= 0 ? 'CHEGOU — toque em PC' : null}
+          onAdj={adjAll} onPc={onPc} onZerar={() => setOdoBase((points.length ? cum[points.length - 1] * factor : 0) + odoAdj)} onClose={() => setNavOpen(false)} />
+      )}
+      <NavConfig st={st} visible={cfgOpen} onClose={() => setCfgOpen(false)} />
     </ScrollView>
   );
 }
