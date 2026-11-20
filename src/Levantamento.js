@@ -1,7 +1,7 @@
 // Levantamento da prova dirigindo: o rastro do GPS vira o percurso, o organizador marca tulipas (com observação e foto)
 // e, ao chegar, edita cada tulipa com calma (desenho do cruzamento, nome, neutro) antes de aplicar à planilha.
 import { useState } from 'react';
-import { Alert, Image, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { Alert, Image, Text, Vibration, TextInput, TouchableOpacity, View } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { File, Paths } from 'expo-file-system';
 import MapaWeb from './MapaWeb';
@@ -15,7 +15,7 @@ import { detectarCruzamento, dist, linhaPc, rumo, satUrl } from './osm';
 
 const km2 = (m) => (m / 1000).toFixed(3).replace('.', ',');
 const CORES = ['#ff7a2e', '#ffe600', '#00e5ff', '#ff1744', '#76ff03'];
-const KIND = { L: 'Largada', T: 'Tulipa', P: 'PC', N: 'Neutro', C: 'Chegada', R: 'REF' };
+const KIND = { L: 'Largada', T: 'Referência', P: 'Fim/início de trecho', N: 'Neutro', C: 'Chegada', R: 'REF' };
 const COR = { L: '#4caf50', T: '#ff7a2e', P: '#ff5a1f', N: '#ff5252', C: '#c0392b', R: '#ffe600' };
 const PRESETS = [
   ['Em T', [90, 270]], ['Cruzamento', [0, 90, 270]], ['Y', [45, 315]], ['Só reta', [0]],
@@ -112,6 +112,10 @@ export default function Levantamento({ st, prova, last, onAplicar, onProva }) {
   const iniIdx = lev.iniT != null ? Math.max(0, points.findIndex((p) => p.t >= lev.iniT)) : -1;
   const kmAqui = iniIdx >= 0 && points.length ? Math.max(0, cum[points.length - 1] - cum[iniIdx]) : 0;
   const fechado = lev.marks.some((m) => m.k === 'C');
+  const nTrechos = (o) => o.marks.filter((m) => m.k === 'P' || m.k === 'N').length + 1;
+  // trechos garantidos: um por intervalo entre largada, fins de trecho e chegada
+  const trAtual = (o) => { const a = [...(o.trechos || [])]; while (a.length < nTrechos(o)) a.push({ ...(a[a.length - 1] || { t: 'V', v: '', min: '15' }) }); return a.slice(0, nTrechos(o)); };
+  const setTr = (i, patch) => setLev((o) => { const a = trAtual(o); a[i] = { ...a[i], ...patch }; return { ...o, trechos: a }; });
   // Rastro percorrido (no máximo ~700 pontos para o mapa).
   const trail = (() => {
     if (iniIdx < 0) return [];
@@ -120,15 +124,24 @@ export default function Levantamento({ st, prova, last, onAplicar, onProva }) {
     return seg.filter((_, i) => i % step === 0 || i === seg.length - 1).map((p) => [p.lat, p.lon]);
   })();
 
+  // lê sempre o ponto GPS mais recente na hora do toque (não o da última renderização)
   const pronto = () => {
-    const l = points[points.length - 1];
-    if (!l || (l.acc != null && l.acc > 25) || Date.now() - l.t > 6000) { Alert.alert('GPS sem sinal bom', 'Inicie a gravação na aba Gravar e espere o GPS ficar verde.'); return null; }
+    const pts = getState().points;
+    const l = pts[pts.length - 1];
+    if (!l) { Alert.alert('Sem GPS', 'Ainda não chegou nenhuma posição. Espere o GPS ficar verde e toque de novo.'); return null; }
+    if (Date.now() - l.t > 20000) { Alert.alert('GPS parado', 'A última posição tem mais de 20 s. Confira se o GPS está ligado e com sinal, e toque de novo.'); return null; }
+    if (l.acc != null && l.acc > 50) { Alert.alert('Sinal fraco', `Precisão do GPS: ${Math.round(l.acc)} m. Espere melhorar e toque de novo.`); return null; }
     return l;
   };
   const marcar = (k, extra = {}) => {
     const l = pronto(); if (!l) return;
+    const pts = getState().points;
+    const iniI = lev.iniT != null ? Math.max(0, pts.findIndex((p) => p.t >= lev.iniT)) : -1;
+    const cumF = cumulative(pts);
+    const kmAgora = iniI >= 0 && pts.length ? Math.max(0, cumF[pts.length - 1] - cumF[iniI]) : 0;
+    Vibration.vibrate(60);
     if (k === 'L') {
-      const novo = () => setLev({ iniT: l.t, marks: [{ id: 1, k: 'L', lat: l.lat, lon: l.lon, hdg: l.hdg ?? null, km: 0, nota: '', foto: null }] });
+      const novo = () => setLev({ iniT: l.t, trechos: [{ t: 'V', v: '', min: '15' }], marks: [{ id: 1, k: 'L', lat: l.lat, lon: l.lon, hdg: l.hdg ?? null, km: 0, nota: '', foto: null }] });
       if (!lev.marks.length) return novo();
       Alert.alert('Iniciar levantamento', 'Isso apaga o levantamento anterior desta prova. Continuar?', [
         { text: 'Cancelar' },
@@ -136,13 +149,21 @@ export default function Levantamento({ st, prova, last, onAplicar, onProva }) {
       ]);
       return;
     }
-    if (iniIdx < 0) return Alert.alert('Marque a largada primeiro');
-    const m = { id: Date.now(), k, lat: Math.round(l.lat * 1e6) / 1e6, lon: Math.round(l.lon * 1e6) / 1e6, hdg: l.hdg != null && l.hdg >= 0 ? Math.round(l.hdg) : null, km: Math.round(kmAqui), nota: '', foto: null, ...(k === 'N' ? { nt: 120 } : {}), ...extra };
-    setLev((o) => ({ ...o, marks: [...o.marks, m] }));
+    if (iniI < 0) return Alert.alert('Marque a largada primeiro');
+    const m = { id: Date.now(), k, lat: Math.round(l.lat * 1e6) / 1e6, lon: Math.round(l.lon * 1e6) / 1e6, hdg: l.hdg != null && l.hdg >= 0 ? Math.round(l.hdg) : null, km: Math.round(kmAgora), nota: '', foto: null, ...(k === 'N' ? { nt: 120 } : {}), ...extra };
+    setLev((o) => ({ ...o, marks: [...o.marks, m], trechos: k === 'P' || k === 'N' ? [...trAtual(o), { ...trAtual(o)[trAtual(o).length - 1] }] : o.trechos }));
     if (k === 'T' || k === 'P' || k === 'N') setAberta(m.id);
   };
   const upd = (id, patch) => setLev((o) => ({ ...o, marks: o.marks.map((m) => (m.id === id ? { ...m, ...patch } : m)) }));
-  const del = (id) => setLev((o) => ({ ...o, marks: o.marks.filter((m) => m.id !== id) }));
+  const del = (id) => setLev((o) => {
+    const alvo = o.marks.find((m) => m.id === id);
+    let tr = o.trechos;
+    if (alvo && (alvo.k === 'P' || alvo.k === 'N')) {
+      const idx = o.marks.filter((m) => m.k === 'P' || m.k === 'N').findIndex((m) => m.id === id);
+      tr = trAtual(o); tr.splice(idx + 1, 1);
+    }
+    return { ...o, marks: o.marks.filter((m) => m.id !== id), trechos: tr };
+  });
   const foto = (id) => {
     Alert.alert('Foto da referência', 'De onde vem a foto?', [
       { text: 'Câmera', onPress: () => pegaFoto(id, true) },
@@ -198,6 +219,8 @@ export default function Levantamento({ st, prova, last, onAplicar, onProva }) {
   const semArms = ordenadas.filter((m) => m.k === 'T' && !(m.dw && m.dw.length) && !(m.arms && m.arms.length && m.out != null));
   const aplicar = () => {
     if (!fechado) return Alert.alert('Falta a chegada', 'Toque em CHEGADA no fim do percurso.');
+    const sem = trAtual(lev).map((t, i) => (t.t === 'V' && !(parseFloat(String(t.v).replace(',', '.')) > 0) ? i + 1 : 0)).filter(Boolean);
+    if (sem.length) return Alert.alert('Trecho sem média', `Defina a média do(s) trecho(s) ${sem.join(', ')} ou marque como deslocamento.`);
     if (semArms.length) return Alert.alert('Tulipas sem desenho', `${semArms.length} tulipa(s) ainda sem ruas e saída. Elas ficam só com o texto. Continuar?`, [{ text: 'Voltar' }, { text: 'Aplicar assim', onPress: () => confirmar() }]);
     confirmar();
   };
@@ -221,7 +244,7 @@ export default function Levantamento({ st, prova, last, onAplicar, onProva }) {
       prev = d;
     });
     const legs = pontosKm.slice(1).map((k, i) => Math.round((k - pontosKm[i]) * 1000) / 1000);
-    onAplicar({ wps, rota: { coords: trail, legs, tul }, nIdx: ntMap, refs, pcl });
+    onAplicar({ wps, rota: { coords: trail, legs, tul }, nIdx: ntMap, refs, pcl, trIni: trAtual(lev) });
     Alert.alert('Aplicado', 'Percurso, tulipas e trechos foram para a aba Planilha. Ajuste as médias e publique.');
   };
 
@@ -254,7 +277,12 @@ export default function Levantamento({ st, prova, last, onAplicar, onProva }) {
     if (!cand) return;
     const m = { id: Date.now(), k, lat: cand.lat, lon: cand.lon, hdg: cand.hdg, km: cand.km, nota: '', foto: null, ...(k === 'N' ? { nt: 120 } : {}) };
     const ord = (x) => (x.k === 'L' ? -1 : x.k === 'C' ? 1e12 : x.km);
-    setLev((o) => ({ ...o, marks: [...o.marks, m].sort((x, y) => ord(x) - ord(y)) }));
+    setLev((o) => {
+      const marks = [...o.marks, m].sort((x, y) => ord(x) - ord(y));
+      let tr = o.trechos;
+      if (k === 'P' || k === 'N') { const idx = marks.filter((x) => x.k === 'P' || x.k === 'N').findIndex((x) => x.id === m.id); tr = trAtual(o); tr.splice(idx + 1, 0, { ...tr[idx] }); }
+      return { ...o, marks, trechos: tr };
+    });
     setCand(null);
     if (k === 'T' || k === 'P' || k === 'N') setAberta(m.id);
   };
@@ -262,8 +290,8 @@ export default function Levantamento({ st, prova, last, onAplicar, onProva }) {
   const ult = ordenadas[ordenadas.length - 1];
   const nTul = (i) => ordenadas.slice(0, i + 1).filter(comTulipa).length;
   const nPc = (i) => ordenadas.slice(0, i + 1).filter((x) => x.k === 'P' || x.k === 'N').length;
-  const rotulo = (m, i) => (m.k === 'T' ? 'Tulipa ' + nTul(i) : m.k === 'P' ? 'PC ' + nPc(i) : m.k === 'N' ? 'Neutro (PC ' + nPc(i) + ')' : m.k === 'L' ? 'Largada · tulipa ' + nTul(i) : m.k === 'C' ? 'Chegada · tulipa ' + nTul(i) : KIND[m.k]);
-  const pinosBase = ordenadas.map((m, i) => ({ lat: m.lat, lon: m.lon, txt: m.k === 'T' ? 'T' + nTul(i) : m.k === 'P' ? 'PC' + nPc(i) : m.k === 'N' ? 'N' + nPc(i) : KIND[m.k], cls: m.k === 'L' ? 'l' : m.k === 'C' ? 'c' : '' }));
+  const rotulo = (m, i) => (m.k === 'T' ? 'Referência ' + nTul(i) : m.k === 'P' ? 'Fim do trecho ' + nPc(i) + ' / início do ' + (nPc(i) + 1) : m.k === 'N' ? 'Neutro · fim do trecho ' + nPc(i) : m.k === 'L' ? 'Largada · referência ' + nTul(i) : m.k === 'C' ? 'Chegada · referência ' + nTul(i) : KIND[m.k]);
+  const pinosBase = ordenadas.map((m, i) => ({ lat: m.lat, lon: m.lon, txt: m.k === 'T' ? 'R' + nTul(i) : m.k === 'P' ? 'F' + nPc(i) : m.k === 'N' ? 'N' + nPc(i) : KIND[m.k], cls: m.k === 'L' ? 'l' : m.k === 'C' ? 'c' : '' }));
   const pinos = cand ? [...pinosBase, { lat: cand.lat, lon: cand.lon, txt: 'NOVO', cls: 'c' }] : pinosBase;
   const linhas = ordenadas.filter((m) => m.k === 'P' || m.k === 'N').map(linhaPc).concat(cand ? [linhaPc({ lat: cand.lat, lon: cand.lon, hdg: cand.hdg })] : []);
   const B = ({ cor, tx, on, fg }) => (
@@ -285,12 +313,37 @@ export default function Levantamento({ st, prova, last, onAplicar, onProva }) {
         <TouchableOpacity style={st.btn2} onPress={() => setDash((d) => !d)}><Text style={st.btn2Tx}>{dash ? 'Pontilhado' : 'Contínuo'}</Text></TouchableOpacity>
         <TouchableOpacity style={st.btn2} onPress={() => setRc((c) => CORES[(CORES.indexOf(c) + 1) % CORES.length])}><Text style={[st.btn2Tx, { color: rc }]}>Cor</Text></TouchableOpacity>
       </View>
+      {lev.marks.length > 0 && (() => {
+        const trs = trAtual(lev);
+        const bnd = ordenadas.filter((m) => m.k === 'L' || m.k === 'P' || m.k === 'N' || m.k === 'C');
+        return (
+          <View style={st.card}>
+            <Text style={st.tip}>Trechos (toque para alterar)</Text>
+            {trs.map((t, i) => {
+              const ini = bnd[i], fim = bnd[i + 1];
+              const kmT = ini ? (fim ? fim.km : kmAqui) - ini.km : 0;
+              const atual = !fechado && i === trs.length - 1;
+              return (
+                <View key={i} style={{ borderTopWidth: i ? 1 : 0, borderTopColor: '#262b32', paddingVertical: 6 }}>
+                  <Text style={[st.v, atual && { color: '#ff7a2e' }]}>Trecho {i + 1}{atual ? ' · em andamento' : ''} · {km2(Math.max(0, kmT))} km</Text>
+                  <View style={[st.row, { marginVertical: 4, alignItems: 'center' }]}>
+                    <TouchableOpacity style={[st.btn2, t.t === 'V' && { backgroundColor: '#ff7a2e' }]} onPress={() => setTr(i, { t: 'V' })}><Text style={[st.btn2Tx, t.t === 'V' && { color: '#0c1014' }]}>Média</Text></TouchableOpacity>
+                    <TouchableOpacity style={[st.btn2, t.t === 'D' && { backgroundColor: '#ff7a2e' }]} onPress={() => setTr(i, { t: 'D' })}><Text style={[st.btn2Tx, t.t === 'D' && { color: '#0c1014' }]}>Deslocamento</Text></TouchableOpacity>
+                    {t.t === 'V' ? <TextInput style={[st.input, { minWidth: 70 }]} value={String(t.v ?? '')} onChangeText={(v) => setTr(i, { v })} keyboardType="decimal-pad" placeholder="km/h" placeholderTextColor="#666" />
+                      : <TextInput style={[st.input, { minWidth: 70 }]} value={String(t.min ?? '')} onChangeText={(v) => setTr(i, { min: v })} keyboardType="decimal-pad" placeholder="min" placeholderTextColor="#666" />}
+                  </View>
+                </View>
+              );
+            })}
+          </View>
+        );
+      })()}
       {!fechado && (
         <View style={[st.row, { marginBottom: 6 }]}>
           {lev.marks.length === 0 ? <B cor="#4caf50" tx="LARGADA" on={() => marcar('L')} /> : (
             <>
-              <B cor="#ff7a2e" tx="TULIPA" on={() => marcar('T')} />
-              <B cor="#ff5a1f" tx="PC" on={() => marcar('P')} />
+              <B cor="#ff7a2e" tx="REFERÊNCIA" on={() => marcar('T')} />
+              <B cor="#ff5a1f" tx="FIM/INÍCIO TRECHO" on={() => marcar('P')} />
               <B cor="#c0392b" fg="#fff" tx="NEUTRO" on={() => marcar('N')} />
               <B cor="#1565c0" fg="#fff" tx="FOTO" on={fotoRapida} />
             </>
@@ -300,7 +353,7 @@ export default function Levantamento({ st, prova, last, onAplicar, onProva }) {
       {lev.marks.length > 0 && !fechado && (
         <TouchableOpacity style={[st.btn, { backgroundColor: '#c0392b', marginBottom: 8 }]} onPress={() => marcar('C')}><Text style={[st.btnTx, { color: '#fff' }]}>CHEGADA (fim da prova)</Text></TouchableOpacity>
       )}
-      {fechado && !cand && <Text style={st.tipTx}>Para incluir tulipa, PC ou neutro, toque no traçado do mapa no ponto certo.</Text>}
+      {fechado && !cand && <Text style={st.tipTx}>Para incluir referência, fim de trecho ou neutro, toque no traçado do mapa no ponto certo.</Text>}
       {cand && (
         <View style={st.card}>
           <Text style={st.tip}>Novo ponto · km {km2(cand.km)}</Text>
@@ -311,14 +364,14 @@ export default function Levantamento({ st, prova, last, onAplicar, onProva }) {
           </View>
           <Text style={st.tipTx}>O que é este ponto?</Text>
           <View style={[st.row, { marginTop: 4, marginBottom: 6 }]}>
-            <B cor="#ff7a2e" tx="TULIPA" on={() => inserir('T')} />
-            <B cor="#ff5a1f" tx="PC" on={() => inserir('P')} />
+            <B cor="#ff7a2e" tx="REFERÊNCIA" on={() => inserir('T')} />
+            <B cor="#ff5a1f" tx="FIM/INÍCIO TRECHO" on={() => inserir('P')} />
             <B cor="#c0392b" fg="#fff" tx="NEUTRO" on={() => inserir('N')} />
           </View>
           <TouchableOpacity style={st.btn2} onPress={() => setCand(null)}><Text style={st.btn2Tx}>Cancelar</Text></TouchableOpacity>
         </View>
       )}
-      <Text style={st.tipTx}>{iniIdx >= 0 ? `${km2(kmAqui)} km percorridos · ${ordenadas.filter((m) => m.k === 'T').length} tulipa(s) · ${ordenadas.filter((m) => m.k === 'P').length} PC(s) · ${ordenadas.filter((m) => m.k === 'N').length} neutro(s)` : 'Levantamento ainda não iniciado: ligue o GPS, espere ficar verde e toque LARGADA.'}{last?.acc != null ? ` · GPS ${last.acc.toFixed(0)} m` : ''}</Text>
+      <Text style={st.tipTx}>{iniIdx >= 0 ? `${km2(kmAqui)} km percorridos · ${ordenadas.filter((m) => m.k === 'T').length} referência(s) · trecho ${nTrechos(lev)} em andamento · ${ordenadas.filter((m) => m.k === 'N').length} neutro(s)` : 'Levantamento ainda não iniciado: ligue o GPS, espere ficar verde e toque LARGADA.'}{last?.acc != null ? ` · GPS ${last.acc.toFixed(0)} m` : ''}</Text>
       {fechado && (
         <TouchableOpacity style={[st.btn2, { marginBottom: 8 }]} onPress={() => del(ult.id)}><Text style={st.btn2Tx}>Reabrir (desfazer chegada)</Text></TouchableOpacity>
       )}

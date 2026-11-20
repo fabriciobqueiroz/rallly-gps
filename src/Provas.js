@@ -1,6 +1,7 @@
 // Lista "Minhas provas": criar (com nome), abrir, renomear e apagar (com dupla confirmação).
 import { useEffect, useState } from 'react';
-import { Alert, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { Alert, KeyboardAvoidingView, Modal, ScrollView, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { DateTimePickerAndroid } from '@react-native-community/datetimepicker';
 import { File } from 'expo-file-system';
 import { apagarProvaNuvem, criarProva, ouvirMinhasProvas } from './firebase';
 import { apagarJson, loadJson, saveJson } from './persist';
@@ -13,7 +14,10 @@ export default function ListaProvas({ st, org, onAbrir, onSairOrg }) {
   const [idx, setIdx] = useState(() => loadJson('lev_index', []));
   const [novo, setNovo] = useState('');
   const [cidade, setCidade] = useState('');
-  const [dataTx, setDataTx] = useState('');
+  const [dataObj, setDataObj] = useState(null);
+  const [form, setForm] = useState(false);
+  const dataTx = dataObj ? `${String(dataObj.getDate()).padStart(2, '0')}/${String(dataObj.getMonth() + 1).padStart(2, '0')}/${dataObj.getFullYear()}` : '';
+  const escolherData = () => DateTimePickerAndroid.open({ value: dataObj || new Date(), mode: 'date', onChange: (_, d) => { if (d) setDataObj(d); } });
   const [nuvem, setNuvem] = useState([]);
   const [busy, setBusy] = useState(false);
   const [apagando, setApagando] = useState(null);
@@ -30,13 +34,13 @@ export default function ListaProvas({ st, org, onAbrir, onSairOrg }) {
     const nome = novo.trim();
     if (!nome) return Alert.alert('Falta o nome', 'Dê um nome para a nova prova.');
     const ts = parseDataBR(dataTx);
-    if (ts == null) return Alert.alert('Data da prova', 'Digite a data no formato DD/MM/AAAA, por exemplo 16/08/2026.');
+    if (ts == null) return Alert.alert('Data da prova', 'Escolha a data da prova no calendário.');
     setBusy(true);
     try {
       const code = await criarProva(nome, cidade.trim(), dataTx.trim(), ts);
       saveJson('lev_' + slugProva(code), { iniT: null, marks: [], nome });
       salva([{ code, nome, marcas: 0, km: 0, ts: Date.now() }, ...idx]);
-      setNovo(''); setCidade(''); setDataTx('');
+      setNovo(''); setCidade(''); setDataObj(null); setForm(false);
       onAbrir(code, true);
     } catch (e) { Alert.alert('Não criou a prova', String(e?.message || e)); }
     setBusy(false);
@@ -104,13 +108,23 @@ export default function ListaProvas({ st, org, onAbrir, onSairOrg }) {
         </View>
       )}
       <View style={st.card}>
-        <Text style={st.tip}>Nova prova</Text>
-        <TextInput style={st.field} value={novo} onChangeText={setNovo} placeholder="Nome da prova" placeholderTextColor="#666" />
-        <TextInput style={st.field} value={cidade} onChangeText={setCidade} placeholder="Cidade - UF (ex.: São José do Rio Preto - SP)" placeholderTextColor="#666" />
-        <TextInput style={st.field} value={dataTx} onChangeText={setDataTx} placeholder="Data (DD/MM/AAAA)" placeholderTextColor="#666" keyboardType="numbers-and-punctuation" />
-        <TouchableOpacity style={[st.btn, { marginTop: 8, marginBottom: 0 }]} onPress={criar} disabled={busy}><Text style={st.btnTx}>{busy ? 'Criando…' : 'Criar prova'}</Text></TouchableOpacity>
-        <Text style={st.tipTx}>O código (4 números) é gerado sozinho. Os competidores não digitam código: veem a prova em "Minhas provas" quando você inscreve o e-mail deles.</Text>
+        <TouchableOpacity style={[st.btn, { marginBottom: 0 }]} onPress={() => setForm(true)}><Text style={st.btnTx}>+ NOVA PROVA</Text></TouchableOpacity>
+        <Text style={st.tipTx}>O código (4 números) é gerado sozinho. Os competidores veem a prova em "Provas" quando você inscreve o e-mail deles.</Text>
       </View>
+      <Modal visible={form} animationType="slide" onRequestClose={() => setForm(false)}>
+        <KeyboardAvoidingView style={{ flex: 1, backgroundColor: '#0c1014' }} behavior="padding">
+          <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ padding: 16, paddingTop: 50 }}>
+            <Text style={[st.tip, { fontSize: 20 }]}>Nova prova</Text>
+            <TextInput style={st.field} value={novo} onChangeText={setNovo} placeholder="Nome da prova" placeholderTextColor="#666" />
+            <TextInput style={st.field} value={cidade} onChangeText={setCidade} placeholder="Cidade - UF" placeholderTextColor="#666" />
+            <TouchableOpacity style={[st.field, { justifyContent: 'center' }]} onPress={escolherData}>
+              <Text style={{ color: dataTx ? '#fff' : '#666', fontSize: 16 }}>{dataTx ? `📅  ${dataTx}` : '📅  Escolher a data no calendário'}</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={[st.btn, { marginTop: 14 }]} onPress={criar} disabled={busy}><Text style={st.btnTx}>{busy ? 'Criando…' : 'Criar prova'}</Text></TouchableOpacity>
+            <TouchableOpacity style={st.btn2} onPress={() => setForm(false)}><Text style={st.btn2Tx}>Cancelar</Text></TouchableOpacity>
+          </ScrollView>
+        </KeyboardAvoidingView>
+      </Modal>
     </View>
   );
 }

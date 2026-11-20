@@ -87,10 +87,15 @@ export default function Organizador({ st, prova, provaMap, last, onOrg, onProva,
   }, [ng]);
 
   // Percurso vindo do levantamento dirigindo: usa o rastro e as tulipas marcadas, sem recalcular pelo OSRM.
-  const aplicarLevantamento = ({ wps: w, rota: r, nIdx, refs: rf, pcl: pc }) => {
+  const aplicarLevantamento = ({ wps: w, rota: r, nIdx, refs: rf, pcl: pc, trIni }) => {
     setManual(true);
     setWps(w); setRota(r); setRefs(rf); setPcl(pc || []);
-    setLegs(r.legs.map((_, i) => novoLeg(num(dif, 3), ng, (nIdx.get ? nIdx.get(i) : nIdx.has(i) ? 60 : 0) || 0)));
+    setLegs(r.legs.map((_, i) => {
+      const base = novoLeg(num(dif, 3), ng, (nIdx.get ? nIdx.get(i) : nIdx.has(i) ? 60 : 0) || 0);
+      const t = trIni && trIni[i];
+      if (!t) return base;
+      return t.t === 'D' ? { ...base, t: 'D', min: String(t.min || base.min) } : { ...base, t: 'V', v: vs(t.v, dif, ng).map((x, k) => (k === 0 ? String(t.v).replace(',', '.') : x)) };
+    }));
     setSec('planilha');
   };
   const upd = (i, patch) => setLegs((o) => o.map((l, j) => (j === i ? { ...l, ...patch } : l)));
@@ -163,7 +168,7 @@ export default function Organizador({ st, prova, provaMap, last, onOrg, onProva,
         <View>
       <View style={st.card}>
         <Text style={st.tip}>Prova {org.prova} · organizador</Text>
-        <Text style={st.tipTx}>Toque no mapa (ou dirija e use os botões abaixo): 1º ponto = largada, depois os PCs, e o último = chegada. O app calcula a rota, gera as tulipas e a planilha de trechos.</Text>
+        <Text style={st.tipTx}>Toque no mapa (ou dirija e use os botões abaixo): 1º ponto = largada, depois os fins de trecho, e o último = chegada. O app calcula a rota, gera as tulipas e a planilha de trechos.</Text>
       </View>
       {manual && (
         <View style={st.card}>
@@ -185,7 +190,7 @@ export default function Organizador({ st, prova, provaMap, last, onOrg, onProva,
         </View>
         {legs.map((l, i) => (
           <View key={i} style={{ borderTopWidth: 1, borderTopColor: '#262b32', paddingVertical: 8 }}>
-            <Text style={st.v}>{i === 0 ? 'Largada' : `PC${i}`} → {i === legs.length - 1 ? 'Chegada' : `PC${i + 1}`} · {(rota.legs[i] ?? 0).toFixed(3)} km</Text>
+            <Text style={st.v}>Trecho {i + 1} · {(rota.legs[i] ?? 0).toFixed(3)} km</Text>
             <View style={[st.row, { marginTop: 6, marginBottom: 6 }]}>
               <TouchableOpacity style={chip(l.t === 'V')} onPress={() => upd(i, { t: 'V' })}><Text style={[st.btn2Tx, l.t === 'V' && { color: '#0c1014' }]}>V média</Text></TouchableOpacity>
               <TouchableOpacity style={chip(l.t === 'D')} onPress={() => upd(i, { t: 'D' })}><Text style={[st.btn2Tx, l.t === 'D' && { color: '#0c1014' }]}>D deslocamento</Text></TouchableOpacity>

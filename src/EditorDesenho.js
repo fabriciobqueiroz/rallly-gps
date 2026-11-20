@@ -18,7 +18,7 @@ export default function EditorDesenho({ visible, inicial, foto, sat, hdg = 0, on
   const [txt, setTxt] = useState('');
   const hist = useRef([]);
   const R = useRef({});
-  R.current = { items, aba, sel, grosso, S };
+  R.current = { ...R.current, items, aba, sel, grosso, S };
   const push = () => { hist.current = [...hist.current.slice(-30), R.current.items]; };
   const desfazer = () => { if (!hist.current.length) return; const p = hist.current[hist.current.length - 1]; hist.current = hist.current.slice(0, -1); setItems(p); setSel(null); };
 
@@ -28,18 +28,20 @@ export default function EditorDesenho({ visible, inicial, foto, sat, hdg = 0, on
     onMoveShouldSetPanResponderCapture: () => true,
     onPanResponderTerminationRequest: () => false,
     onPanResponderGrant: (e) => {
-      const { aba: a, items: it, S: s, grosso: g } = R.current;
+      const { aba: a, items: it, S: s } = R.current;
       const x = (e.nativeEvent.locationX / s) * 100, y = (e.nativeEvent.locationY / s) * 100;
-      R.current.last = [x, y];
+      R.current.x0 = x; R.current.y0 = y; R.current.last = [x, y]; R.current.moved = false;
       if (a === 'pen') { R.current.stroke = [Math.round(x * 10) / 10, Math.round(y * 10) / 10]; setLive([...R.current.stroke]); setSel(null); return; }
       let best = null, bd = 18;
       it.forEach((q, i) => { const [cx, cy] = centro(q); const d = Math.hypot(cx - x, cy - y); if (d < bd) { bd = d; best = i; } });
-      setSel(best);
-      if (best != null) push();
+      R.current.hit = best != null;
+      if (best != null) { setSel(best); R.current.sel = best; }
+      if (R.current.sel != null) push();
     },
-    onPanResponderMove: (e) => {
-      const { aba: a, S: s, sel: sl } = R.current;
-      const x = (e.nativeEvent.locationX / s) * 100, y = (e.nativeEvent.locationY / s) * 100;
+    onPanResponderMove: (e, g) => {
+      const { aba: a, S: s } = R.current;
+      // usa o deslocamento do gesto (dx/dy): é confiável, ao contrário de locationX durante o arrasto
+      const x = R.current.x0 + (g.dx / s) * 100, y = R.current.y0 + (g.dy / s) * 100;
       if (a === 'pen') {
         const st = R.current.stroke;
         if (!st) return;
@@ -47,8 +49,10 @@ export default function EditorDesenho({ visible, inicial, foto, sat, hdg = 0, on
         if (Math.hypot(x - lx, y - ly) >= 1.2) { st.push(Math.round(x * 10) / 10, Math.round(y * 10) / 10); setLive([...st]); }
         return;
       }
-      const [px, py] = R.current.last || [x, y];
+      const [px, py] = R.current.last;
       R.current.last = [x, y];
+      if (Math.abs(g.dx) + Math.abs(g.dy) > 4) R.current.moved = true;
+      const sl = R.current.sel;
       if (sl != null) setItems((o) => o.map((q, i) => (i === sl ? mover(q, x - px, y - py) : q)));
     },
     onPanResponderRelease: () => {
@@ -57,7 +61,7 @@ export default function EditorDesenho({ visible, inicial, foto, sat, hdg = 0, on
         push();
         const p = R.current.stroke;
         setItems((o) => [...o, { k: 'pen', p, w: g }]);
-      }
+      } else if (a !== 'pen' && !R.current.hit && !R.current.moved) { setSel(null); }
       R.current.stroke = null; setLive(null);
     },
   })).current;

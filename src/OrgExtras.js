@@ -1,6 +1,7 @@
 // Painéis do organizador: categorias e médias, inscrições com largada, liberações, gravação dirigindo e resultado oficial.
 import { useEffect, useRef, useState } from 'react';
 import { loadJson, saveJson } from './persist';
+import { DateTimePickerAndroid } from '@react-native-community/datetimepicker';
 import { Alert, Switch, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { atualizarInscricao, enviarResultado, inscrever, ouvirDataloggers, ouvirRanking, removerInscricao, salvarProva } from './firebase';
 import { compartilharResultadosPdf } from './pdf';
@@ -164,6 +165,19 @@ export function OrgInscricoes({ st, prova, inscritos, categorias }) {
 }
 
 // ---------- Liberações ----------
+function dtTxt(d) { return `${d.getFullYear()}-${p2(d.getMonth() + 1)}-${p2(d.getDate())} ${p2(d.getHours())}:${p2(d.getMinutes())}`; }
+function escolherDT(atual, set) {
+  const base = parseDT(atual) ? new Date(parseDT(atual)) : new Date();
+  DateTimePickerAndroid.open({ value: base, mode: 'date', onChange: (ev, dia) => {
+    if (ev.type !== 'set' || !dia) return;
+    DateTimePickerAndroid.open({ value: base, mode: 'time', is24Hour: true, display: 'spinner', onChange: (ev2, hora) => {
+      if (ev2.type !== 'set' || !hora) return;
+      const d = new Date(dia); d.setHours(hora.getHours(), hora.getMinutes(), 0, 0); set(dtTxt(d));
+    } });
+  } });
+}
+const fmtBR = (v) => { const d = parseDT(v); return d ? `${p2(new Date(d).getDate())}/${p2(new Date(d).getMonth() + 1)}/${new Date(d).getFullYear()}  ${p2(new Date(d).getHours())}:${p2(new Date(d).getMinutes())}` : ''; };
+
 export function OrgLiberacao({ st, prova, lib }) {
   const [ini, setIni] = useState(lib.ini || '');
   const [fim, setFim] = useState(lib.fim || '');
@@ -174,9 +188,15 @@ export function OrgLiberacao({ st, prova, lib }) {
   return (
     <View style={st.card}>
       <Text style={st.tip}>Liberação para os competidores</Text>
-      <Text style={st.tipTx}>Período em que as tulipas e o roadbook ficam visíveis aos competidores. Formato AAAA-MM-DD HH:MM. Vazio = sempre liberado.</Text>
-      <TextInput style={st.field} value={ini} onChangeText={setIni} placeholder="Início, ex.: 2026-08-15 18:00" placeholderTextColor="#666" autoCapitalize="none" />
-      <TextInput style={st.field} value={fim} onChangeText={setFim} placeholder="Fim, ex.: 2026-08-16 20:00" placeholderTextColor="#666" autoCapitalize="none" />
+      <Text style={st.tipTx}>Período em que as tulipas e o roadbook ficam visíveis aos competidores. Toque para escolher data e hora. Vazio = sempre liberado.</Text>
+      {[['Início', ini, setIni], ['Fim', fim, setFim]].map(([nm, v, set]) => (
+        <View key={nm} style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
+          <TouchableOpacity style={[st.field, { flex: 1, justifyContent: 'center' }]} onPress={() => escolherDT(v, set)}>
+            <Text style={{ color: v ? '#fff' : '#666', fontSize: 16 }}>{v ? `📅  ${nm}: ${fmtBR(v)}` : `📅  ${nm}: escolher data e hora`}</Text>
+          </TouchableOpacity>
+          {v ? <TouchableOpacity onPress={() => set('')} style={{ marginTop: 8, padding: 10 }}><Text style={{ color: '#ff5252', fontWeight: '800' }}>✕</Text></TouchableOpacity> : null}
+        </View>
+      ))}
       <Text style={[st.tipTx, { color: semPeriodo ? '#a8a8a8' : ok ? '#4caf50' : '#ffb300' }]}>{semPeriodo ? 'Sem período de liberação definido' : ok ? 'Liberada agora' : 'Fora do período agora'}</Text>
       <TouchableOpacity style={[st.btn2, { marginVertical: 8 }]} onPress={() => salvar({ ini: ini.trim(), fim: fim.trim() })}><Text style={st.btn2Tx}>Salvar período</Text></TouchableOpacity>
       <View style={st.line}>
