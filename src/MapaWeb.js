@@ -9,7 +9,7 @@ const HTML = `<!DOCTYPE html><html><head><meta charset="utf-8">
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <style>html,body,#m{height:100%;margin:0;background:#151a20}
 .pin{background:#ff7a2e;color:#0c1014;font:700 12px sans-serif;border-radius:12px;padding:3px 7px;border:2px solid #fff;white-space:nowrap}
-.pin.l{background:#2e7d32;color:#fff}.pin.c{background:#c0392b;color:#fff}</style></head>
+.pin.l{background:#2e7d32;color:#fff}.pin.c{background:#c0392b;color:#fff}.pin.s{background:#7b1fa2;color:#fff}</style></head>
 <body><div id="m"></div><script>
 var map=L.map('m',{zoomControl:true}).setView([-20.82,-49.38],13);
 var osm=L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'© OpenStreetMap'}).addTo(map);

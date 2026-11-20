@@ -56,45 +56,74 @@ export function rotuloNx(nx, classe, grupos) {
 // O PC (cronometragem) é do organizador: o competidor só vê os pontos com neutro.
 export const tulComp = (tul) => tul.filter((e) => e.t !== 'P' || e.nt > 0);
 
+const hms = (sec) => { const t = Math.max(0, Math.round(sec)); return `${String(Math.floor(t / 3600)).padStart(2, '0')}:${String(Math.floor((t % 3600) / 60)).padStart(2, '0')}:${String(t % 60).padStart(2, '0')}`; };
+
 export function Entrada({ e, st, destaque, faltam, classe, grupos, org }) {
   const marcador = e.t !== 'T';
   const soNeutro = e.t === 'P' && e.nt > 0 && !org;
   const nx = rotuloNx(e.nx, classe, grupos);
+  const gi = classe ? grupoIdx(classe, grupos) : 0;
+  const tm = e.tm ? e.tm[gi] ?? e.tm[0] : null;
+  const velBox = e.nx ? (
+    <View style={{ borderWidth: 2, borderColor: '#f5f5f5', borderRadius: 6, paddingVertical: 2, width: 58, alignItems: 'center' }}>
+      {e.nx.t === 'D' ? (<><Text style={{ color: '#ffe600', fontWeight: '900', fontSize: 16 }}>D</Text><Text style={{ color: '#ffe600', fontWeight: '800', fontSize: 13 }}>{e.nx.min}'</Text></>) : (<>
+        <Text style={{ color: '#f5f5f5', fontWeight: '900', fontSize: 16 }}>V</Text>
+        <Text style={{ color: '#f5f5f5', fontWeight: '900', fontSize: 20 }}>{Array.isArray(e.nx.v) ? (classe ? e.nx.v[gi] ?? e.nx.v[0] : e.nx.v[0]) : (classe === 'AMADOR' ? e.nx.ka : e.nx.kg)}</Text>
+        <Text style={{ color: '#f5f5f5', fontWeight: '700', fontSize: 11 }}>Km/h</Text></>)}
+    </View>
+  ) : <View style={{ width: 58 }} />;
+  const colKm = (
+    <View style={{ width: 66, alignItems: 'flex-end', paddingRight: 8 }}>
+      <Text style={{ color: '#a8a8a8', fontSize: 11 }}>{km2(e.p)}</Text>
+      <Text style={{ color: '#f5f5f5', fontWeight: '900', fontSize: 18 }}>{km2(e.d)}</Text>
+      {faltam != null && <Text style={{ color: '#ffb300', fontWeight: '800', fontSize: 11 }}>faltam {Math.max(0, Math.round(faltam))} m</Text>}
+    </View>
+  );
+  const colTempo = tm != null ? (
+    <View style={{ width: 70, alignItems: 'center' }}>
+      <Text style={{ color: '#f5f5f5', fontWeight: '800', fontSize: 13 }}>{hms(tm)}</Text>
+      <Text style={{ color: '#a8a8a8', fontSize: 11 }}>T{e.tn}</Text>
+    </View>
+  ) : null;
   return (
-    <View style={[st.line, { alignItems: 'center', borderLeftWidth: destaque ? 4 : 0, borderLeftColor: '#ff7a2e', paddingLeft: destaque ? 8 : 0 }]}>
-      <View style={{ width: 74 }}>
-        <Text style={st.v}>{km2(e.p)}</Text>
-        <Text style={[st.k, { flex: 0 }]}>{km2(e.d)}</Text>
-        {faltam != null && <Text style={{ color: '#ffb300', fontWeight: '800', fontSize: 12 }}>faltam {Math.max(0, Math.round(faltam))} m</Text>}
-      </View>
-      {marcador ? (
-        <View style={{ flex: 1, gap: 4 }}>
-          {soNeutro ? (
-            <View style={{ backgroundColor: '#6a1b9a', borderRadius: 10, padding: 8 }}>
-              <Text style={{ color: '#fff', fontWeight: '800' }}>NEUTRO · PARE {mmss(e.nt)}</Text>
-            </View>
-          ) : (
-          <View style={{ backgroundColor: e.t === 'C' ? '#c0392b' : '#37474f', borderRadius: 10, padding: 8 }}>
-            <Text style={{ color: '#fff', fontWeight: '800' }}>{e.t === 'P' ? `PC ${e.n}` : LABEL[e.t]}</Text>
+    <View style={{ borderBottomWidth: 1, borderBottomColor: '#262b32', paddingVertical: 6, borderLeftWidth: destaque ? 4 : 0, borderLeftColor: '#ff7a2e', paddingLeft: destaque ? 8 : 0 }}>
+      <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+        {colKm}
+        {marcador ? (
+          <View style={{ flex: 1, gap: 4 }}>
+            {soNeutro ? (
+              <View style={{ backgroundColor: '#6a1b9a', borderRadius: 10, padding: 8 }}>
+                <Text style={{ color: '#fff', fontWeight: '800' }}>NEUTRO · PARE {mmss(e.nt)}</Text>
+              </View>
+            ) : (
+              <View style={{ backgroundColor: e.t === 'C' ? '#c0392b' : '#37474f', borderRadius: 10, padding: 8 }}>
+                <Text style={{ color: '#fff', fontWeight: '800' }}>{e.t === 'P' ? (e.nt > 0 && e.pn == null ? 'NEUTRO' : `PC ${e.pn ?? e.n}`) : LABEL[e.t]}</Text>
+              </View>
+            )}
+            {e.nt > 0 && !soNeutro && (
+              <View style={{ backgroundColor: '#c0392b', borderRadius: 10, padding: 8 }}>
+                <Text style={{ color: '#fff', fontWeight: '800' }}>N · PARE {mmss(e.nt)}</Text>
+              </View>
+            )}
+            {nx && (
+              <View style={{ backgroundColor: nx.cor, borderRadius: 10, padding: 8 }}>
+                <Text style={{ color: nx.fg, fontWeight: '800' }}>{nx.txt}</Text>
+              </View>
+            )}
           </View>
-          )}
-          {e.nt > 0 && !soNeutro && (
-            <View style={{ backgroundColor: '#c0392b', borderRadius: 10, padding: 8 }}>
-              <Text style={{ color: '#fff', fontWeight: '800' }}>N · PARE {mmss(e.nt)}</Text>
+        ) : (
+          <>
+            <View style={{ alignItems: 'center', marginRight: 8 }}>
+              <Tulipa e={e} size={destaque ? 100 : 76} />
+              {e.rn != null && <Text style={{ color: '#a8a8a8', fontSize: 11 }}>{e.rn}</Text>}
             </View>
-          )}
-          {nx && (
-            <View style={{ backgroundColor: nx.cor, borderRadius: 10, padding: 8 }}>
-              <Text style={{ color: nx.fg, fontWeight: '800' }}>{nx.txt}</Text>
-            </View>
-          )}
-        </View>
-      ) : (
-        <View style={{ flexDirection: 'row', flex: 1, alignItems: 'center', gap: 10 }}>
-          <Tulipa e={e} size={destaque ? 120 : 84} />
-          <Text style={[st.k, { flex: 1 }]}>{e.nm || ' '}</Text>
-        </View>
-      )}
+            {velBox}
+            <View style={{ width: 6 }} />
+            {colTempo}
+          </>
+        )}
+      </View>
+      {!marcador && e.nm ? <Text style={{ color: '#f5f5f5', marginTop: 4, marginLeft: 66, fontSize: 13 }}>{e.nm}</Text> : null}
     </View>
   );
 }

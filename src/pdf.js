@@ -36,17 +36,28 @@ function tipo(nx) {
   return `<div style="background:#2e7d32;color:#fff;padding:3px 6px;font-weight:bold">V ${txt}</div>`;
 }
 
+const hms = (sec) => { const t = Math.max(0, Math.round(sec)); return `${String(Math.floor(t / 3600)).padStart(2, '0')}:${String(Math.floor((t % 3600) / 60)).padStart(2, '0')}:${String(t % 60).padStart(2, '0')}`; };
+const velHtml = (nx) => {
+  if (!nx) return '';
+  if (nx.t === 'D') return `<div style="border:2px solid #000;padding:2px 6px;text-align:center;font-weight:bold">D<br>${nx.min}'</div>`;
+  const vs = Array.isArray(nx.v) ? nx.v : [nx.kg, nx.ka];
+  return vs.map((v, i) => `<div style="border:2px solid #000;padding:2px 6px;text-align:center;font-weight:bold;margin-bottom:2px">${vs.length > 1 ? String.fromCharCode(65 + i) + ' ' : ''}V<br><span style="font-size:18px">${v}</span><br><span style="font-size:10px">Km/h</span></div>`).join('');
+};
+
 export function roadbookHtml(prova, tul0, org) {
   const tul = org ? tul0 : tul0.filter((e) => e.t !== 'P' || e.nt > 0);
   const rows = tul.map((e) => {
-    const mid = e.t === 'T'
-      ? `<div style="display:flex;align-items:center;gap:10px">${tulSvg(e, 90)}<span>${e.nm || ''}</span></div>`
-      : `<div style="font-weight:bold;font-size:16px">${e.t === 'L' ? 'LARGADA' : e.t === 'C' ? 'CHEGADA' : (org ? 'PC ' + e.n : 'NEUTRO')}</div>` +
-        (e.nt > 0 ? `<div style="background:#c0392b;color:#fff;padding:3px 6px;font-weight:bold">N · PARE ${mmss(e.nt)}</div>` : '') + tipo(e.nx);
-    return `<tr><td style="width:70px"><div style="font-size:12px">${km2(e.p)}</div><div style="font-size:18px;font-weight:bold">${km2(e.d)}</div></td><td>${mid}</td></tr>`;
+    const km = `<td style="width:70px;text-align:right"><div style="font-size:11px">${km2(e.p)}</div><div style="font-size:18px;font-weight:bold">${km2(e.d)}</div></td>`;
+    if (e.t === 'T') {
+      const tempo = e.tm ? e.tm.map((t, i) => `<div style="font-weight:bold">${e.tm.length > 1 ? String.fromCharCode(65 + i) + ' ' : ''}${hms(t)}</div>`).join('') + `<div style="font-size:11px">T${e.tn}</div>` : '';
+      return `<tr>${km}<td style="text-align:center">${tulSvg(e, 90)}<div style="font-size:11px">${e.rn ?? ''}</div></td><td style="width:70px">${velHtml(e.nx)}</td><td style="width:80px;text-align:center">${tempo}</td><td>${e.nm || ''}</td></tr>`;
+    }
+    const mid = `<div style="font-weight:bold;font-size:16px">${e.t === 'L' ? 'LARGADA' : e.t === 'C' ? 'CHEGADA' : (org ? (e.nt > 0 && e.pn == null ? 'NEUTRO' : 'PC ' + (e.pn ?? e.n)) : 'NEUTRO')}</div>` +
+      (e.nt > 0 ? `<div style="background:#c0392b;color:#fff;padding:3px 6px;font-weight:bold">N · PARE ${mmss(e.nt)}</div>` : '');
+    return `<tr>${km}<td>${mid}</td><td style="width:70px">${velHtml(e.nx)}</td><td></td><td></td></tr>`;
   }).join('');
   return `<html><body style="font-family:sans-serif;margin:16px"><h2 style="margin:0 0 8px">Roadbook · prova ${prova}</h2>
-  <div style="font-size:11px;margin-bottom:8px">Esquerda: parcial e total (km). Chegue pela rua de baixo e siga a seta. Letras = grupos de média (ver categorias).</div>
+  <div style="font-size:11px;margin-bottom:8px">Colunas: parcial e total (km) · tulipa e nº da referência · velocidade do trecho (só no início dele) · tempo de prova e nº do trecho · observação. Chegue pela rua de baixo e siga a seta. Letras = grupos de média (ver categorias).</div>
   <table style="width:100%;border-collapse:collapse" border="1" cellpadding="5">${rows}</table></body></html>`;
 }
 
