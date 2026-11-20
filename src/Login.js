@@ -14,8 +14,8 @@ const msg = (e) => {
   return String(e?.message || e);
 };
 
-export default function Login({ st, onEntrou }) {
-  const [papel, setPapel] = useState('competidor');
+export default function Login({ st, onEntrou, soOrganizador }) {
+  const [papel, setPapel] = useState(soOrganizador ? 'organizador' : 'competidor');
   const [email, setEmail] = useState('');
   const [senha, setSenha] = useState('');
   const [criar, setCriar] = useState(false);
@@ -44,8 +44,8 @@ export default function Login({ st, onEntrou }) {
   );
   return (
     <View style={st.card}>
-      <Text style={st.tip}>Entrar como</Text>
-      <View style={st.row}>{chip('competidor', 'Competidor')}{chip('organizador', 'Organizador')}</View>
+      {!soOrganizador && <Text style={st.tip}>Entrar como</Text>}
+      {!soOrganizador && <View style={st.row}>{chip('competidor', 'Competidor')}{chip('organizador', 'Organizador')}</View>}
       <TextInput style={st.field} value={email} onChangeText={setEmail} placeholder="E-mail" placeholderTextColor="#666" autoCapitalize="none" keyboardType="email-address" />
       <TextInput style={st.field} value={senha} onChangeText={setSenha} placeholder="Senha (mínimo 6)" placeholderTextColor="#666" secureTextEntry autoCapitalize="none" />
       <TouchableOpacity style={[st.btn, { marginTop: 10, marginBottom: 0 }]} onPress={ir} disabled={busy}>

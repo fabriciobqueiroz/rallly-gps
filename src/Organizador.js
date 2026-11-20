@@ -88,12 +88,12 @@ export default function Organizador({ st, prova, provaMap, last, onOrg, onProva,
   const nPend = useRef(new Set());
   const grupos = gruposDe(provaMap.categorias);
   const ng = grupos.length;
-  const carregado = useRef(false);
+  const carregado = useRef(0);
   const logado = org && org.prova === prova.trim().toUpperCase();
 
   useEffect(() => {
-    if (logado && !carregado.current && !wps.length && provaMap.wps.length) {
-      carregado.current = true;
+    if (logado && provaMap.wps.length && carregado.current !== (provaMap.pub || 1) && !(carregado.current && wps.length)) {
+      carregado.current = provaMap.pub || 1;
       setWps(provaMap.wps);
       setRota({ coords: provaMap.coords, legs: provaMap.legs, tul: provaMap.tul });
       setRefs(provaMap.refs || []);
@@ -156,7 +156,7 @@ export default function Organizador({ st, prova, provaMap, last, onOrg, onProva,
       onProva && onProva(code);
       const o = { prova: code.trim().toUpperCase() };
       saveJson('org', o); setOrg(o); onOrg && onOrg(o);
-      carregado.current = false;
+      carregado.current = 0;
       setWps([]); setRota({ coords: [], legs: [], tul: [] }); setLegs([]); setTrs([]); setRefs([]); setPcl([]); setManual(false); setInscritos([]);
       setSec(Platform.OS === 'web' ? 'planilha' : 'levantar'); setAberta(true);
     } catch (e) { Alert.alert('Sem conexão', String(e?.message || e)); }
@@ -181,7 +181,7 @@ export default function Organizador({ st, prova, provaMap, last, onOrg, onProva,
         tul: JSON.parse(JSON.stringify(tulT)),
         refs,
         pcl: manual ? pcl : [],
-        nome: (loadJson('lev_' + String(prova).trim().toUpperCase().replace(/[^A-Z0-9]+/g, ''), {}).nome || '').slice(0, 60),
+        ...(((loadJson('lev_' + String(prova).trim().toUpperCase().replace(/[^A-Z0-9]+/g, ''), {}).nome || '').slice(0, 60)) ? { nome: (loadJson('lev_' + String(prova).trim().toUpperCase().replace(/[^A-Z0-9]+/g, ''), {}).nome || '').slice(0, 60) } : {}),
         publicadoEm: Date.now(),
       });
       Alert.alert('Prova publicada', 'Planilha e roadbook enviados. Os celulares com este código recebem sozinhos.');
@@ -218,6 +218,7 @@ export default function Organizador({ st, prova, provaMap, last, onOrg, onProva,
         <View>
       <View style={st.card}>
         <Text style={st.tip}>Prova {org.prova} · organizador</Text>
+        {Platform.OS === 'web' && <Text style={[st.tipTx, { color: provaMap.wps.length ? '#4caf50' : '#ffb74d' }]}>{provaMap.wps.length ? `Dados da prova carregados da nuvem: ${provaMap.wps.length} pontos, ${provaMap.trechos.length} trechos.` : 'Esta prova ainda não tem percurso publicado na nuvem. Publique pelo celular (ou marque o percurso no mapa abaixo e toque em Publicar).'}</Text>}
         <Text style={st.tipTx}>Toque no mapa (ou dirija e use os botões abaixo): 1º ponto = largada, depois os fins de trecho, e o último = chegada. O app calcula a rota, gera as tulipas e a planilha de trechos.</Text>
       </View>
       {manual && (
