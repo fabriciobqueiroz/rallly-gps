@@ -150,7 +150,7 @@ export function ouvirInscritos(prova, onData, onError) {
 }
 
 // Datalogger: trilha completa do competidor (compacta) para o resultado oficial.
-export async function enviarDatalogger({ prova, numero, nome, classe, points, pcs }) {
+export async function enviarDatalogger({ prova, numero, nome, classe, points, pcs, tIni: tIniArg }) {
   let pts = points;
   if (pts.length > 14000) pts = pts.filter((_, i) => i % 2 === 0);
   const t0 = pts[0].t;
@@ -160,7 +160,7 @@ export async function enviarDatalogger({ prova, numero, nome, classe, points, pc
     t: pts.map((p) => Math.round((p.t - t0) / 1000)),
     la: pts.map((p) => Math.round(p.lat * 1e5)),
     lo: pts.map((p) => Math.round(p.lon * 1e5)),
-    tIni: pcs && pcs[0] && pcs[0].t0 ? pcs[0].t0 : t0,
+    tIni: tIniArg || (pcs && pcs[0] && pcs[0].t0 ? pcs[0].t0 : t0),
     uid: auth.currentUser?.uid || '',
     enviadoEm: Date.now(),
   });

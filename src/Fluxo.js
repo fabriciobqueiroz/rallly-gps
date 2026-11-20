@@ -8,7 +8,7 @@ import { useKeepAwake } from 'expo-keep-awake';
 import { loadJson, saveJson } from './persist';
 import { lerProva, ouvirMinhasInscricoes, ouvirMinhasProvas, ouvirRanking } from './firebase';
 import { parseHMS, planilhaLiberada } from './OrgExtras';
-import { fmtDur, rank } from './rally';
+import { fmtDur, gruposDe, rank } from './rally';
 
 const slug = (p) => String(p).trim().toUpperCase().replace(/[^A-Z0-9]+/g, '');
 export const parseDataBR = (s) => {
@@ -117,7 +117,7 @@ function Evento({ st, user, x, provaMap, lib, dlStat, pointsN, onDl, enviandoDl,
               </View>
             )}
           </TouchableOpacity>
-          {provaMap.lib?.track === true && <MeuTrackLog st={st} prova={x.insc.prova} uid={user?.uid} provaMap={provaMap} />}
+          {provaMap.lib?.track === true && <MeuTrackLog st={st} prova={x.insc.prova} uid={user?.uid} provaMap={provaMap} grupos={gruposDe(provaMap.categorias)} />}
           <TouchableOpacity style={[st.btn, { backgroundColor: '#1aa6c9', marginTop: 24 }]} onPress={onIniciar}><Text style={[st.btnTx, { color: '#fff' }]}>INICIAR RALLY</Text></TouchableOpacity>
           <TouchableOpacity style={st.btn2} onPress={onPersonalizar}><Text style={st.btn2Tx}>Personalizar tela</Text></TouchableOpacity>
         </View>
