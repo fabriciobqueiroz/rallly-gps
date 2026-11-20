@@ -39,9 +39,11 @@ const Wrap = ({ children }) => <View style={{ flexDirection: 'row', flexWrap: 'w
 // ---------- Categorias e grupos de média ----------
 export function OrgCategorias({ st, prova, categorias }) {
   const [novo, setNovo] = useState('');
-  const cats = categorias.length ? categorias : CATS_PADRAO;
+  const [loc, setLoc] = useState(null);
+  useEffect(() => { setLoc(null); }, [categorias]);
+  const cats = loc || (categorias.length ? categorias : CATS_PADRAO);
   const ng = Math.max(...cats.map((c) => c.g || 0)) + 1;
-  const salvar = (next) => salvarProva(prova, { categorias: next }).catch((e) => Alert.alert('Não salvou', String(e?.message || e)));
+  const salvar = (next) => { setLoc(next); salvarProva(prova, { categorias: next }).catch((e) => { setLoc(null); Alert.alert('Não salvou', String(e?.message || e)); }); };
   const add = () => {
     const nome = novo.trim().toUpperCase();
     if (!nome) return;
@@ -51,11 +53,11 @@ export function OrgCategorias({ st, prova, categorias }) {
   return (
     <View style={st.card}>
       <Text style={st.tip}>Categorias e grupos de média</Text>
-      <Text style={st.tipTx}>Categorias do mesmo grupo (mesma letra) usam a mesma média em cada trecho. Ex.: todas no grupo A, ou separe as que terão média diferente. Os competidores escolhem a categoria na inscrição.</Text>
+      <Text style={st.tipTx}>Toque em A, B… para escolher o grupo de cada categoria. Categorias do mesmo grupo usam a mesma média em cada trecho; se quiser médias diferentes (ex.: Amador mais lento), ponha a categoria em outro grupo. Os competidores escolhem a categoria na inscrição.</Text>
       {cats.map((c) => (
         <View key={c.nome} style={{ borderTopWidth: 1, borderTopColor: '#262b32', paddingVertical: 8 }}>
           <View style={st.line}>
-            <Text style={st.v}>{c.nome}</Text>
+            <Text style={st.v}>{c.nome} · Grupo {LETRAS[c.g || 0]}</Text>
             <TouchableOpacity onPress={() => salvar(cats.filter((x) => x.nome !== c.nome))}><Text style={{ color: '#ff5252', fontWeight: '700' }}>remover</Text></TouchableOpacity>
           </View>
           <Wrap>
