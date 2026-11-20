@@ -5,16 +5,20 @@ import MapaWeb from './MapaWeb';
 import Tela from './Tela';
 import { haversine } from './store';
 import { ouvirDataloggers, ouvirMeuDatalogger } from './firebase';
-import { GRUPOS_PADRAO, oficialDeTrilha, pcsDoLogger, pontos, resolverTrecho } from './rally';
+import { GRUPOS_PADRAO, oficialDeTrilha, pcsDoLogger } from './rally';
 
 const clock = (ms) => { const d = new Date(ms); return [d.getHours(), d.getMinutes(), d.getSeconds()].map((x) => String(x).padStart(2, '0')).join(':'); };
 const sg = (s) => `${s >= 0 ? '+' : '−'}${Math.abs(s).toFixed(1).replace('.', ',')} s`;
 
 // Resultado do competidor a partir do datalogger: PCs, previsto x real, diferença e pontos (1 ponto por segundo).
+// Regulamento CBA (Art. 21): passagem só vale a ±10 min do ideal; fora disso ou sem passar = pontuação máxima (6.000).
+export const JANELA = 600;
+export const escalaDe = (lib) => (lib && lib.escala === 'd' ? 10 : 1); // pontos por segundo: 1 (padrão) ou 10 (1 por décimo, CBA)
 export function calcDl(dl, provaMap, grupos) {
   const larg = dl.tIni || dl.t0;
+  const esc = escalaDe(provaMap.lib), max = JANELA * esc;
   let pcs = [];
-  try { pcs = oficialDeTrilha(pcsDoLogger(dl), provaMap.wps || [], provaMap.trechos || [], dl.classe, grupos || GRUPOS_PADRAO, larg, provaMap.pcl || []); } catch {}
+  try { pcs = oficialDeTrilha(pcsDoLogger(dl), provaMap.wps || [], provaMap.trechos || [], dl.classe, grupos || GRUPOS_PADRAO, larg, provaMap.pcl || [], provaMap.coords || []); } catch {}
   const legs = provaMap.legs || [], trs = provaMap.trs || [];
   let acc = 0, pcN = 0;
   const cumM = legs.map((l) => (acc += (l || 0) * 1000));
@@ -26,9 +30,16 @@ export function calcDl(dl, provaMap, grupos) {
     let k = 0;
     if (dAt != null) trs.forEach((t, j) => { if ((t.d0 || 0) <= dAt + 1.5) k = j; });
     const km = dAt != null && trs[k] ? (dAt - (trs[k].d0 || 0)) / 1000 : (p.dist || 0) / 1000;
-    return { n: p.n, lab: neu ? 'N' : String(pcN), trc: trs.length ? k + 1 : p.trecho, km, tprova: p.miss ? null : (p.t - larg) / 1000, tipo: p.tipo, neu, miss: !!p.miss, prev: neu ? null : prev, real: p.miss ? null : p.t, diff: p.diff, pts: p.diff != null && p.tipo !== 'D' ? Math.abs(p.diff) : 0 };
+    const fora = !neu && !p.miss && p.tipo !== 'D' && p.diff != null && Math.abs(p.diff) > JANELA;
+    const falta = !neu && (!!p.miss || fora);
+    const pts = neu ? 0 : falta ? max : p.diff != null && p.tipo !== 'D' ? Math.abs(p.diff) * esc : 0;
+    return { n: p.n, lab: neu ? 'N' : String(pcN), trc: trs.length ? k + 1 : p.trecho, km, tprova: p.miss ? null : (p.t - larg) / 1000, tipo: p.tipo, neu, miss: !!p.miss, fora, falta, prev: neu ? null : prev, real: p.miss ? null : p.t, diff: p.diff, pts };
   });
-  return { larg, rows, total: pontos(pcs), npcs: pcs.filter((p) => !p.miss && !p.neu).length, totalPcs: rows.filter((x) => !x.neu).length, zerados: rows.filter((x) => !x.neu && x.diff != null && x.tipo !== 'D' && Math.round(x.diff) === 0).length };
+  const validos = rows.filter((x) => !x.neu);
+  const passou = validos.filter((x) => !x.falta).length;
+  const total = rows.reduce((a, x) => a + x.pts, 0);
+  const minimo = Math.floor((validos.length * 2) / 3); // classificado: passou por 2/3 dos PCs (arredondado para baixo)
+  return { larg, rows, esc, max, total, npcs: passou, totalPcs: validos.length, minimo, classif: passou >= minimo && validos.length > 0, zerados: validos.filter((x) => !x.falta && x.tipo !== 'D' && x.diff != null && Math.round(x.pts) === 0).length };
 }
 
 function Tabela({ st, dl, provaMap, grupos }) {
@@ -46,18 +57,19 @@ function Tabela({ st, dl, provaMap, grupos }) {
           <C t={x.trc ?? '—'} w="8%" />
           <C t={x.km.toFixed(3).replace('.', ',')} w="13%" />
           <C t={x.prev != null ? clock(x.prev) : '—'} w="19%" />
-          <C t={x.real != null ? clock(x.real) : 'não passou'} w="19%" c={x.miss ? '#ff5252' : undefined} />
+          <C t={x.real != null ? clock(x.real) : '****'} w="19%" c={x.falta ? '#ff5252' : undefined} />
           <C t={x.tprova != null ? hms(x.tprova) : '—'} w="19%" />
-          <C t={x.neu ? 'NEUTRO' : x.diff != null ? (x.tipo === 'D' ? '0' : String(Math.round(x.diff))) : '—'} w="14%" c={x.diff == null ? undefined : x.diff > 0.5 ? '#ff7a2e' : x.diff < -0.5 ? '#4caf50' : undefined} />
+          <C t={x.neu ? 'NEUTRO' : x.falta ? String(r.max) : x.tipo === 'D' ? '0' : x.diff != null ? String(Math.round(x.diff * r.esc)) : '—'} w="14%" c={x.falta ? '#ff5252' : x.diff == null ? undefined : x.diff > 0.5 ? '#ff7a2e' : x.diff < -0.5 ? '#4caf50' : undefined} />
         </View>
       ))}
       <View style={{ borderTopWidth: 1.5, borderTopColor: '#888', marginTop: 8, paddingTop: 6 }}>
-        <View style={st.line}><Text style={st.v}>Pontos perdidos</Text><Text style={st.v}>{r.total.toFixed(0)}</Text></View>
-        <View style={st.line}><Text style={st.v}>Total</Text><Text style={st.v}>{r.total.toFixed(0)}</Text></View>
+        <View style={st.line}><Text style={st.v}>Pontos perdidos</Text><Text style={st.v}>{Math.round(r.total)}</Text></View>
+        <View style={st.line}><Text style={st.v}>Total</Text><Text style={st.v}>{Math.round(r.total)}</Text></View>
         <View style={st.line}><Text style={st.v}>Total PC zerado</Text><Text style={st.v}>{r.zerados}</Text></View>
-        <Text style={st.tipTx}>{r.npcs} de {r.totalPcs} PC identificados no rastro. Neutro não pontua.</Text>
+        <Text style={st.tipTx}>{r.npcs} de {r.totalPcs} PC válidos. {r.classif ? 'Classificado.' : `NÃO CLASSIFICADO: precisa passar por ${r.minimo} PC (2/3).`} Neutro não pontua.</Text>
+        {r.rows.some((x) => x.falta) && <Text style={[st.tipTx, { color: '#ff5252' }]}>**** = não passou ou passou fora de ±10 min: {r.max} pontos.</Text>}
       </View>
-      <Text style={st.tipTx}>Atrasado (+) ou adiantado (−), 1 ponto por segundo. Menos pontos vence.</Text>
+      <Text style={st.tipTx}>Atrasado (+) ou adiantado (−), {r.esc === 10 ? '1 ponto por décimo de segundo' : '1 ponto por segundo'}. Menos pontos vence.</Text>
     </View>
   );
 }
@@ -126,10 +138,10 @@ export function OrgTrackLog({ st, prova, provaMap, grupos, categorias }) {
       {classes.map((c) => (
         <View key={c} style={{ marginTop: 6 }}>
           <Text style={{ color: '#fff', fontWeight: '800' }}>{c}</Text>
-          {res.filter((r) => r.d.classe === c).sort((a, b) => (b.npcs - a.npcs) || (a.total - b.total)).map((r, i) => (
+          {res.filter((r) => r.d.classe === c).sort((a, b) => (Number(b.classif) - Number(a.classif)) || (a.total - b.total)).map((r, i) => (
             <View key={r.d.numero} style={st.line}>
-              <Text style={st.k}>{i + 1}º  #{r.d.numero} {r.d.nome} · {r.npcs} PC</Text>
-              <Text style={st.v}>{r.total.toFixed(1).replace('.', ',')} pts</Text>
+              <Text style={st.k}>{r.classif ? `${i + 1}º` : 'NC'}  #{r.d.numero} {r.d.nome} · {r.npcs}/{r.totalPcs} PC</Text>
+              <Text style={st.v}>{Math.round(r.total)} pts</Text>
             </View>
           ))}
         </View>

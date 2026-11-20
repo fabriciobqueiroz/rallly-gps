@@ -5,7 +5,8 @@ import { DateTimePickerAndroid } from './pickers';
 import { Alert, Switch, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { atualizarInscricao, enviarResultado, inscrever, ouvirDataloggers, ouvirRanking, removerInscricao, salvarProva } from './firebase';
 import { compartilharResultadosPdf } from './pdf';
-import { cumulative, oficialDeTrilha, pcsDoLogger, pontos, rank } from './rally';
+import { cumulative, oficialDeTrilha, pcsDoLogger, rank } from './rally';
+import { calcDl } from './TrackLog';
 import { getState } from './store';
 
 export const CATS_PADRAO = [{ nome: 'TURISMO LIGHT', g: 0 }, { nome: 'TURISMO', g: 0 }, { nome: 'GRADUADO', g: 0 }, { nome: 'MASTER', g: 0 }];
@@ -29,7 +30,7 @@ export function planilhaLiberada(lib, now = Date.now()) {
 }
 
 const Chip = ({ st, on, onPress, children, small }) => (
-  <TouchableOpacity style={[st.btn2, { flexGrow: 0, flexShrink: 0, flexBasis: 'auto', paddingHorizontal: small ? 10 : 14, paddingVertical: small ? 4 : 6 }, on && { backgroundColor: '#ff7a2e' }]} onPress={onPress}>
+  <TouchableOpacity style={[st.chip, { paddingHorizontal: small ? 10 : 14, paddingVertical: small ? 4 : 6 }, on && { backgroundColor: '#ff7a2e' }]} onPress={onPress}>
     <Text style={[st.btn2Tx, on && { color: '#0c1014' }]}>{children}</Text>
   </TouchableOpacity>
 );
@@ -66,7 +67,7 @@ export function OrgCategorias({ st, prova, categorias }) {
       ))}
       <View style={[st.row, { marginTop: 10, marginBottom: 0 }]}>
         <TextInput style={[st.field, { flex: 1, marginTop: 0 }]} value={novo} onChangeText={setNovo} placeholder="Nova categoria" placeholderTextColor="#666" autoCapitalize="characters" />
-        <TouchableOpacity style={[st.btn2, { flexGrow: 0, flexShrink: 0, flexBasis: 'auto', paddingHorizontal: 16 }]} onPress={add}><Text style={st.btn2Tx}>Adicionar</Text></TouchableOpacity>
+        <TouchableOpacity style={[st.chip, { paddingHorizontal: 16 }]} onPress={add}><Text style={st.btn2Tx}>Adicionar</Text></TouchableOpacity>
       </View>
       {categorias.length === 0 && (
         <TouchableOpacity style={[st.btn2, { marginTop: 10 }]} onPress={() => salvar(CATS_PADRAO)}><Text style={st.btn2Tx}>Usar estas categorias na prova</Text></TouchableOpacity>
@@ -216,6 +217,12 @@ export function OrgLiberacao({ st, prova, lib }) {
         <Text style={[st.k, { flex: 1 }]}>Liberar track log (rastro) ao competidor{'\n'}<Text style={{ fontSize: 12 }}>Ele vê o próprio rastro sobre o percurso.</Text></Text>
         <Switch value={lib.track === true} onValueChange={(v) => salvar({ track: v })} />
       </View>
+      <Text style={[st.tip, { marginTop: 10 }]}>Pontuação dos PCs</Text>
+      <Text style={st.tipTx}>Atrasado ou adiantado pontua igual. Não passar no PC, ou passar fora de ±10 min do ideal, vale a pontuação máxima ({lib.escala === 'd' ? '6.000' : '600'} pontos).</Text>
+      <View style={st.row}>
+        <TouchableOpacity style={[st.btn2, lib.escala !== 'd' && { backgroundColor: '#ff7a2e' }]} onPress={() => salvar({ escala: 's' })}><Text style={[st.btn2Tx, lib.escala !== 'd' && { color: '#0c1014' }]}>1 ponto por segundo</Text></TouchableOpacity>
+        <TouchableOpacity style={[st.btn2, lib.escala === 'd' && { backgroundColor: '#ff7a2e' }]} onPress={() => salvar({ escala: 'd' })}><Text style={[st.btn2Tx, lib.escala === 'd' && { color: '#0c1014' }]}>1 ponto por décimo (CBA)</Text></TouchableOpacity>
+      </View>
       <Text style={st.tipTx}>Nos testes tudo começa liberado. O organizador sempre vê tudo.</Text>
     </View>
   );
@@ -285,8 +292,9 @@ export function OrgResultados({ st, prova, provaMap, grupos, inscritos, categori
     let ok = 0;
     for (const dl of dls) {
       try {
-        const pcs = oficialDeTrilha(pcsDoLogger(dl), provaMap.wps, provaMap.trechos, dl.classe, grupos, dl.tIni || dl.t0, provaMap.pcl || []).filter((p) => !p.miss);
-        await enviarResultado({ prova, numero: dl.numero, nome: dl.nome, classe: dl.classe, pcs, pontos: pontos(pcs), oficial: true });
+        const r = calcDl(dl, provaMap, grupos);
+        const pcs = oficialDeTrilha(pcsDoLogger(dl), provaMap.wps, provaMap.trechos, dl.classe, grupos, dl.tIni || dl.t0, provaMap.pcl || [], provaMap.coords || []).filter((p) => !p.miss);
+        await enviarResultado({ prova, numero: dl.numero, nome: dl.nome, classe: dl.classe, pcs, pontos: r.total, oficial: true, extra: { npcs: r.npcs, totalPcs: r.totalPcs, classif: r.classif } });
         ok++;
       } catch (e) { setMsg('Erro: ' + String(e?.message || e)); }
     }
@@ -319,8 +327,8 @@ export function OrgResultados({ st, prova, provaMap, grupos, inscritos, categori
             <View style={[st.line, { backgroundColor: '#1b6b85', borderRadius: 8, paddingHorizontal: 10 }]}><Text style={{ color: '#fff', fontWeight: '800' }}>{c}</Text></View>
             {por(c).map((r, i) => (
               <View key={r.numero} style={st.line}>
-                <Text style={st.k}>{r.nc ? 'NC' : `${i + 1}º`}  #{r.numero} {r.nome}{r.nc ? '' : ` · ${r.npcs} PC`}</Text>
-                <Text style={st.v}>{r.nc ? 'N/A' : `${Number(r.pontos).toFixed(1)} pts`}</Text>
+                <Text style={st.k}>{r.nc || r.classif === false ? 'NC' : `${i + 1}º`}  #{r.numero} {r.nome}{r.nc ? '' : ` · ${r.npcs}${r.totalPcs ? '/' + r.totalPcs : ''} PC`}</Text>
+                <Text style={st.v}>{r.nc ? 'N/A' : `${Math.round(Number(r.pontos))} pts`}</Text>
               </View>
             ))}
           </View>

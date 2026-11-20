@@ -38,7 +38,7 @@ function EditorTulipa({ st, m, onChange, onDesenhar, onDetectar }) {
     onChange({ arms: has ? arms.filter((x) => x !== a) : [...arms, a], out: has && m.out === a ? null : m.out });
   };
   const Chip = ({ on, tx, onPress, cor }) => (
-    <TouchableOpacity style={[st.btn2, { flexGrow: 0, flexShrink: 0, flexBasis: 'auto', paddingHorizontal: 10, paddingVertical: 6 }, on && { backgroundColor: cor || '#ff7a2e' }]} onPress={onPress}>
+    <TouchableOpacity style={[st.chip, { paddingHorizontal: 10, paddingVertical: 6 }, on && { backgroundColor: cor || '#ff7a2e' }]} onPress={onPress}>
       <Text style={[st.btn2Tx, on && { color: '#0c1014' }]}>{tx}</Text>
     </TouchableOpacity>
   );

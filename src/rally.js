@@ -146,25 +146,40 @@ export const pontos = (pcs) => pcs.reduce((a, p) => a + (p.diff != null && p.tip
 
 // Ordena o ranking: mais PCs feitos primeiro, depois menos pontos.
 export function rank(results) {
-  return [...results].sort((a, b) => (b.npcs - a.npcs) || (a.pontos - b.pontos));
+  // Resultado oficial (regulamento CBA): não classificado vai para o fim; depois vence quem perdeu menos pontos.
+  return [...results].sort((a, b) => (a.oficial && b.oficial && a.classif != null && b.classif != null ? (Number(b.classif) - Number(a.classif)) || (a.pontos - b.pontos) : (b.npcs - a.npcs) || (a.pontos - b.pontos)));
 }
 
 
 // ---- Resultado oficial a partir do datalogger (trilha completa enviada pelo competidor) ----
 // Instante em que a trilha passa mais perto do ponto (PC), a partir de fromT. null se não passou a menos de maxD metros.
-export function crossingTime(points, wp, fromT, maxD = 60) {
-  let best = null, inside = false;
+export function crossingTime(points, wp, fromT, maxD = 60, dir = null) {
+  let best = null, inside = false, first = null, last = null;
+  const kx = Math.cos((wp[0] * Math.PI) / 180) * 111320, ky = 110540;
+  // Sentido certo: o carro não pode cruzar o PC em direção claramente oposta à do percurso.
+  const sentidoOk = () => {
+    if (!dir || !first || !last || first === last) return true;
+    const vx = (last.lon - first.lon) * kx, vy = (last.lat - first.lat) * ky, nv = Math.hypot(vx, vy), nd = Math.hypot(dir[0], dir[1]);
+    if (nv < 15 || nd < 1) return true;
+    return (vx * dir[0] + vy * dir[1]) / (nv * nd) >= -0.5;
+  };
   for (const p of points) {
     if (p.t < fromT) continue;
     const d = haversine({ lat: wp[0], lon: wp[1] }, p);
-    if (d <= maxD) { inside = true; if (!best || d < best.d) best = { d, t: p.t }; }
-    else if (inside) break;
+    if (d <= maxD) {
+      if (!inside) { inside = true; first = p; best = null; }
+      last = p;
+      if (!best || d < best.d) best = { d, t: p.t };
+    } else if (inside) {
+      if (sentidoOk()) return best.t;
+      inside = false; best = null;
+    }
   }
-  return best ? best.t : null;
+  return inside && best && sentidoOk() ? best.t : null;
 }
 
 // Instante em que a trilha cruza a linha do PC [la1,lo1,la2,lo2] (interpolado entre dois pontos), depois de fromT.
-export function crossingLine(points, line, fromT) {
+export function crossingLine(points, line, fromT, dir = null) {
   const [la1, lo1, la2, lo2] = line;
   const la0 = (la1 + la2) / 2, lo0 = (lo1 + lo2) / 2, kx = Math.cos((la0 * Math.PI) / 180) * 111320, ky = 110540;
   const X = (lo) => (lo - lo0) * kx, Y = (la) => (la - la0) * ky;
@@ -180,6 +195,7 @@ export function crossingLine(points, line, fromT) {
     const w = ((ax - px) * d1y - (ay - py) * d1x) / den; // posição na linha do PC
     if (u >= 0 && u <= 1 && w >= 0 && w <= 1) {
       const t = p.t + u * (q.t - p.t);
+      if (dir) { const nv = Math.hypot(d1x, d1y), nd = Math.hypot(dir[0], dir[1]); if (nv > 0 && nd > 0 && (d1x * dir[0] + d1y * dir[1]) / (nv * nd) < -0.5) continue; }
       if (t >= fromT) return t;
     }
   }
@@ -188,7 +204,20 @@ export function crossingLine(points, line, fromT) {
 
 // Refaz os PCs oficiais: cada PC vale o instante em que o carro passou pelo ponto do mapa.
 // wps = [largada, PC1, ..., chegada]; trechos = trechos publicados; t0 = instante da largada.
-export function oficialDeTrilha(points, wps, trechos, classe, grupos, t0, pcl = []) {
+// Direção (em metros leste/norte) do percurso levantado ao passar pelo ponto wp, para checar o sentido da passagem.
+function direcaoNoPonto(coords, wp) {
+  if (!coords || coords.length < 3) return null;
+  let k = 0, md = Infinity;
+  for (let i = 0; i < coords.length; i++) { const d = Math.abs(coords[i][0] - wp[0]) + Math.abs(coords[i][1] - wp[1]); if (d < md) { md = d; k = i; } }
+  const a = coords[Math.max(0, k - 4)], b = coords[Math.min(coords.length - 1, k + 4)];
+  const kx = Math.cos((wp[0] * Math.PI) / 180) * 111320, ky = 110540;
+  const v = [(b[1] - a[1]) * kx, (b[0] - a[0]) * ky];
+  return Math.hypot(v[0], v[1]) < 5 ? null : v;
+}
+
+// Refaz os PCs oficiais: cada PC vale o instante em que o carro passou pelo ponto do mapa (primeira passagem no sentido certo).
+// wps = [largada, PC1, ..., chegada]; trechos = trechos publicados; t0 = instante da largada.
+export function oficialDeTrilha(points, wps, trechos, classe, grupos, t0, pcl = [], coords = []) {
   const cum = cumulative(points);
   const pcs = [];
   let tIni = t0;
@@ -197,12 +226,18 @@ export function oficialDeTrilha(points, wps, trechos, classe, grupos, t0, pcl = 
     if (!wp) break;
     const tr = resolverTrecho(trechos[i], classe, grupos);
     const ln = pcl.slice((i + 1) * 4, (i + 1) * 4 + 4);
-    const tc = ln.length === 4 && ln.some((x) => x) ? crossingLine(points, ln, tIni) : crossingTime(points, wp, tIni);
-    if (tc == null) { pcs.push({ n: i + 1, tipo: tr.tipo, trecho: i + 1, miss: true, neu: tr.nt > 0, diff: null, t0: tIni }); continue; }
-    const elapsed = (tc - tIni) / 1000;
-    const dist = distAt(points, cum, tc) - distAt(points, cum, tIni);
+    const dir = direcaoNoPonto(coords, wp);
+    const tc = ln.length === 4 && ln.some((x) => x) ? crossingLine(points, ln, tIni, dir) : crossingTime(points, wp, tIni, 60, dir);
     const v = tr.kmh / 3.6;
     const idealTime = tr.tipo === 'D' ? tr.min * 60 : v > 0 ? (tr.km * 1000) / v : null;
+    if (tc == null) {
+      pcs.push({ n: i + 1, tipo: tr.tipo, trecho: i + 1, miss: true, neu: tr.nt > 0, diff: null, idealTime, t0: tIni });
+      // Não passou: os PCs seguintes são medidos a partir do horário ideal do PC perdido.
+      if (idealTime != null) tIni = tIni + idealTime * 1000 + (tr.nt > 0 ? tr.nt * 1000 : 0);
+      continue;
+    }
+    const elapsed = (tc - tIni) / 1000;
+    const dist = distAt(points, cum, tc) - distAt(points, cum, tIni);
     pcs.push({ n: i + 1, tipo: tr.tipo, trecho: i + 1, elapsed, dist, avgKmh: elapsed > 0 ? (dist / elapsed) * 3.6 : 0, diff: tr.nt > 0 ? null : idealTime != null ? elapsed - idealTime : null, idealTime, neu: tr.nt > 0, t0: tIni, t: tc });
     tIni = tr.nt > 0 ? tc + tr.nt * 1000 : tc;
   }

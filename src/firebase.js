@@ -21,14 +21,14 @@ const auth = Platform.OS === 'web' ? getAuth(app) : initializeAuth(app, { persis
 
 const slug = (s) => String(s).trim().toUpperCase().replace(/[^A-Z0-9]+/g, '-');
 
-export async function enviarResultado({ prova, numero, nome, classe, pcs, pontos, oficial }) {
+export async function enviarResultado({ prova, numero, nome, classe, pcs, pontos, oficial, extra }) {
   const id = `${slug(prova)}_${slug(numero)}`;
   await setDoc(doc(db, 'resultados', id), {
     prova: slug(prova),
     numero: String(numero),
     nome: String(nome),
     classe: classe || 'GRADUADO',
-    npcs: pcs.length,
+    npcs: (extra && extra.npcs) ?? pcs.length,
     pontos: Math.round(pontos * 10) / 10,
     pcs: pcs.map((p) => ({
       n: p.n,
@@ -41,6 +41,7 @@ export async function enviarResultado({ prova, numero, nome, classe, pcs, pontos
       t0: p.t0 ?? null,
       t: p.t ?? null,
     })),
+    ...(extra || {}),
     oficial: !!oficial,
     uid: oficial ? 'oficial' : (auth.currentUser?.uid || ''),
     enviadoEm: Date.now(),

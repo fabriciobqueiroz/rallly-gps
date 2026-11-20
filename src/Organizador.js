@@ -197,7 +197,7 @@ export default function Organizador({ st, prova, provaMap, last, onOrg, onProva,
 
   const total = rota.legs.reduce((a, b) => a + b, 0);
   const me = last ? [last.lat, last.lon] : null;
-  const chip = (on) => [st.btn2, { flexGrow: 0, flexShrink: 0, flexBasis: 'auto', paddingHorizontal: 14, paddingVertical: 6 }, on && { backgroundColor: '#ff7a2e' }];
+  const chip = (on) => [st.chip, { paddingHorizontal: 14, paddingVertical: 6 }, on && { backgroundColor: '#ff7a2e' }];
   const cats = provaMap.categorias;
   const SEC = [['levantar', 'Levantar'], ['planilha', 'Planilha'], ['categorias', 'Categorias'], ['inscricoes', 'Inscrições'], ['ranking', 'Ranking'], ['resultados', 'Resultados'], ['tracklog', 'Track log'], ['liberacao', 'Liberação']].filter(([k]) => Platform.OS !== 'web' || (k !== 'levantar' && k !== 'ranking'));
   const nomeProva = (loadJson('lev_index', []).find((x) => x.code === org.prova) || {}).nome || '';

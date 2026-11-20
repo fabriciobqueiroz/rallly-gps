@@ -231,7 +231,7 @@ export function NavConfig({ st, visible, onClose, piloto }) {
     setNomeNovo(''); setEdit(novo);
   };
   const apagarL = (x) => Alert.alert('Apagar layout', `Apagar "${x.nome}"?`, [{ text: 'Cancelar', style: 'cancel' }, { text: 'Apagar', style: 'destructive', onPress: () => gravaL({ ...L, [sk]: L[sk] === x.id ? 'padrao' : L[sk], list: L.list.filter((y) => y.id !== x.id) }) }]);
-  const Opc = ({ on, tx, onPress }) => <TouchableOpacity style={[st.btn2, { flexGrow: 0, flexShrink: 0, flexBasis: 'auto', paddingHorizontal: 12, paddingVertical: 8 }, on && { backgroundColor: '#ff7a2e' }]} onPress={onPress}><Text style={[st.btn2Tx, on && { color: '#0c1014' }]}>{tx}</Text></TouchableOpacity>;
+  const Opc = ({ on, tx, onPress }) => <TouchableOpacity style={[st.chip, { paddingHorizontal: 12, paddingVertical: 8 }, on && { backgroundColor: '#ff7a2e' }]} onPress={onPress}><Text style={[st.btn2Tx, on && { color: '#0c1014' }]}>{tx}</Text></TouchableOpacity>;
   const Num = ({ v, on, w = 56 }) => <TextInput style={[st.input, { minWidth: w }]} defaultValue={String(v)} keyboardType="numbers-and-punctuation" onEndEditing={(e) => on(num(e.nativeEvent.text))} />;
   return (
     <Tela visible={visible} onRequestClose={onClose}>

@@ -17,6 +17,7 @@ export const st = StyleSheet.create({
   btnStop: { backgroundColor: '#c0392b' },
   btnTx: { color: '#0c1014', fontWeight: '800', fontSize: 16 },
   btn2: { flex: 1, borderWidth: 1, borderColor: '#ff7a2e', borderRadius: 12, padding: 12, alignItems: 'center' },
+  chip: { borderWidth: 1, borderColor: '#ff7a2e', borderRadius: 12, padding: 12, alignItems: 'center', alignSelf: 'flex-start' },
   btn2Tx: { color: '#ff7a2e', fontWeight: '700', fontSize: 13 },
   input: { color: '#f5f5f5', borderWidth: 1, borderColor: '#262b32', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 4, minWidth: 80, textAlign: 'right', fontWeight: '700' },
   area: { color: '#f5f5f5', borderWidth: 1, borderColor: '#262b32', borderRadius: 8, padding: 10, minHeight: 90, marginVertical: 8, textAlignVertical: 'top' },
