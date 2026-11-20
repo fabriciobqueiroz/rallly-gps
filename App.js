@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import {
-  Alert, Linking, Platform, ScrollView, Share, StyleSheet, Text, TextInput, TouchableOpacity, Vibration, View,
+  Alert, KeyboardAvoidingView, Linking, Platform, ScrollView, Share, StyleSheet, Text, TextInput, TouchableOpacity, Vibration, View,
 } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import * as Location from 'expo-location';
@@ -335,7 +335,8 @@ export default function App() {
   const onSoDl = () => { if (!running) start(); setSoDl(true); };
   const finalizarDl = async () => { await stop(); await onDatalogger(); setSoDl(false); };
   return (
-    <ScrollView style={st.root} contentContainerStyle={st.wrap}>
+    <KeyboardAvoidingView style={{ flex: 1 }} behavior="padding">
+    <ScrollView style={st.root} contentContainerStyle={st.wrap} keyboardShouldPersistTaps="handled">
       <StatusBar style="light" />
       <Text style={st.h1}>Rally GPS</Text>
       <View style={[st.row, { alignItems: 'center' }]}>
@@ -428,6 +429,7 @@ export default function App() {
       {pilotoOpen && <PilotoTela cfg={loadNav()} tul={tulVis} classe={piloto.classe} grupos={grupos} onPersonalizar={() => setCfgPiloto(true)} onClose={() => setPilotoOpen(false)} />}
       <NavConfig st={st} piloto visible={cfgPiloto} onClose={() => setCfgPiloto(false)} />
     </ScrollView>
+    </KeyboardAvoidingView>
   );
 }
 
