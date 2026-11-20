@@ -1,11 +1,23 @@
 // Versão para o navegador do computador: só o modo organizador (planilha, inscrições, resultados, track log).
 import { useEffect, useRef, useState } from 'react';
-import { ScrollView, Text, TouchableOpacity, View } from 'react-native';
+import { Alert, ScrollView, Text, TouchableOpacity, View } from 'react-native';
 import Login from './src/Login';
 import Organizador from './src/Organizador';
 import { st } from './src/estilos';
 import { ouvirAuth, ouvirProva, sairConta } from './src/firebase';
 import { loadJson, saveJson } from './src/persist';
+
+// No navegador o Alert do React Native não faz nada: troca por caixas do próprio navegador.
+Alert.alert = (titulo, msg, botoes) => {
+  const texto = [titulo, msg].filter(Boolean).join('\n\n');
+  const bs = botoes && botoes.length ? botoes : [{ text: 'OK' }];
+  if (bs.length < 2) { window.alert(texto); if (bs[0] && bs[0].onPress) bs[0].onPress(); return; }
+  const cancel = bs.find((b) => b.style === 'cancel');
+  const acao = bs.find((b) => b.style !== 'cancel');
+  const ok = window.confirm(texto + '\n\nOK = ' + (acao && acao.text ? acao.text : 'Confirmar') + ' · Cancelar = ' + (cancel && cancel.text ? cancel.text : 'Voltar'));
+  const b = ok ? acao : cancel;
+  if (b && b.onPress) b.onPress();
+};
 
 const VAZIO = { wps: [], coords: [], legs: [], kmh: [], tul: [], trechos: [], trs: [], categorias: [], lib: {}, refs: [], pcl: [] };
 const pair = (a) => { const o = []; for (let i = 0; i + 1 < a.length; i += 2) o.push([a[i], a[i + 1]]); return o; };
