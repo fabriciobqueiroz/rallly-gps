@@ -59,7 +59,8 @@ export const tulComp = (tul) => tul.filter((e) => e.t !== 'P' || e.nt > 0);
 const hms = (sec) => { const t = Math.max(0, Math.round(sec)); return `${String(Math.floor(t / 3600)).padStart(2, '0')}:${String(Math.floor((t % 3600) / 60)).padStart(2, '0')}:${String(t % 60).padStart(2, '0')}`; };
 
 export function Entrada({ e, st, destaque, faltam, classe, grupos, org }) {
-  const marcador = e.t !== 'T';
+  const neuDw = e.t === 'P' && e.nt > 0 && !!(e.dw && e.dw.length);
+  const marcador = e.t !== 'T' && !neuDw;
   const soNeutro = e.t === 'P' && e.nt > 0 && !org;
   const nx = rotuloNx(e.nx, classe, grupos);
   const gi = classe ? grupoIdx(classe, grupos) : 0;
@@ -117,7 +118,7 @@ export function Entrada({ e, st, destaque, faltam, classe, grupos, org }) {
               <Tulipa e={e} size={destaque ? 100 : 76} />
               {e.rn != null && <Text style={{ color: '#a8a8a8', fontSize: 11 }}>{e.rn}</Text>}
             </View>
-            {velBox}
+            {neuDw ? <View style={{ backgroundColor: '#6a1b9a', borderRadius: 10, padding: 8, width: 78, alignItems: 'center' }}><Text style={{ color: '#fff', fontWeight: '900', fontSize: 12 }}>NEUTRO</Text><Text style={{ color: '#fff', fontWeight: '800', fontSize: 12 }}>PARE</Text><Text style={{ color: '#fff', fontWeight: '900', fontSize: 15 }}>{mmss(e.nt)}</Text></View> : velBox}
             <View style={{ width: 6 }} />
             {colTempo}
           </>

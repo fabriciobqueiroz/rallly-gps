@@ -1,7 +1,8 @@
 // Ligação com o Firestore (banco na nuvem) para o ranking.
 import { initializeApp } from 'firebase/app';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { initializeAuth, getReactNativePersistence, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged, sendPasswordResetEmail } from 'firebase/auth';
+import { Platform } from 'react-native';
+import { getAuth, initializeAuth, getReactNativePersistence, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged, sendPasswordResetEmail } from 'firebase/auth';
 import { initializeFirestore, doc, setDoc, getDoc, getDocs, deleteDoc, collection, query, where, onSnapshot } from 'firebase/firestore';
 
 const firebaseConfig = {
@@ -16,7 +17,7 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 // Long polling é mais estável em redes móveis dentro do React Native.
 const db = initializeFirestore(app, { experimentalForceLongPolling: true });
-const auth = initializeAuth(app, { persistence: getReactNativePersistence(AsyncStorage) });
+const auth = Platform.OS === 'web' ? getAuth(app) : initializeAuth(app, { persistence: getReactNativePersistence(AsyncStorage) });
 
 const slug = (s) => String(s).trim().toUpperCase().replace(/[^A-Z0-9]+/g, '-');
 

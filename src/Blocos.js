@@ -21,15 +21,16 @@ export function faixaDe(sec, cfg) {
 const p2 = (x) => String(x).padStart(2, '0');
 const hms = (ms) => { const d = new Date(ms); return `${p2(d.getHours())}:${p2(d.getMinutes())}:${p2(d.getSeconds())}`; };
 
-export function LinhaRb({ e, pct, atual, w, classe, grupos }) {
-  const h = Math.round((w * 0.46 * pct) / 100), k = Math.max(0.6, pct / 100);
+export function LinhaRb({ e, pct, atual, w, hh, classe, grupos }) {
+  const neuDw = e.t === 'P' && e.nt > 0 && !!(e.dw && e.dw.length);
+  const h = hh != null ? Math.max(20, Math.floor(hh)) : Math.round((w * 0.46 * pct) / 100), k = Math.max(0.6, Math.min(1.6, hh != null ? hh / (w * 0.46) : pct / 100));
   const bg = atual ? '#f5e50f' : '#fff';
-  if (e.t !== 'T') {
+  if (e.t !== 'T' && !neuDw) {
     const mm = (s) => `${Math.floor(s / 60)}:${String(Math.round(s % 60)).padStart(2, '0')}`;
-    const txt = e.t === 'P' ? (e.nt > 0 ? `NEUTRO · PARE ${mm(e.nt)}` : `PC ${e.n}`) : e.t === 'L' ? 'LARGADA' : 'CHEGADA';
+    const txt = e.t === 'P' ? (e.nt > 0 ? `NEUTRO · PARE ${mm(e.nt)}` : `PC ${e.pn ?? e.n}`) : e.t === 'L' ? 'LARGADA' : 'CHEGADA';
     const nx = rotuloNx(e.nx, classe, grupos);
     return (
-      <View style={{ backgroundColor: e.t === 'C' ? '#c0392b' : e.t === 'P' && e.nt > 0 ? '#6a1b9a' : '#37474f', paddingVertical: 6 * k, paddingHorizontal: 8, flexDirection: 'row', justifyContent: 'space-between' }}>
+      <View style={{ backgroundColor: e.t === 'C' ? '#c0392b' : e.t === 'P' && e.nt > 0 ? '#6a1b9a' : '#37474f', height: hh != null ? h : undefined, paddingVertical: hh != null ? 0 : 6 * k, paddingHorizontal: 8, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
         <Text style={{ color: '#fff', fontWeight: '800', fontSize: 15 * k }}>{txt}  {fmtDist(e.d, { un: 'km', dec: 3 })}</Text>
         {nx ? <Text style={{ color: '#fff', fontWeight: '800', fontSize: 15 * k }}>{nx.txt}</Text> : null}
       </View>
@@ -40,10 +41,11 @@ export function LinhaRb({ e, pct, atual, w, classe, grupos }) {
       <View style={{ flex: 1, paddingHorizontal: 4, paddingVertical: 2 }}>
         <Text style={{ color: '#000', fontSize: 12 * k, textAlign: 'right' }}>{fmtDist(e.p, { un: 'km', dec: 3 })}</Text>
         <Text style={{ color: '#000', fontSize: 26 * k, fontWeight: '800' }}>{fmtDist(e.d, { un: 'km', dec: 3 })}</Text>
+        {neuDw ? <Text style={{ color: '#fff', backgroundColor: '#6a1b9a', fontSize: 12 * k, fontWeight: '800', paddingHorizontal: 6, alignSelf: 'flex-start', borderRadius: 4 }}>NEUTRO · PARE {Math.floor(e.nt / 60)}:{String(Math.round(e.nt % 60)).padStart(2, '0')}</Text> : null}
         {e.nm ? <Text style={{ color: '#000', fontSize: 11 * k }} numberOfLines={2}>{e.nm}</Text> : null}
       </View>
-      <View style={{ width: h, height: h }}>
-        {e.dw && e.dw.length ? <DesenhoSvg items={e.dw} size={h} /> : <Tulipa e={e} size={h} />}
+      <View style={{ width: Math.min(h, w * 0.5), height: h, alignItems: 'center', justifyContent: 'center' }}>
+        {e.dw && e.dw.length ? <DesenhoSvg items={e.dw} size={Math.min(h, w * 0.5)} /> : <Tulipa e={e} size={Math.min(h, w * 0.5)} />}
       </View>
     </View>
   );
@@ -113,11 +115,17 @@ export function Bloco({ tipo, d, w, h }) {
     case 'm10': return <Btn tx="−10" bg="#9e9e9e" on={() => d.onAdj(-10)} />;
     case 'p1': return <Btn tx="+1" bg="#9e9e9e" on={() => d.onAdj(1)} />;
     case 'm1': return <Btn tx="−1" bg="#9e9e9e" on={() => d.onAdj(-1)} />;
-    case 'pc': return <Btn tx="PC" bg="#2e7d32" fg="#fff" on={d.onPc} />;
+    case 'pc': return null;
     case 'rb': return (
       <View style={{ width: w, height: h, overflow: 'hidden', backgroundColor: '#000' }}>
         {d.fim ? <View style={{ backgroundColor: '#c0392b', paddingVertical: 6, alignItems: 'center' }}><Text style={{ color: '#fff', fontWeight: '900', fontSize: 18 }}>FIM DA PROVA</Text></View> : null}
-        {d.rbLinhas ? d.rbLinhas.map((l) => <LinhaRb key={l.key} e={l.e} pct={l.pct} atual={l.atual} w={w} classe={d.classe} grupos={d.grupos} />)
+        {d.rbLinhas ? (() => {
+          const ehTul = (e) => e.t === 'T' || (e.t === 'P' && e.nt > 0 && e.dw && e.dw.length);
+          const avail = Math.max(40, h - (d.fim ? 36 : 0));
+          const wt = d.rbLinhas.map((l) => (ehTul(l.e) ? l.pct : l.pct * 0.3));
+          const soma = wt.reduce((a, b) => a + b, 0) || 1;
+          return d.rbLinhas.map((l, i) => <LinhaRb key={l.key} e={l.e} pct={l.pct} atual={l.atual} w={w} hh={(avail * wt[i]) / soma} classe={d.classe} grupos={d.grupos} />);
+        })()
           : <View style={{ flex: 1, backgroundColor: '#fff', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#999' }}><Text style={{ color: '#000', fontWeight: '800', fontSize: 16 }}>ROADBOOK</Text><Text style={{ color: '#555', fontSize: 12 }}>as tulipas aparecem aqui</Text></View>}
       </View>
     );

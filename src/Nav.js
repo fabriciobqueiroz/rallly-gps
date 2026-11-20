@@ -7,6 +7,7 @@ import * as Battery from 'expo-battery';
 import * as ScreenOrientation from 'expo-screen-orientation';
 import { ouvirEspelho, publicarEspelho } from './firebase';
 import { grupoIdx } from './rally';
+import Svg, { Text as SvgText } from 'react-native-svg';
 import { useKeepAwake } from 'expo-keep-awake';
 import { loadJson, saveJson } from './persist';
 import { Bloco, fmtDist, fmtTnav, faixaDe } from './Blocos';
@@ -26,7 +27,7 @@ export const NAV_PADRAO = {
   ref: { un: 'm', dec: 0 },
   trc: { un: 'm', dec: 0 },
   odo: { un: 'km', dec: 3 },
-  rb: { ant: 1, prox: 2, pAnt: 60, pAtual: 100, pProx: [80, 60, 50] },
+  rb: { ant: 1, prox: 4, pAnt: 60, pAtual: 100, pProx: [80, 60, 50, 40, 40, 40, 40, 40] },
   barra: { on: true, ini: 100, cor: '#e53935' },
 };
 export const loadNav = () => {
@@ -38,7 +39,16 @@ export const saveNav = (c) => saveJson('navcfg', c);
 const CORES = ['#f5e50f', '#e53935', '#1e88e5', '#43a047', '#fb8c00', '#000000', '#ffffff'];
 const num = (s) => { const v = parseFloat(String(s).replace(',', '.')); return isNaN(v) ? 0 : v; };
 
-export function NavTela({ cfg, stage, rs, last, globalDist, odoM, tul, rot, trs, fim, classe, grupos, aviso, onAdj, onPc, onZerar, onClose, onIniciarAgora, onEncerrar }) {
+// Monta as linhas do roadbook: N tulipas anteriores, a atual e M seguintes (configuráveis).
+function montarRb(tul, iA, rb) {
+  const out = [];
+  if (iA < 0) return out;
+  for (let k = rb.ant; k >= 1; k--) if (tul[iA - k]) out.push({ e: tul[iA - k], pct: rb.pAnt, key: 'a' + k });
+  if (tul[iA]) out.push({ e: tul[iA], pct: rb.pAtual, atual: true, key: 'c' });
+  for (let k = 1; k <= rb.prox; k++) if (tul[iA + k]) out.push({ e: tul[iA + k], pct: rb.pProx[k - 1] ?? 40, key: 'p' + k });
+  return out;
+}
+export function NavTela({ cfg, stage, rs, last, globalDist, odoM, tul, rot, trs, fim, classe, grupos, aviso, cont, onAdj, onPc, onZerar, onClose, onIniciarAgora, onEncerrar }) {
   useKeepAwake();
   const { width } = useWindowDimensions();
   const [t, setT] = useState(Date.now());
@@ -81,12 +91,7 @@ export function NavTela({ cfg, stage, rs, last, globalDist, odoM, tul, rot, trs,
   const regTrc = Number.isFinite(regTrc0) ? regTrc0 : null;
   const placa = (tr) => (tr ? (tr.tipo === 'D' ? { tx: `D${tr.min}'`, d: true } : { tx: String(Math.round(tr.kmh)), d: false }) : null);
   const rb = cfg.rb;
-  const linhasRb = [];
-  if (iAtual >= 0) {
-    for (let k = rb.ant; k >= 1; k--) if (tul[iAtual - k]) linhasRb.push({ e: tul[iAtual - k], pct: rb.pAnt, key: 'a' + k });
-    linhasRb.push({ e: tul[iAtual], pct: rb.pAtual, atual: true, key: 'c' });
-    for (let k = 1; k <= rb.prox; k++) if (tul[iAtual + k]) linhasRb.push({ e: tul[iAtual + k], pct: rb.pProx[k - 1] ?? 50, key: 'p' + k });
-  }
+  const linhasRb = montarRb(tul, iAtual, rb);
   const d = {
     cfg, spd, tnav, fx, odoM, regRef, regRef2, regTrc, pa: placa(trAtual), pp: placa(trProx), clock: last ? last.t : t, acc: last ? last.acc : null,
     trN: trsN ? (stage.idx >= 0 && trIdx >= 0 ? `${trIdx + 1}/${trsN.length}` : null) : stage.idx >= 0 ? `${stage.idx + 1}/${rot.trechos.length}` : null, fim: !!fim, refN: iAtual >= 0 ? `${iAtual + 1}/${tul.length}` : null,
@@ -116,6 +121,13 @@ export function NavTela({ cfg, stage, rs, last, globalDist, odoM, tul, rot, trs,
               <Bloco tipo={it.tipo} d={d} w={it.w * cv.w} h={it.h * cv.h} />
             </View>
           ))}
+          {cont != null && cont > 0 && cont <= 10 ? (
+            <View pointerEvents="none" style={{ position: 'absolute', left: 0, top: 0, right: 0, bottom: 0, alignItems: 'center', justifyContent: 'center' }}>
+              <Svg width={cv.w} height={cv.h}>
+                <SvgText x={cv.w / 2} y={cv.h / 2 + Math.min(cv.w, cv.h) * 0.3} fontSize={Math.min(cv.w, cv.h) * 0.85} fontWeight="bold" fill="none" stroke="#ffe600" strokeWidth={Math.max(4, Math.min(cv.w, cv.h) * 0.02)} textAnchor="middle">{String(Math.ceil(cont))}</SvgText>
+              </Svg>
+            </View>
+          ) : null}
         </View>
         {fim && onEncerrar ? (
           <TouchableOpacity style={{ position: 'absolute', left: 12, right: 12, bottom: 24, backgroundColor: '#c0392b', borderRadius: 12, paddingVertical: 18, alignItems: 'center', elevation: 6 }} onPress={() => confirma('Encerrar a prova', 'Confirma que você terminou a prova? O T.NAV para e você volta à tela da prova.', onEncerrar)}>
@@ -156,12 +168,7 @@ export function PilotoTela({ cfg, tul, classe, grupos, onPersonalizar, onClose }
   const fx = e.tnav != null ? faixaDe(Number(e.tnav.toFixed(cfg.tnavDec)), cfg) : { bg: '#000', fg: '#fff' };
   const rb = cfg.rb;
   const iA = e.iAtual != null ? e.iAtual : -1;
-  const linhas = [];
-  if (iA >= 0 && tul[iA]) {
-    for (let k = rb.ant; k >= 1; k--) if (tul[iA - k]) linhas.push({ e: tul[iA - k], pct: rb.pAnt, key: 'a' + k });
-    linhas.push({ e: tul[iA], pct: rb.pAtual, atual: true, key: 'c' });
-    for (let k = 1; k <= rb.prox; k++) if (tul[iA + k]) linhas.push({ e: tul[iA + k], pct: rb.pProx[k - 1] ?? 50, key: 'p' + k });
-  }
+  const linhas = iA >= 0 && tul[iA] ? montarRb(tul, iA, rb) : [];
   const d = {
     cfg, spd: e.spd ?? null, tnav: e.tnav ?? null, fx, odoM: e.odoM || 0, regRef: e.regRef ?? null, regRef2: e.regRef2 ?? null, regTrc: e.regTrc ?? null,
     pa: e.pa || null, pp: e.pp || null, clock: t, acc: e.acc ?? null, trN: e.trN, refN: e.refN, kmAcum: e.kmAcum || 0, bat: e.bat ?? -1, elapsed: e.elapsed ?? null,
@@ -295,12 +302,12 @@ export function NavConfig({ st, visible, onClose, piloto }) {
           </View>
           <View style={st.card}>
             <Text style={st.tip}>Roadbook na tela</Text>
-            <Lin st={st} tx="Tulipas anteriores (0 a 2)"><Num v={c.rb.ant} on={(v) => up((o) => { o.rb.ant = Math.max(0, Math.min(2, Math.round(v))); return o; })} /></Lin>
-            <Lin st={st} tx="Tulipas seguintes (0 a 3)"><Num v={c.rb.prox} on={(v) => up((o) => { o.rb.prox = Math.max(0, Math.min(3, Math.round(v))); return o; })} /></Lin>
-            <Text style={st.tipTx}>Tamanho em % do original (30 a 150):</Text>
+            <Lin st={st} tx="Tulipas anteriores (0 a 4)"><Num v={c.rb.ant} on={(v) => up((o) => { o.rb.ant = Math.max(0, Math.min(4, Math.round(v))); return o; })} /></Lin>
+            <Lin st={st} tx="Tulipas seguintes (0 a 8)"><Num v={c.rb.prox} on={(v) => up((o) => { o.rb.prox = Math.max(0, Math.min(8, Math.round(v))); return o; })} /></Lin>
+            <Text style={st.tipTx}>A janela do roadbook é dividida entre as tulipas nessa proporção (30 a 150):</Text>
             <Lin st={st} tx="Anterior"><Num v={c.rb.pAnt} on={(v) => up((o) => { o.rb.pAnt = Math.max(30, Math.min(150, v)); return o; })} /></Lin>
             <Lin st={st} tx="Atual (a principal)"><Num v={c.rb.pAtual} on={(v) => up((o) => { o.rb.pAtual = Math.max(30, Math.min(150, v)); return o; })} /></Lin>
-            {[0, 1, 2].map((i) => <Lin key={i} st={st} tx={`Seguinte ${i + 1}`}><Num v={c.rb.pProx[i]} on={(v) => up((o) => { o.rb.pProx[i] = Math.max(30, Math.min(150, v)); return o; })} /></Lin>)}
+            {Array.from({ length: Math.min(8, c.rb.prox) }, (_, i) => i).map((i) => <Lin key={i} st={st} tx={`Seguinte ${i + 1}`}><Num v={c.rb.pProx[i] ?? 40} on={(v) => up((o) => { o.rb.pProx[i] = Math.max(30, Math.min(150, v)); return o; })} /></Lin>)}
           </View>
           <TouchableOpacity style={[st.btn, { marginTop: 4 }]} onPress={onClose}><Text style={st.btnTx}>Pronto</Text></TouchableOpacity>
         </ScrollView>

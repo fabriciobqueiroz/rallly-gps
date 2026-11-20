@@ -198,12 +198,12 @@ export function oficialDeTrilha(points, wps, trechos, classe, grupos, t0, pcl = 
     const tr = resolverTrecho(trechos[i], classe, grupos);
     const ln = pcl.slice((i + 1) * 4, (i + 1) * 4 + 4);
     const tc = ln.length === 4 && ln.some((x) => x) ? crossingLine(points, ln, tIni) : crossingTime(points, wp, tIni);
-    if (tc == null) break;
+    if (tc == null) { pcs.push({ n: i + 1, tipo: tr.tipo, trecho: i + 1, miss: true, neu: tr.nt > 0, diff: null, t0: tIni }); continue; }
     const elapsed = (tc - tIni) / 1000;
     const dist = distAt(points, cum, tc) - distAt(points, cum, tIni);
     const v = tr.kmh / 3.6;
     const idealTime = tr.tipo === 'D' ? tr.min * 60 : v > 0 ? (tr.km * 1000) / v : null;
-    pcs.push({ n: i + 1, tipo: tr.tipo, trecho: i + 1, elapsed, dist, avgKmh: elapsed > 0 ? (dist / elapsed) * 3.6 : 0, idealTime, diff: idealTime != null ? elapsed - idealTime : null, t0: tIni, t: tc });
+    pcs.push({ n: i + 1, tipo: tr.tipo, trecho: i + 1, elapsed, dist, avgKmh: elapsed > 0 ? (dist / elapsed) * 3.6 : 0, diff: tr.nt > 0 ? null : idealTime != null ? elapsed - idealTime : null, idealTime, neu: tr.nt > 0, t0: tIni, t: tc });
     tIni = tr.nt > 0 ? tc + tr.nt * 1000 : tc;
   }
   return pcs;

@@ -15,7 +15,6 @@ export const BLOCOS = {
   m10: { nome: 'Botão −10', w: 0.19, h: 0.1, btn: true },
   p1: { nome: 'Botão +1', w: 0.19, h: 0.1, btn: true },
   m1: { nome: 'Botão −1', w: 0.19, h: 0.1, btn: true },
-  pc: { nome: 'Botão PC', w: 0.38, h: 0.1, btn: true },
   prec: { nome: 'Precisão GPS', w: 0.3, h: 0.07 },
   bat: { nome: 'Nível de bateria', w: 0.38, h: 0.06 },
   trcn: { nome: 'Número do trecho', w: 0.3, h: 0.08 },
@@ -33,14 +32,14 @@ const V = [
   it('odo', 0, 0, 0.55, 0.13), it('tnav', 0.55, 0, 0.45, 0.13),
   it('vel', 0, 0.13, 0.33, 0.11), it('regref', 0.33, 0.13, 0.34, 0.11), it('atual', 0.67, 0.13, 0.33, 0.11),
   it('prox', 0, 0.24, 0.38, 0.12), it('regtrc', 0, 0.36, 0.38, 0.1),
-  it('p10', 0, 0.46, 0.19, 0.1), it('m10', 0.19, 0.46, 0.19, 0.1), it('pc', 0, 0.56, 0.38, 0.1), it('bat', 0, 0.66, 0.38, 0.06),
+  it('p10', 0, 0.46, 0.19, 0.1), it('m10', 0.19, 0.46, 0.19, 0.1), it('bat', 0, 0.66, 0.38, 0.06),
   it('rb', 0.38, 0.24, 0.62, 0.76),
 ];
 const H = [
   it('odo', 0, 0, 0.2, 0.2), it('tnav', 0.2, 0, 0.2, 0.2),
   it('vel', 0, 0.2, 0.2, 0.2), it('regref', 0.2, 0.2, 0.2, 0.2),
   it('atual', 0, 0.4, 0.2, 0.2), it('prox', 0.2, 0.4, 0.2, 0.2), it('regtrc', 0, 0.6, 0.4, 0.2),
-  it('p10', 0, 0.8, 0.1, 0.2), it('m10', 0.1, 0.8, 0.1, 0.2), it('pc', 0.2, 0.8, 0.2, 0.2),
+  it('p10', 0, 0.8, 0.1, 0.2), it('m10', 0.1, 0.8, 0.1, 0.2),
   it('rb', 0.4, 0, 0.6, 1),
 ];
 // Piloto: sem botões de incremento; o roadbook ocupa mais espaço.

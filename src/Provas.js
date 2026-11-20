@@ -2,7 +2,7 @@
 import { useEffect, useState } from 'react';
 import Tela from './Tela';
 import { Alert, KeyboardAvoidingView, ScrollView, Text, TextInput, TouchableOpacity, View } from 'react-native';
-import { DateTimePickerAndroid } from '@react-native-community/datetimepicker';
+import { DateTimePickerAndroid } from './pickers';
 import { File } from 'expo-file-system';
 import { apagarProvaNuvem, criarProva, ouvirMinhasProvas } from './firebase';
 import { apagarJson, loadJson, saveJson } from './persist';

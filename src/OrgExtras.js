@@ -1,7 +1,7 @@
 // Painéis do organizador: categorias e médias, inscrições com largada, liberações, gravação dirigindo e resultado oficial.
 import { useEffect, useRef, useState } from 'react';
 import { loadJson, saveJson } from './persist';
-import { DateTimePickerAndroid } from '@react-native-community/datetimepicker';
+import { DateTimePickerAndroid } from './pickers';
 import { Alert, Switch, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { atualizarInscricao, enviarResultado, inscrever, ouvirDataloggers, ouvirRanking, removerInscricao, salvarProva } from './firebase';
 import { compartilharResultadosPdf } from './pdf';
@@ -12,6 +12,12 @@ export const CATS_PADRAO = [{ nome: 'TURISMO LIGHT', g: 0 }, { nome: 'TURISMO', 
 const LETRAS = 'ABCDEF';
 const p2 = (x) => String(x).padStart(2, '0');
 export const parseHMS = (t) => { const m = /^(\d{1,2}):(\d{2})(?::(\d{2}))?$/.exec(String(t || '').trim()); return m ? +m[1] * 3600 + +m[2] * 60 + (+m[3] || 0) : null; };
+// Abre o relógio (roda) para escolher o horário; devolve HH:MM:SS (segundos preservados do valor atual).
+export function escolherHora(atual, set) {
+  const s0 = parseHMS(atual);
+  const d = new Date(); d.setHours(s0 != null ? Math.floor(s0 / 3600) % 24 : 9, s0 != null ? Math.floor((s0 % 3600) / 60) : 0, 0, 0);
+  DateTimePickerAndroid.open({ value: d, mode: 'time', is24Hour: true, display: 'spinner', onChange: (ev, h) => { if (ev.type === 'set' && h) set(`${p2(h.getHours())}:${p2(h.getMinutes())}:${p2(s0 != null ? s0 % 60 : 0)}`); } });
+}
 export const fmtHMS = (s) => `${p2(Math.floor(s / 3600) % 24)}:${p2(Math.floor((s % 3600) / 60))}:${p2(s % 60)}`;
 const parseDT = (t) => { const d = new Date(String(t || '').trim().replace(' ', 'T')); return isNaN(d) ? null : d.getTime(); };
 
@@ -115,7 +121,7 @@ export function OrgInscricoes({ st, prova, inscritos, categorias }) {
       <View style={st.card}>
         <Text style={st.tip}>Largada e sorteio</Text>
         <View style={st.row}>
-          <TextInput style={[st.field, { flex: 1 }]} value={base} onChangeText={setBase} placeholder="Primeiro carro HH:MM:SS" placeholderTextColor="#666" keyboardType="numbers-and-punctuation" />
+          <TouchableOpacity style={[st.field, { flex: 1, justifyContent: 'center' }]} onPress={() => escolherHora(base, setBase)}><Text style={st.v}>Primeiro carro: {base || 'escolher'}</Text></TouchableOpacity>
           <View style={[st.field, { flex: 1, justifyContent: 'center' }]}><Text style={st.v}>Intervalo: 60 s</Text></View>
         </View>
         <View style={st.row}>
@@ -152,8 +158,7 @@ export function OrgInscricoes({ st, prova, inscritos, categorias }) {
                 <Text style={st.tipTx}>{p.email || 'sem e-mail'}{p.equipe ? ` · ${p.equipe}` : ''}</Text>
                 <View style={st.line}>
                   <Text style={st.k}>Largada {p.ordem ? `(${p.ordem}º)` : ''}</Text>
-                  <TextInput style={st.input} value={edit[p.numero] ?? p.largada ?? ''} placeholder="--:--:--" placeholderTextColor="#666"
-                    onChangeText={(v) => setEdit((e) => ({ ...e, [p.numero]: v }))} onEndEditing={() => salvarLarg(p)} keyboardType="numbers-and-punctuation" />
+                  <TouchableOpacity style={[st.input, { justifyContent: 'center', minWidth: 110 }]} onPress={() => escolherHora(p.largada, (v) => atualizarInscricao(prova, p.numero, { largada: v }).catch(() => {}))}><Text style={st.v}>{p.largada || '--:--:--'}</Text></TouchableOpacity>
                 </View>
               </View>
             ))}
@@ -280,7 +285,7 @@ export function OrgResultados({ st, prova, provaMap, grupos, inscritos, categori
     let ok = 0;
     for (const dl of dls) {
       try {
-        const pcs = oficialDeTrilha(pcsDoLogger(dl), provaMap.wps, provaMap.trechos, dl.classe, grupos, dl.tIni || dl.t0, provaMap.pcl || []);
+        const pcs = oficialDeTrilha(pcsDoLogger(dl), provaMap.wps, provaMap.trechos, dl.classe, grupos, dl.tIni || dl.t0, provaMap.pcl || []).filter((p) => !p.miss);
         await enviarResultado({ prova, numero: dl.numero, nome: dl.nome, classe: dl.classe, pcs, pontos: pontos(pcs), oficial: true });
         ok++;
       } catch (e) { setMsg('Erro: ' + String(e?.message || e)); }

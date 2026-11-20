@@ -225,7 +225,7 @@ export default function Levantamento({ st, prova, last, onAplicar, onProva }) {
   };
 
   const ordenadas = lev.marks;
-  const comTulipa = (m) => m.k === 'T' || m.k === 'L' || m.k === 'C' || m.k === 'S';
+  const comTulipa = (m) => m.k === 'T' || m.k === 'L' || m.k === 'C' || m.k === 'S' || m.k === 'N';
   const semArms = ordenadas.filter((m) => (m.k === 'T' || m.k === 'S') && !(m.dw && m.dw.length) && !(m.arms && m.arms.length && m.out != null));
   const aplicar = () => {
     if (!fechado) return Alert.alert('Falta a chegada', 'Toque em CHEGADA no fim do percurso.');
@@ -248,7 +248,7 @@ export default function Levantamento({ st, prova, last, onAplicar, onProva }) {
       else if (m.k === 'T') { refN++; tul.push({ ...tulipaDe(m, p), rn: refN }); }
       else if (m.k === 'S') { refN++; trI++; trsOut.push({ ...trsL[trI], d0: d }); tul.push({ ...tulipaDe(m, p), rn: refN, ptr: trI }); }
       else if (m.k === 'P') { pcN++; pcNum++; tul.push({ t: 'P', n: pcN, pn: pcNum, d, p, man: true }); }
-      else if (m.k === 'N') { pcN++; tul.push({ t: 'P', n: pcN, d, p, man: true }); }
+      else if (m.k === 'N') { pcN++; tul.push({ ...(temDesenho(m) ? entradaDe(m, p) : {}), t: 'P', n: pcN, d, p, man: true, neu: true }); }
       else if (m.k === 'C') { refN++; if (temDesenho(m)) tul.push({ ...entradaDe(m, p), rn: refN }); tul.push({ t: 'C', n: pcN + 1, d, p: temDesenho(m) ? 0 : p, man: true, rn: refN }); }
       if (m.k === 'L' || m.k === 'P' || m.k === 'N' || m.k === 'C') {
         wps.push([m.lat, m.lon]); pontosKm.push(d / 1000);
@@ -453,7 +453,7 @@ export default function Levantamento({ st, prova, last, onAplicar, onProva }) {
                           <Text style={st.tipTx}>O relógio do trecho seguinte só começa depois desse tempo.</Text>
                         </View>
                       )}
-                      {m.k !== 'P' && m.k !== 'N' && (
+                      {m.k !== 'P' && (
                         <View>
                           <TextInput style={st.field} value={m.nota} onChangeText={(v) => upd(m.id, { nota: v })} placeholder="Observação (só para você)" placeholderTextColor="#666" multiline />
                           <View style={[st.row, { marginTop: 8, marginBottom: 0 }]}>
