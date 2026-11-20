@@ -2,9 +2,11 @@
 // Durante a prova nada é editável, só os botões de correção (+10 m, -10 m, PC) e o menu ⋮.
 import { useEffect, useRef, useState } from 'react';
 import { Alert, Modal, ScrollView, Switch, Text, TextInput, TouchableOpacity, View, useWindowDimensions } from 'react-native';
+import Tela from './Tela';
 import * as Battery from 'expo-battery';
 import * as ScreenOrientation from 'expo-screen-orientation';
 import { ouvirEspelho, publicarEspelho } from './firebase';
+import { grupoIdx } from './rally';
 import { useKeepAwake } from 'expo-keep-awake';
 import { loadJson, saveJson } from './persist';
 import { Bloco, fmtDist, fmtTnav, faixaDe } from './Blocos';
@@ -23,19 +25,20 @@ export const NAV_PADRAO = {
   ],
   ref: { un: 'm', dec: 0 },
   trc: { un: 'm', dec: 0 },
+  odo: { un: 'km', dec: 3 },
   rb: { ant: 1, prox: 2, pAnt: 60, pAtual: 100, pProx: [80, 60, 50] },
   barra: { on: true, ini: 100, cor: '#e53935' },
 };
 export const loadNav = () => {
   const c = loadJson('navcfg', {});
-  return { ...NAV_PADRAO, ...c, tiles: { ...NAV_PADRAO.tiles, ...(c.tiles || {}) }, ref: { ...NAV_PADRAO.ref, ...(c.ref || {}) }, trc: { ...NAV_PADRAO.trc, ...(c.trc || {}) }, rb: { ...NAV_PADRAO.rb, ...(c.rb || {}) }, barra: { ...NAV_PADRAO.barra, ...(c.barra || {}) } };
+  return { ...NAV_PADRAO, ...c, tiles: { ...NAV_PADRAO.tiles, ...(c.tiles || {}) }, ref: { ...NAV_PADRAO.ref, ...(c.ref || {}) }, trc: { ...NAV_PADRAO.trc, ...(c.trc || {}) }, odo: { ...NAV_PADRAO.odo, ...(c.odo || {}) }, rb: { ...NAV_PADRAO.rb, ...(c.rb || {}) }, barra: { ...NAV_PADRAO.barra, ...(c.barra || {}) } };
 };
 export const saveNav = (c) => saveJson('navcfg', c);
 
 const CORES = ['#f5e50f', '#e53935', '#1e88e5', '#43a047', '#fb8c00', '#000000', '#ffffff'];
 const num = (s) => { const v = parseFloat(String(s).replace(',', '.')); return isNaN(v) ? 0 : v; };
 
-export function NavTela({ cfg, stage, rs, last, globalDist, odoM, tul, rot, classe, grupos, aviso, onAdj, onPc, onZerar, onClose, onIniciarAgora }) {
+export function NavTela({ cfg, stage, rs, last, globalDist, odoM, tul, rot, trs, fim, classe, grupos, aviso, onAdj, onPc, onZerar, onClose, onIniciarAgora, onEncerrar }) {
   useKeepAwake();
   const { width } = useWindowDimensions();
   const [t, setT] = useState(Date.now());
@@ -53,7 +56,11 @@ export function NavTela({ cfg, stage, rs, last, globalDist, odoM, tul, rot, clas
   const spd = last && last.spd != null && last.spd >= 0 ? last.spd : null;
   const dt = last ? Math.min(1.5, Math.max(0, (t - last.t) / 1000)) : 0;
   const v = stage.targetKmh / 3.6;
-  const tnav = rs && rs.aheadSec != null && v > 0 ? rs.aheadSec + (((spd ?? 0) - v) * dt) / v : null;
+  const tnav0 = rs && rs.aheadSec != null && v > 0 ? rs.aheadSec + (((spd ?? 0) - v) * dt) / v : null;
+  const fz = useRef(null);
+  if (fim && !fz.current) fz.current = { tnav: Number.isFinite(tnav0) ? tnav0 : null, elapsed: rs && Number.isFinite(rs.elapsed) ? rs.elapsed : null };
+  if (!fim) fz.current = null;
+  const tnav = fim && fz.current ? fz.current.tnav : (Number.isFinite(tnav0) ? tnav0 : null);
   const fx = tnav != null ? faixaDe(Number(tnav.toFixed(cfg.tnavDec)), cfg) : { bg: '#000', fg: '#fff' };
   // próxima referência (tulipa) e fim do trecho
   const iAt = tul.length ? Math.max(0, tul.findIndex((e) => e.d >= globalDist - 15)) : -1;
@@ -62,9 +69,16 @@ export function NavTela({ cfg, stage, rs, last, globalDist, odoM, tul, rot, clas
   const regRef = prox ? prox.d - globalDist : null;
   const prox2 = prox ? tul.find((e) => e.d > prox.d + 0.5) : null;
   const regRef2 = prox2 ? prox2.d - globalDist : null;
-  const trAtual = stage.idx >= 0 ? rot.trechos[stage.idx] : null;
-  const trProx = stage.idx >= 0 ? rot.trechos[stage.idx + 1] : null;
-  const regTrc = rs && rs.remain != null ? rs.remain : null;
+  const trAtual = trsN ? (trIdx >= 0 ? resolve(trsN[trIdx]) : null) : stage.idx >= 0 ? rot.trechos[stage.idx] : null;
+  const trProx = trsN ? (trIdx >= 0 ? resolve(trsN[trIdx + 1]) : null) : stage.idx >= 0 ? rot.trechos[stage.idx + 1] : null;
+  const gi = classe ? grupoIdx(classe, grupos) : 0;
+  const trsN = trs && trs.length ? trs : null;
+  let trIdx = -1;
+  if (trsN) trsN.forEach((t, i) => { if (t.d0 <= globalDist + 1.5) trIdx = i; });
+  const dFim = tul.length ? tul[tul.length - 1].d : 0;
+  const resolve = (t) => (t ? (t.t === 'D' ? { tipo: 'D', min: t.min, kmh: 0 } : { tipo: 'V', kmh: (t.v && (t.v[gi] ?? t.v[0])) || 0 }) : null);
+  const regTrc0 = trsN ? (stage.idx >= 0 ? Math.max(0, (trIdx + 1 < trsN.length ? trsN[trIdx + 1].d0 : dFim) - globalDist) : null) : (rs && rs.remain != null ? rs.remain : null);
+  const regTrc = Number.isFinite(regTrc0) ? regTrc0 : null;
   const placa = (tr) => (tr ? (tr.tipo === 'D' ? { tx: `D${tr.min}'`, d: true } : { tx: String(Math.round(tr.kmh)), d: false }) : null);
   const rb = cfg.rb;
   const linhasRb = [];
@@ -75,15 +89,15 @@ export function NavTela({ cfg, stage, rs, last, globalDist, odoM, tul, rot, clas
   }
   const d = {
     cfg, spd, tnav, fx, odoM, regRef, regRef2, regTrc, pa: placa(trAtual), pp: placa(trProx), clock: last ? last.t : t, acc: last ? last.acc : null,
-    trN: stage.idx >= 0 ? `${stage.idx + 1}/${rot.trechos.length}` : null, refN: iAtual >= 0 ? `${iAtual + 1}/${tul.length}` : null,
-    kmAcum: globalDist, bat: bat, elapsed: rs ? rs.elapsed : null, rbLinhas: iAtual >= 0 ? linhasRb : null, classe, grupos, edit: false, onAdj, onPc,
+    trN: trsN ? (stage.idx >= 0 && trIdx >= 0 ? `${trIdx + 1}/${trsN.length}` : null) : stage.idx >= 0 ? `${stage.idx + 1}/${rot.trechos.length}` : null, fim: !!fim, refN: iAtual >= 0 ? `${iAtual + 1}/${tul.length}` : null,
+    kmAcum: globalDist, bat: bat, elapsed: fim && fz.current ? fz.current.elapsed : rs && Number.isFinite(rs.elapsed) ? rs.elapsed : null, rbLinhas: iAtual >= 0 ? linhasRb : null, classe, grupos, edit: false, onAdj, onPc,
   };
   // Espelho para o celular do piloto (mesma conta): publica os valores a cada 2 s.
   const espRef = useRef(null);
   espRef.current = {
-    spd: spd ?? null, tnav: tnav ?? null, odoM: odoM ?? 0, regRef: regRef ?? null, regRef2: regRef2 ?? null, regTrc: regTrc ?? null,
+    spd: spd ?? null, tnav: tnav ?? null, odoM: Number.isFinite(odoM) ? odoM : 0, regRef: regRef ?? null, regRef2: regRef2 ?? null, regTrc: regTrc ?? null,
     pa: d.pa || null, pp: d.pp || null, acc: d.acc ?? null, trN: d.trN || null, refN: d.refN || null, kmAcum: d.kmAcum ?? 0,
-    bat: d.bat ?? -1, elapsed: d.elapsed ?? null, iAtual, aviso: aviso || '',
+    bat: d.bat ?? -1, elapsed: d.elapsed ?? null, iAtual, aviso: aviso || '', fim: !!fim,
   };
   useEffect(() => { const id = setInterval(() => { publicarEspelho(espRef.current).catch(() => {}); }, 2000); return () => clearInterval(id); }, []);
   const confirma = (tit, msg, fn) => { setMenu(false); Alert.alert(tit, msg, [{ text: 'Cancelar', style: 'cancel' }, { text: 'Confirmar', onPress: fn }]); };
@@ -103,6 +117,11 @@ export function NavTela({ cfg, stage, rs, last, globalDist, odoM, tul, rot, clas
             </View>
           ))}
         </View>
+        {fim && onEncerrar ? (
+          <TouchableOpacity style={{ position: 'absolute', left: 12, right: 12, bottom: 24, backgroundColor: '#c0392b', borderRadius: 12, paddingVertical: 18, alignItems: 'center', elevation: 6 }} onPress={() => confirma('Encerrar a prova', 'Confirma que você terminou a prova? O T.NAV para e você volta à tela da prova.', onEncerrar)}>
+            <Text style={{ color: '#fff', fontWeight: '900', fontSize: 20 }}>ENCERRAR PROVA</Text>
+          </TouchableOpacity>
+        ) : null}
         {menu && (
           <View style={{ position: 'absolute', top: 26 + TOPO, right: 10, zIndex: 9, backgroundColor: '#fff', borderRadius: 8, padding: 6, elevation: 8 }}>
             <TouchableOpacity style={{ padding: 12 }} onPress={() => confirma('Zerar odômetro', 'Zerar o odômetro (GPS) agora? Não altera o T.NAV nem a posição no roadbook.', onZerar)}><Text style={{ fontSize: 16, color: '#000' }}>Zerar odômetro</Text></TouchableOpacity>
@@ -146,7 +165,7 @@ export function PilotoTela({ cfg, tul, classe, grupos, onPersonalizar, onClose }
   const d = {
     cfg, spd: e.spd ?? null, tnav: e.tnav ?? null, fx, odoM: e.odoM || 0, regRef: e.regRef ?? null, regRef2: e.regRef2 ?? null, regTrc: e.regTrc ?? null,
     pa: e.pa || null, pp: e.pp || null, clock: t, acc: e.acc ?? null, trN: e.trN, refN: e.refN, kmAcum: e.kmAcum || 0, bat: e.bat ?? -1, elapsed: e.elapsed ?? null,
-    rbLinhas: linhas.length ? linhas : null, classe, grupos, edit: false, onAdj: () => {}, onPc: () => {},
+    rbLinhas: linhas.length ? linhas : null, classe, grupos, edit: false, fim: !!e.fim, onAdj: () => {}, onPc: () => {},
   };
   const aviso = !esp ? 'Aguardando o navegador… (mesma conta de e-mail, com internet)' : idade != null && idade > 8 ? `Sem sincronismo com o navegador há ${Math.round(idade)} s` : '';
   return (
@@ -208,8 +227,8 @@ export function NavConfig({ st, visible, onClose, piloto }) {
   const Opc = ({ on, tx, onPress }) => <TouchableOpacity style={[st.btn2, { flex: 0, paddingHorizontal: 12, paddingVertical: 8 }, on && { backgroundColor: '#ff7a2e' }]} onPress={onPress}><Text style={[st.btn2Tx, on && { color: '#0c1014' }]}>{tx}</Text></TouchableOpacity>;
   const Num = ({ v, on, w = 56 }) => <TextInput style={[st.input, { minWidth: w }]} defaultValue={String(v)} keyboardType="numbers-and-punctuation" onEndEditing={(e) => on(num(e.nativeEvent.text))} />;
   return (
-    <Modal visible={visible} animationType="slide" onRequestClose={onClose}>
-      <View style={{ flex: 1, backgroundColor: '#0c1014', paddingTop: 36 }}>
+    <Tela visible={visible} onRequestClose={onClose}>
+      <View style={{ flex: 1, backgroundColor: '#0c1014', paddingTop: 8 }}>
         <Text style={[st.tip, { paddingHorizontal: 12 }]}>Personalizar a tela da prova</Text>
         <ScrollView contentContainerStyle={{ padding: 12, paddingBottom: 30 }}>
           <View style={st.card}>
@@ -251,7 +270,7 @@ export function NavConfig({ st, visible, onClose, piloto }) {
             </View>
             <Text style={st.tipTx}>Toque no quadrado para trocar a cor. Vale a primeira faixa que contém o valor.</Text>
           </View>
-          {[['ref', 'REG REF (até a próxima referência)'], ['trc', 'REG TRC (até o fim do trecho)']].map(([k, nome]) => (
+          {[['ref', 'REG REF (até a próxima referência)'], ['trc', 'PRÓX. TRECHO (distância até o próximo trecho)'], ['odo', 'ODÔMETRO (GPS)']].map(([k, nome]) => (
             <View key={k} style={st.card}>
               <Text style={st.tip}>{nome}</Text>
               <View style={[st.row, { marginTop: 6 }]}>
@@ -287,6 +306,6 @@ export function NavConfig({ st, visible, onClose, piloto }) {
         </ScrollView>
       </View>
       {edit && <LayoutEditor layout={edit} cfg={c} piloto={piloto} onSalvar={(lay) => gravaL({ ...L, list: L.list.map((y) => (y.id === lay.id ? lay : y)) })} onClose={() => setEdit(null)} />}
-    </Modal>
+    </Tela>
   );
 }

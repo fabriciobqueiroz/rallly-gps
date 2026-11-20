@@ -8,6 +8,7 @@ import { loadJson, saveJson } from './persist';
 import { Roadbook } from './Tulipa';
 import { gruposDe } from './rally';
 import Levantamento from './Levantamento';
+import { OrgTrackLog } from './TrackLog';
 import ListaProvas, { slugProva } from './Provas';
 import { CATS_PADRAO, OrgCategorias, OrgInscricoes, OrgLiberacao, OrgResultados } from './OrgExtras';
 import { compartilharPdf } from './pdf';
@@ -197,7 +198,7 @@ export default function Organizador({ st, prova, provaMap, last, onOrg, onProva,
   const me = last ? [last.lat, last.lon] : null;
   const chip = (on) => [st.btn2, { flex: 0, paddingHorizontal: 14, paddingVertical: 6 }, on && { backgroundColor: '#ff7a2e' }];
   const cats = provaMap.categorias;
-  const SEC = [['levantar', 'Levantar'], ['planilha', 'Planilha'], ['categorias', 'Categorias'], ['inscricoes', 'Inscrições'], ['ranking', 'Ranking'], ['resultados', 'Resultados'], ['liberacao', 'Liberação']];
+  const SEC = [['levantar', 'Levantar'], ['planilha', 'Planilha'], ['categorias', 'Categorias'], ['inscricoes', 'Inscrições'], ['ranking', 'Ranking'], ['resultados', 'Resultados'], ['tracklog', 'Track log'], ['liberacao', 'Liberação']];
   const nomeProva = (loadJson('lev_index', []).find((x) => x.code === org.prova) || {}).nome || '';
   return (
     <View>
@@ -209,6 +210,7 @@ export default function Organizador({ st, prova, provaMap, last, onOrg, onProva,
       {sec === 'levantar' && <Levantamento key={org.prova} st={st} prova={org.prova} last={last} onAplicar={aplicarLevantamento} />}
       {sec === 'categorias' && <OrgCategorias st={st} prova={org.prova} categorias={cats} />}
       {sec === 'inscricoes' && <OrgInscricoes key={org.prova} st={st} prova={org.prova} inscritos={inscritos} categorias={cats} />}
+      {sec === 'tracklog' && <OrgTrackLog st={st} prova={org.prova} provaMap={provaMap} />}
       {sec === 'liberacao' && <OrgLiberacao st={st} prova={org.prova} lib={provaMap.lib || {}} />}
       {sec === 'resultados' && <OrgResultados st={st} prova={org.prova} provaMap={provaMap} grupos={grupos} inscritos={inscritos} categorias={cats} />}
       {sec === 'planilha' && (

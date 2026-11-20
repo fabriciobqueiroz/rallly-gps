@@ -1,6 +1,7 @@
 // Fluxo do competidor: eventos → evento → modo de uso → largada → configurações → equipamento → prova.
 import { useEffect, useState } from 'react';
 import { Alert, AppState, Linking, Modal, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { MeuTrackLog } from './TrackLog';
 import * as Location from 'expo-location';
 import * as Battery from 'expo-battery';
 import { useKeepAwake } from 'expo-keep-awake';
@@ -116,6 +117,7 @@ function Evento({ st, user, x, provaMap, lib, dlStat, pointsN, onDl, enviandoDl,
               </View>
             )}
           </TouchableOpacity>
+          {provaMap.lib?.track === true && <MeuTrackLog st={st} prova={x.insc.prova} uid={user?.uid} provaMap={provaMap} />}
           <TouchableOpacity style={[st.btn, { backgroundColor: '#1aa6c9', marginTop: 24 }]} onPress={onIniciar}><Text style={[st.btnTx, { color: '#fff' }]}>INICIAR RALLY</Text></TouchableOpacity>
           <TouchableOpacity style={st.btn2} onPress={onPersonalizar}><Text style={st.btn2Tx}>Personalizar tela</Text></TouchableOpacity>
         </View>
@@ -153,29 +155,21 @@ function Modo({ st, onEscolhe, onVoltar }) {
 }
 
 // ---------- 4. Largada ----------
-function Largada({ st, minhaLarg, largManual, setLargManual, onContinua, onVoltar }) {
-  const [tx, setTx] = useState(largManual || '');
-  const fixa = !!minhaLarg;
-  const ir = () => {
-    if (fixa) return onContinua();
-    if (parseHMS(tx) == null) return Alert.alert('Horário inválido', 'Use HH:MM:SS, por exemplo 09:30:00.');
-    setLargManual(tx); onContinua();
-  };
+function Largada({ st, minhaLarg, onContinua, onVoltar }) {
   return (
     <View>
-      <Topo st={st} titulo="Qual sua hora de largada?" onVoltar={onVoltar} />
-      {fixa ? (
-        <View style={st.card}>
-          <Text style={{ color: '#fff', fontSize: 44, fontWeight: '800', textAlign: 'center' }}>{minhaLarg}</Text>
-          <Text style={[st.tipTx, { textAlign: 'center' }]}>Definida pelo organizador. Só ele pode alterar.</Text>
-        </View>
-      ) : (
-        <View style={st.card}>
-          <TextInput style={[st.field, { fontSize: 36, textAlign: 'center', fontWeight: '800' }]} value={tx} onChangeText={setTx} placeholder="HH:MM:SS" placeholderTextColor="#666" keyboardType="numbers-and-punctuation" />
-          <Text style={[st.tipTx, { textAlign: 'center' }]}>O organizador ainda não definiu a sua largada. Digite o horário.</Text>
-        </View>
-      )}
-      <TouchableOpacity style={[st.btn, { marginTop: 16 }]} onPress={ir}><Text style={st.btnTx}>CONTINUAR</Text></TouchableOpacity>
+      <Topo st={st} titulo="Sua hora de largada" onVoltar={onVoltar} />
+      <View style={st.card}>
+        {minhaLarg ? (
+          <>
+            <Text style={{ color: '#fff', fontSize: 44, fontWeight: '800', textAlign: 'center' }}>{minhaLarg}</Text>
+            <Text style={[st.tipTx, { textAlign: 'center' }]}>Definida pelo organizador. Só ele pode alterar.</Text>
+          </>
+        ) : (
+          <Text style={[st.tipTx, { textAlign: 'center', fontSize: 15 }]}>O organizador ainda não definiu a sua largada. Quando ele definir, o horário aparece aqui sozinho.</Text>
+        )}
+      </View>
+      <TouchableOpacity style={[st.btn, { marginTop: 16 }]} onPress={onContinua}><Text style={st.btnTx}>CONTINUAR</Text></TouchableOpacity>
     </View>
   );
 }

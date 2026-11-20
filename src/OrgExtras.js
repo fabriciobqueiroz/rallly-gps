@@ -207,6 +207,10 @@ export function OrgLiberacao({ st, prova, lib }) {
         <Text style={[st.k, { flex: 1 }]}>Liberar soma de pontos no app</Text>
         <Switch value={lib.soma !== false} onValueChange={(v) => salvar({ soma: v })} />
       </View>
+      <View style={st.line}>
+        <Text style={[st.k, { flex: 1 }]}>Liberar track log (rastro) ao competidor{'\n'}<Text style={{ fontSize: 12 }}>Ele vê o próprio rastro sobre o percurso.</Text></Text>
+        <Switch value={lib.track === true} onValueChange={(v) => salvar({ track: v })} />
+      </View>
       <Text style={st.tipTx}>Nos testes tudo começa liberado. O organizador sempre vê tudo.</Text>
     </View>
   );

@@ -1,7 +1,8 @@
 // Levantamento da prova dirigindo: o rastro do GPS vira o percurso, o organizador marca tulipas (com observação e foto)
 // e, ao chegar, edita cada tulipa com calma (desenho do cruzamento, nome, neutro) antes de aplicar à planilha.
-import { useState } from 'react';
-import { Alert, Image, Text, Vibration, TextInput, TouchableOpacity, View } from 'react-native';
+import { useRef, useState } from 'react';
+import { Alert, Image, ScrollView, Text, Vibration, TextInput, TouchableOpacity, View, useWindowDimensions } from 'react-native';
+import Tela from './Tela';
 import * as ImagePicker from 'expo-image-picker';
 import { File, Paths } from 'expo-file-system';
 import MapaWeb from './MapaWeb';
@@ -84,6 +85,12 @@ export default function Levantamento({ st, prova, last, onAplicar, onProva }) {
   const chave = 'lev_' + String(prova).trim().toUpperCase().replace(/[^A-Z0-9]+/g, '');
   const [lev, setLevRaw] = useState(() => loadJson(chave, { iniT: null, marks: [] }));
   const [aberta, setAberta] = useState(null);
+  const [tela, setTela] = useState(true);
+  const [menuMapa, setMenuMapa] = useState(false);
+  const [trAsk, setTrAsk] = useState(null);
+  const { height: winH } = useWindowDimensions();
+  const listaRef = useRef(null);
+  const ultimoToque = useRef(0);
   const [seguir, setSeguir] = useState(true);
   const [ctr, setCtr] = useState(0);
   const [rw, setRw] = useState(5);
@@ -124,6 +131,7 @@ export default function Levantamento({ st, prova, last, onAplicar, onProva }) {
     return seg.filter((_, i) => i % step === 0 || i === seg.length - 1).map((p) => [p.lat, p.lon]);
   })();
 
+  const perguntaTrecho = (i) => Alert.alert(`Trecho ${i + 1}`, 'Definir a velocidade (média) ou o deslocamento deste trecho agora?', [{ text: 'Depois', style: 'cancel' }, { text: 'Agora', onPress: () => setTrAsk(i) }]);
   // lê sempre o ponto GPS mais recente na hora do toque (não o da última renderização)
   const pronto = () => {
     const pts = getState().points;
@@ -134,14 +142,16 @@ export default function Levantamento({ st, prova, last, onAplicar, onProva }) {
     return l;
   };
   const marcar = (k, extra = {}) => {
+    if (Date.now() - ultimoToque.current < 700) return;
     const l = pronto(); if (!l) return;
+    ultimoToque.current = Date.now();
     const pts = getState().points;
     const iniI = lev.iniT != null ? Math.max(0, pts.findIndex((p) => p.t >= lev.iniT)) : -1;
     const cumF = cumulative(pts);
     const kmAgora = iniI >= 0 && pts.length ? Math.max(0, cumF[pts.length - 1] - cumF[iniI]) : 0;
     Vibration.vibrate(60);
     if (k === 'L') {
-      const novo = () => setLev({ iniT: l.t, trechos: [{ t: 'V', v: '', min: '15' }], marks: [{ id: 1, k: 'L', lat: l.lat, lon: l.lon, hdg: l.hdg ?? null, km: 0, nota: '', foto: null }] });
+      const novo = () => { setLev({ iniT: l.t, trechos: [{ t: 'V', v: '', min: '15' }], marks: [{ id: 1, k: 'L', lat: l.lat, lon: l.lon, hdg: l.hdg ?? null, km: 0, nota: '', foto: null }] }); perguntaTrecho(0); };
       if (!lev.marks.length) return novo();
       Alert.alert('Iniciar levantamento', 'Isso apaga o levantamento anterior desta prova. Continuar?', [
         { text: 'Cancelar' },
@@ -152,7 +162,7 @@ export default function Levantamento({ st, prova, last, onAplicar, onProva }) {
     if (iniI < 0) return Alert.alert('Marque a largada primeiro');
     const m = { id: Date.now(), k, lat: Math.round(l.lat * 1e6) / 1e6, lon: Math.round(l.lon * 1e6) / 1e6, hdg: l.hdg != null && l.hdg >= 0 ? Math.round(l.hdg) : null, km: Math.round(kmAgora), nota: '', foto: null, ...(k === 'N' ? { nt: 120 } : {}), ...extra };
     setLev((o) => ({ ...o, marks: [...o.marks, m], trechos: k === 'S' ? [...trAtual(o), { ...trAtual(o)[trAtual(o).length - 1] }] : o.trechos }));
-    if (k === 'T' || k === 'S' || k === 'P' || k === 'N') setAberta(m.id);
+    if (k === 'S') perguntaTrecho(nTrechos(lev));
   };
   const upd = (id, patch) => setLev((o) => ({ ...o, marks: o.marks.map((m) => (m.id === id ? { ...m, ...patch } : m)) }));
   const del = (id) => setLev((o) => {
@@ -288,7 +298,8 @@ export default function Levantamento({ st, prova, last, onAplicar, onProva }) {
       return { ...o, marks, trechos: tr };
     });
     setCand(null);
-    if (k === 'T' || k === 'S' || k === 'P' || k === 'N') setAberta(m.id);
+    if (k === 'S') perguntaTrecho(lev.marks.filter((x) => x.k === 'S' && (x.km < m.km)).length + 1);
+    else if (k === 'T' || k === 'P' || k === 'N') setAberta(m.id);
   };
 
   const ult = ordenadas[ordenadas.length - 1];
@@ -300,25 +311,84 @@ export default function Levantamento({ st, prova, last, onAplicar, onProva }) {
   const pinos = cand ? [...pinosBase, { lat: cand.lat, lon: cand.lon, txt: 'NOVO', cls: 'c' }] : pinosBase;
   const linhas = ordenadas.filter((m) => m.k === 'P' || m.k === 'N').map(linhaPc).concat(cand ? [linhaPc({ lat: cand.lat, lon: cand.lon, hdg: cand.hdg })] : []);
   const B = ({ cor, tx, on, fg }) => (
-    <TouchableOpacity style={{ flex: 1, backgroundColor: cor, borderRadius: 10, paddingVertical: 16, alignItems: 'center' }} onPress={on}>
+    <TouchableOpacity style={{ flex: 1, backgroundColor: cor, borderRadius: 10, paddingVertical: 18, alignItems: 'center' }} onPressIn={on} hitSlop={{ top: 4, bottom: 4, left: 2, right: 2 }} activeOpacity={0.6}>
       <Text style={{ color: fg || '#000', fontWeight: '900', fontSize: 11 }}>{tx}</Text>
     </TouchableOpacity>
   );
   const Sep = () => <View style={{ height: 2, backgroundColor: '#444', marginTop: 6 }} />;
+  const trAskV = trAsk != null ? trAtual(lev)[trAsk] : null;
+  const statusTxt = (iniIdx >= 0 ? `${km2(kmAqui)} km percorridos · ${ordenadas.filter((m) => m.k === 'T').length} referência(s) · trecho ${nTrechos(lev)} em andamento · ${ordenadas.filter((m) => m.k === 'N').length} neutro(s)` : 'Levantamento ainda não iniciado: ligue o GPS, espere ficar verde e toque LARGADA.') + (last?.acc != null ? ` · GPS ${last.acc.toFixed(0)} m` : '');
 
   return (
     <View>
-      <MapaWeb wps={[]} coords={trail} marks={pinos} lines={linhas} sat editable={fechado} onTap={tocaTrilha} follow={seguir && !fechado} rw={rw} dash={dash} rc={rc} ctr={ctr} me={last ? [last.lat, last.lon] : null} height={380} />
-      <View style={[st.row, { marginBottom: 6 }]}>
-        <TouchableOpacity style={st.btn2} onPress={() => { setCtr((c) => c + 1); setSeguir(true); }}><Text style={st.btn2Tx}>◎ Centralizar</Text></TouchableOpacity>
-        <TouchableOpacity style={st.btn2} onPress={() => setSeguir((v) => !v)}><Text style={st.btn2Tx}>{seguir ? 'Seguindo: SIM' : 'Seguindo: NÃO'}</Text></TouchableOpacity>
+      <View style={st.card}>
+        <Text style={st.tip}>Levantamento do percurso</Text>
+        <Text style={st.tipTx}>{statusTxt}</Text>
+        <TouchableOpacity style={[st.btn, { marginBottom: 0 }]} onPress={() => setTela(true)}><Text style={st.btnTx}>Abrir levantamento</Text></TouchableOpacity>
       </View>
-      <View style={[st.row, { marginBottom: 6 }]}>
-        <TouchableOpacity style={st.btn2} onPress={() => setRw((w) => (w >= 10 ? 3 : w + 2))}><Text style={st.btn2Tx}>Espessura: {rw}</Text></TouchableOpacity>
-        <TouchableOpacity style={st.btn2} onPress={() => setDash((d) => !d)}><Text style={st.btn2Tx}>{dash ? 'Pontilhado' : 'Contínuo'}</Text></TouchableOpacity>
-        <TouchableOpacity style={st.btn2} onPress={() => setRc((c) => CORES[(CORES.indexOf(c) + 1) % CORES.length])}><Text style={[st.btn2Tx, { color: rc }]}>Cor</Text></TouchableOpacity>
-      </View>
-      {lev.marks.length > 0 && (() => {
+      <Tela visible={tela} onRequestClose={() => setTela(false)}>
+        <View style={{ flex: 1 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 10, paddingVertical: 6, gap: 8 }}>
+            <Text style={{ flex: 1, color: '#f5f5f5', fontSize: 12 }} numberOfLines={2}>{statusTxt}</Text>
+            <TouchableOpacity style={st.btn2} onPress={() => { setCtr((c) => c + 1); setSeguir(true); }}><Text style={st.btn2Tx}>◎</Text></TouchableOpacity>
+            <TouchableOpacity style={st.btn2} onPress={() => setMenuMapa((v) => !v)}><Text style={st.btn2Tx}>⚙ Mapa</Text></TouchableOpacity>
+            <TouchableOpacity style={st.btn2} onPress={() => setTela(false)}><Text style={st.btn2Tx}>✕</Text></TouchableOpacity>
+          </View>
+          <View style={{ paddingHorizontal: 10 }}>
+            <MapaWeb wps={[]} coords={trail} marks={pinos} lines={linhas} sat editable={fechado} onTap={tocaTrilha} follow={seguir && !fechado} rw={rw} dash={dash} rc={rc} ctr={ctr} me={last ? [last.lat, last.lon] : null} height={Math.round(winH * 0.34)} />
+          </View>
+          {menuMapa && (
+            <View style={[st.row, { paddingHorizontal: 10, marginBottom: 6, flexWrap: 'wrap' }]}>
+              <TouchableOpacity style={st.btn2} onPress={() => setSeguir((v) => !v)}><Text style={st.btn2Tx}>{seguir ? 'Seguindo: SIM' : 'Seguindo: NÃO'}</Text></TouchableOpacity>
+              <TouchableOpacity style={st.btn2} onPress={() => setRw((w) => (w >= 10 ? 3 : w + 2))}><Text style={st.btn2Tx}>Espessura: {rw}</Text></TouchableOpacity>
+              <TouchableOpacity style={st.btn2} onPress={() => setDash((d) => !d)}><Text style={st.btn2Tx}>{dash ? 'Pontilhado' : 'Contínuo'}</Text></TouchableOpacity>
+              <TouchableOpacity style={st.btn2} onPress={() => setRc((c) => CORES[(CORES.indexOf(c) + 1) % CORES.length])}><Text style={[st.btn2Tx, { color: rc }]}>Cor</Text></TouchableOpacity>
+            </View>
+          )}
+          <View style={{ paddingHorizontal: 10 }}>
+            {!fechado && (
+              <View style={[st.row, { marginBottom: 6 }]}>
+                {lev.marks.length === 0 ? <B cor="#4caf50" tx="LARGADA" on={() => marcar('L')} /> : (
+                  <>
+                    <B cor="#ff7a2e" tx="REFERÊNCIA" on={() => marcar('T')} />
+                    <B cor="#7b1fa2" fg="#fff" tx="TRECHO" on={() => marcar('S')} />
+                    <B cor="#ff5a1f" tx="PC" on={() => marcar('P')} />
+                    <B cor="#c0392b" fg="#fff" tx="NEUTRO" on={() => marcar('N')} />
+                  </>
+                )}
+              </View>
+            )}
+            {lev.marks.length > 0 && !fechado && (
+              <View style={[st.row, { marginBottom: 6 }]}>
+                <B cor="#1565c0" fg="#fff" tx="FOTO" on={fotoRapida} />
+                <View style={{ flex: 2 }}><B cor="#c0392b" fg="#fff" tx="CHEGADA (fim da prova)" on={() => marcar('C')} /></View>
+              </View>
+            )}
+            {fechado && !cand && <Text style={st.tipTx}>Toque no traçado do mapa, no ponto certo, para incluir referência, trecho, PC ou neutro.</Text>}
+{cand && (
+          <View style={st.card}>
+            <Text style={st.tip}>Novo ponto · km {km2(cand.km)}</Text>
+            <View style={[st.row, { marginTop: 6, marginBottom: 6, alignItems: 'center' }]}>
+              <TouchableOpacity style={st.btn2} onPress={() => nudge(-1)}><Text style={st.btn2Tx}>◀ 5 m</Text></TouchableOpacity>
+              <Text style={[st.tipTx, { flex: 1, textAlign: 'center' }]}>ajustar ao longo do traçado</Text>
+              <TouchableOpacity style={st.btn2} onPress={() => nudge(1)}><Text style={st.btn2Tx}>5 m ▶</Text></TouchableOpacity>
+            </View>
+            <Text style={st.tipTx}>O que é este ponto?</Text>
+            <View style={[st.row, { marginTop: 4, marginBottom: 6 }]}>
+              <B cor="#ff7a2e" tx="REFERÊNCIA" on={() => inserir('T')} />
+              <B cor="#7b1fa2" fg="#fff" tx="TRECHO" on={() => inserir('S')} />
+              <B cor="#ff5a1f" tx="PC" on={() => inserir('P')} />
+              <B cor="#c0392b" fg="#fff" tx="NEUTRO" on={() => inserir('N')} />
+            </View>
+            <TouchableOpacity style={st.btn2} onPress={() => setCand(null)}><Text style={st.btn2Tx}>Cancelar</Text></TouchableOpacity>
+          </View>
+        )}
+            </View>
+          <ScrollView ref={listaRef} style={{ flex: 1 }} contentContainerStyle={{ paddingHorizontal: 10, paddingBottom: 16 }} keyboardShouldPersistTaps="handled" onContentSizeChange={() => { if (!fechado) listaRef.current && listaRef.current.scrollToEnd({ animated: true }); }}>
+            {fechado && (
+              <TouchableOpacity style={[st.btn2, { marginBottom: 8 }]} onPress={() => del(ult.id)}><Text style={st.btn2Tx}>Reabrir (desfazer chegada)</Text></TouchableOpacity>
+            )}
+      {fechado && lev.marks.length > 0 && (() => {
         const trs = trAtual(lev);
         const bnd = ordenadas.filter((m) => m.k === 'L' || m.k === 'S' || m.k === 'C');
         return (
@@ -334,8 +404,9 @@ export default function Levantamento({ st, prova, last, onAplicar, onProva }) {
                   <View style={[st.row, { marginVertical: 4, alignItems: 'center' }]}>
                     <TouchableOpacity style={[st.btn2, t.t === 'V' && { backgroundColor: '#ff7a2e' }]} onPress={() => setTr(i, { t: 'V' })}><Text style={[st.btn2Tx, t.t === 'V' && { color: '#0c1014' }]}>Média</Text></TouchableOpacity>
                     <TouchableOpacity style={[st.btn2, t.t === 'D' && { backgroundColor: '#ff7a2e' }]} onPress={() => setTr(i, { t: 'D' })}><Text style={[st.btn2Tx, t.t === 'D' && { color: '#0c1014' }]}>Deslocamento</Text></TouchableOpacity>
-                    {t.t === 'V' ? <TextInput style={[st.input, { minWidth: 70 }]} value={String(t.v ?? '')} onChangeText={(v) => setTr(i, { v })} keyboardType="decimal-pad" placeholder="km/h" placeholderTextColor="#666" />
-                      : <TextInput style={[st.input, { minWidth: 70 }]} value={String(t.min ?? '')} onChangeText={(v) => setTr(i, { min: v })} keyboardType="decimal-pad" placeholder="min" placeholderTextColor="#666" />}
+                    {t.t === 'V' ? <TextInput style={[st.input, { minWidth: 70 }]} value={String(t.v ?? '')} onChangeText={(v) => setTr(i, { v })} keyboardType="decimal-pad" placeholder="0" placeholderTextColor="#666" />
+                      : <TextInput style={[st.input, { minWidth: 70 }]} value={String(t.min ?? '')} onChangeText={(v) => setTr(i, { min: v })} keyboardType="decimal-pad" placeholder="0" placeholderTextColor="#666" />}
+                    <Text style={st.k}>{t.t === 'V' ? 'km/h' : 'min'}</Text>
                   </View>
                 </View>
               );
@@ -343,53 +414,6 @@ export default function Levantamento({ st, prova, last, onAplicar, onProva }) {
           </View>
         );
       })()}
-      {!fechado && (
-        <View style={[st.row, { marginBottom: 6 }]}>
-          {lev.marks.length === 0 ? <B cor="#4caf50" tx="LARGADA" on={() => marcar('L')} /> : (
-            <>
-              <B cor="#ff7a2e" tx="REFERÊNCIA" on={() => marcar('T')} />
-              <B cor="#7b1fa2" fg="#fff" tx="TRECHO" on={() => marcar('S')} />
-              <B cor="#ff5a1f" tx="PC" on={() => marcar('P')} />
-              <B cor="#c0392b" fg="#fff" tx="NEUTRO" on={() => marcar('N')} />
-            </>
-          )}
-        </View>
-      )}
-      {lev.marks.length > 0 && !fechado && (
-        <TouchableOpacity style={[st.btn, { backgroundColor: '#1565c0', marginBottom: 8, paddingVertical: 12 }]} onPress={fotoRapida}><Text style={[st.btnTx, { color: '#fff' }]}>FOTO DA ÚLTIMA MARCA</Text></TouchableOpacity>
-      )}
-      {lev.marks.length > 0 && !fechado && (
-        <TouchableOpacity style={[st.btn, { backgroundColor: '#c0392b', marginBottom: 8 }]} onPress={() => marcar('C')}><Text style={[st.btnTx, { color: '#fff' }]}>CHEGADA (fim da prova)</Text></TouchableOpacity>
-      )}
-      {fechado && !cand && <Text style={st.tipTx}>Para incluir referência, trecho ou neutro, toque no traçado do mapa no ponto certo.</Text>}
-      {cand && (
-        <View style={st.card}>
-          <Text style={st.tip}>Novo ponto · km {km2(cand.km)}</Text>
-          <View style={[st.row, { marginTop: 6, marginBottom: 6, alignItems: 'center' }]}>
-            <TouchableOpacity style={st.btn2} onPress={() => nudge(-1)}><Text style={st.btn2Tx}>◀ 5 m</Text></TouchableOpacity>
-            <Text style={[st.tipTx, { flex: 1, textAlign: 'center' }]}>ajustar ao longo do traçado</Text>
-            <TouchableOpacity style={st.btn2} onPress={() => nudge(1)}><Text style={st.btn2Tx}>5 m ▶</Text></TouchableOpacity>
-          </View>
-          <Text style={st.tipTx}>O que é este ponto?</Text>
-          <View style={[st.row, { marginTop: 4, marginBottom: 6 }]}>
-            <B cor="#ff7a2e" tx="REFERÊNCIA" on={() => inserir('T')} />
-            <B cor="#7b1fa2" fg="#fff" tx="TRECHO" on={() => inserir('S')} />
-            <B cor="#ff5a1f" tx="PC" on={() => inserir('P')} />
-            <B cor="#c0392b" fg="#fff" tx="NEUTRO" on={() => inserir('N')} />
-          </View>
-          <TouchableOpacity style={st.btn2} onPress={() => setCand(null)}><Text style={st.btn2Tx}>Cancelar</Text></TouchableOpacity>
-        </View>
-      )}
-      <Text style={st.tipTx}>{iniIdx >= 0 ? `${km2(kmAqui)} km percorridos · ${ordenadas.filter((m) => m.k === 'T').length} referência(s) · trecho ${nTrechos(lev)} em andamento · ${ordenadas.filter((m) => m.k === 'N').length} neutro(s)` : 'Levantamento ainda não iniciado: ligue o GPS, espere ficar verde e toque LARGADA.'}{last?.acc != null ? ` · GPS ${last.acc.toFixed(0)} m` : ''}</Text>
-      {fechado && (
-        <TouchableOpacity style={[st.btn2, { marginBottom: 8 }]} onPress={() => del(ult.id)}><Text style={st.btn2Tx}>Reabrir (desfazer chegada)</Text></TouchableOpacity>
-      )}
-
-      {(() => { const em = ordenadas.find((x) => x.id === editorId); return em ? (
-        <EditorDesenho visible foto={em.foto} sat={satUrl(em.lat, em.lon)} hdg={em.hdg || 0} onApagarFoto={() => apagarFoto(em.id)} inicial={em.dw && em.dw.length ? em.dw : em.arms && em.arms.length ? [{ k: 'tpl', arms: em.arms, out: em.out ?? null, x: 50, y: 55, s: 0.85, r: 0 }] : []}
-          onCancel={() => setEditorId(null)} onSave={(it) => { upd(em.id, { dw: it }); setEditorId(null); }} />
-      ) : null; })()}
-
       {ordenadas.length > 0 && (
         <View style={st.card}>
           <Text style={st.tip}>{fechado ? 'Marcas (editar)' : 'Marcas (toque para anotar e fotografar)'}</Text>
@@ -454,6 +478,31 @@ export default function Levantamento({ st, prova, last, onAplicar, onProva }) {
           <Text style={st.tipTx}>Depois de aplicar, ajuste médias e tipos (V, D) de cada trecho na aba Planilha e publique.</Text>
         </View>
       )}
+          </ScrollView>
+          {trAskV && (
+            <View style={{ position: 'absolute', left: 0, right: 0, top: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'center', padding: 20 }}>
+              <View style={st.card}>
+                <Text style={st.tip}>Trecho {trAsk + 1}</Text>
+                <View style={[st.row, { marginVertical: 8 }]}>
+                  <TouchableOpacity style={[st.btn2, trAskV.t === 'V' && { backgroundColor: '#ff7a2e' }]} onPress={() => setTr(trAsk, { t: 'V' })}><Text style={[st.btn2Tx, trAskV.t === 'V' && { color: '#0c1014' }]}>Média</Text></TouchableOpacity>
+                  <TouchableOpacity style={[st.btn2, trAskV.t === 'D' && { backgroundColor: '#ff7a2e' }]} onPress={() => setTr(trAsk, { t: 'D' })}><Text style={[st.btn2Tx, trAskV.t === 'D' && { color: '#0c1014' }]}>Deslocamento</Text></TouchableOpacity>
+                </View>
+                <View style={[st.row, { alignItems: 'center' }]}>
+                  {trAskV.t === 'V'
+                    ? <TextInput style={[st.input, { minWidth: 90 }]} autoFocus value={String(trAskV.v ?? '')} onChangeText={(v) => setTr(trAsk, { v })} keyboardType="decimal-pad" placeholder="0" placeholderTextColor="#666" />
+                    : <TextInput style={[st.input, { minWidth: 90 }]} autoFocus value={String(trAskV.min ?? '')} onChangeText={(v) => setTr(trAsk, { min: v })} keyboardType="decimal-pad" placeholder="0" placeholderTextColor="#666" />}
+                  <Text style={[st.v, { marginLeft: 8 }]}>{trAskV.t === 'V' ? 'km/h' : 'min'}</Text>
+                </View>
+                <TouchableOpacity style={[st.btn, { marginTop: 12, marginBottom: 0 }]} onPress={() => setTrAsk(null)}><Text style={st.btnTx}>OK</Text></TouchableOpacity>
+              </View>
+            </View>
+          )}
+        </View>
+      </Tela>
+      {(() => { const em = ordenadas.find((x) => x.id === editorId); return em ? (
+        <EditorDesenho visible foto={em.foto} sat={satUrl(em.lat, em.lon)} hdg={em.hdg || 0} onApagarFoto={() => apagarFoto(em.id)} inicial={em.dw && em.dw.length ? em.dw : em.arms && em.arms.length ? [{ k: 'tpl', arms: em.arms, out: em.out ?? null, x: 50, y: 55, s: 0.85, r: 0 }] : []}
+          onCancel={() => setEditorId(null)} onSave={(it) => { upd(em.id, { dw: it }); setEditorId(null); }} />
+      ) : null; })()}
     </View>
   );
 }

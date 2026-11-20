@@ -1,6 +1,7 @@
 // Editor de desenho da tulipa: peças prontas, marcos, caneta (dedo) e texto, com a foto da referência como fundo para decalcar.
 import { useRef, useState } from 'react';
-import { Image, Modal, PanResponder, ScrollView, Text, TextInput, TouchableOpacity, View, useWindowDimensions } from 'react-native';
+import Tela from './Tela';
+import { Image, PanResponder, ScrollView, Text, TextInput, TouchableOpacity, View, useWindowDimensions } from 'react-native';
 import { Circle } from 'react-native-svg';
 import { CRUZAMENTOS, DesenhoSvg, SIMBOLOS, centro, mover } from './Desenho';
 
@@ -77,8 +78,8 @@ export default function EditorDesenho({ visible, inicial, foto, sat, hdg = 0, on
   const realce = it0 ? (() => { const [cx, cy] = centro(it0); return <Circle cx={cx} cy={cy} r={10} fill="#ffe600" fillOpacity={0.45} />; })() : null;
 
   return (
-    <Modal visible={visible} animationType="slide" onRequestClose={onCancel}>
-      <View style={{ flex: 1, backgroundColor: '#0c1014', paddingTop: 36 }}>
+    <Tela visible={visible} onRequestClose={onCancel}>
+      <View style={{ flex: 1, backgroundColor: '#0c1014', paddingTop: 8 }}>
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 12, marginBottom: 8, alignItems: 'center' }}>
           <Text style={{ color: '#f5f5f5', fontWeight: '800', fontSize: 16 }}>Desenho da tulipa</Text>
           <View style={{ flexDirection: 'row', gap: 8 }}>
@@ -160,6 +161,6 @@ export default function EditorDesenho({ visible, inicial, foto, sat, hdg = 0, on
           <Btn flex={1} on tx="OK" cor="#4caf50" press={() => onSave(items)} />
         </View>
       </View>
-    </Modal>
+    </Tela>
   );
 }

@@ -1,6 +1,7 @@
 // Lista "Minhas provas": criar (com nome), abrir, renomear e apagar (com dupla confirmação).
 import { useEffect, useState } from 'react';
-import { Alert, KeyboardAvoidingView, Modal, ScrollView, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import Tela from './Tela';
+import { Alert, KeyboardAvoidingView, ScrollView, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { DateTimePickerAndroid } from '@react-native-community/datetimepicker';
 import { File } from 'expo-file-system';
 import { apagarProvaNuvem, criarProva, ouvirMinhasProvas } from './firebase';
@@ -111,9 +112,9 @@ export default function ListaProvas({ st, org, onAbrir, onSairOrg }) {
         <TouchableOpacity style={[st.btn, { marginBottom: 0 }]} onPress={() => setForm(true)}><Text style={st.btnTx}>+ NOVA PROVA</Text></TouchableOpacity>
         <Text style={st.tipTx}>O código (4 números) é gerado sozinho. Os competidores veem a prova em "Provas" quando você inscreve o e-mail deles.</Text>
       </View>
-      <Modal visible={form} animationType="slide" onRequestClose={() => setForm(false)}>
+      <Tela visible={form} onRequestClose={() => setForm(false)}>
         <KeyboardAvoidingView style={{ flex: 1, backgroundColor: '#0c1014' }} behavior="padding">
-          <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ padding: 16, paddingTop: 50 }}>
+          <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ padding: 16, paddingTop: 12 }}>
             <Text style={[st.tip, { fontSize: 20 }]}>Nova prova</Text>
             <TextInput style={st.field} value={novo} onChangeText={setNovo} placeholder="Nome da prova" placeholderTextColor="#666" />
             <TextInput style={st.field} value={cidade} onChangeText={setCidade} placeholder="Cidade - UF" placeholderTextColor="#666" />
@@ -124,7 +125,7 @@ export default function ListaProvas({ st, org, onAbrir, onSairOrg }) {
             <TouchableOpacity style={st.btn2} onPress={() => setForm(false)}><Text style={st.btn2Tx}>Cancelar</Text></TouchableOpacity>
           </ScrollView>
         </KeyboardAvoidingView>
-      </Modal>
+      </Tela>
     </View>
   );
 }

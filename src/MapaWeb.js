@@ -21,6 +21,7 @@ map.on('click',function(e){if(editable)send({t:'tap',lat:e.latlng.lat,lon:e.latl
 function setData(d){
   layer.clearLayers();editable=!!d.editable;
   if(d.coords&&d.coords.length){var rw=d.rw||5;L.polyline(d.coords,{color:d.rc||'#ff7a2e',weight:rw,opacity:.95,lineCap:'round',lineJoin:'round',dashArray:d.dash?('1,'+(rw*2.2)):null}).addTo(layer);}
+  if(d.coords2&&d.coords2.length){L.polyline(d.coords2,{color:d.rc2||'#ff7a2e',weight:4,opacity:.95}).addTo(layer);}
   if(d.sat&&!satSet){satSet=true;map.removeLayer(osm);satl.addTo(map);}
   (d.lines||[]).forEach(function(l){L.polyline([[l[0],l[1]],[l[2],l[3]]],{color:'#ff1744',weight:4,opacity:1}).addTo(layer);});
   (d.marks||[]).forEach(function(w){
@@ -40,13 +41,13 @@ window.addEventListener('message',function(e){setData(JSON.parse(e.data));});
 send({t:'ready'});
 </script></body></html>`;
 
-export default function MapaWeb({ wps = [], coords = [], marks = [], lines = [], sat = false, follow = false, rw = 5, dash = false, rc = '#ff7a2e', ctr = 0, editable = false, me = null, onTap, height = 360 }) {
+export default function MapaWeb({ wps = [], coords = [], coords2 = [], rc2 = '#ff7a2e', marks = [], lines = [], sat = false, follow = false, rw = 5, dash = false, rc = '#ff7a2e', ctr = 0, editable = false, me = null, onTap, height = 360 }) {
   const ref = useRef(null);
   const ready = useRef(false);
   const push = () => {
-    if (ready.current && ref.current) ref.current.postMessage(JSON.stringify({ wps, coords, marks, lines, sat, follow, rw, dash, rc, ctr, editable, me }));
+    if (ready.current && ref.current) ref.current.postMessage(JSON.stringify({ wps, coords, coords2, rc2, marks, lines, sat, follow, rw, dash, rc, ctr, editable, me }));
   };
-  useEffect(push, [wps, coords, marks, lines, editable, me, follow, rw, dash, rc, ctr]);
+  useEffect(push, [wps, coords, coords2, rc2, marks, lines, editable, me, follow, rw, dash, rc, ctr]);
   return (
     <View style={{ height, borderRadius: 12, overflow: 'hidden', marginBottom: 10 }}>
       <WebView

@@ -95,8 +95,9 @@ export function startStage(stage, points, cum, factor, extra = {}) {
 export function status(stage, points, cum, factor) {
   const n = points.length;
   if (!stage.active || !n) return null;
-  const elapsed = (points[n - 1].t - stage.t0) / 1000; // s
-  const dist = cum[n - 1] * factor - stage.d0 + stage.adjust; // m
+  const fin = (x, pad = 0) => (Number.isFinite(x) ? x : pad);
+  const elapsed = fin((points[n - 1].t - stage.t0) / 1000); // s
+  const dist = fin(fin(cum[n - 1]) * fin(factor, 1) - fin(stage.d0) + fin(stage.adjust)); // m
   const v = stage.targetKmh / 3.6; // m/s
   const avgKmh = elapsed > 0 ? (dist / elapsed) * 3.6 : 0;
   let idealDist = null;

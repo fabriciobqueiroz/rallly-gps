@@ -89,18 +89,18 @@ export function Bloco({ tipo, d, w, h }) {
     </TouchableOpacity>
   );
   switch (tipo) {
-    case 'tnav': return <Cx label="T.NAV" bg={d.fx.bg} fg={d.fx.fg} v={d.tnav != null ? fmtTnav(d.tnav, cfg.tnavDec) : '—'} />;
-    case 'regref': return <Cx label="REG REF" fill={barra(d.regRef)} fillCor={cfg.barra.cor} v={d.regRef != null ? fmtDist(d.regRef, cfg.ref) : '—'} />;
-    case 'regref2': return <Cx label="PRÓXIMA REF" fill={barra(d.regRef2)} fillCor={cfg.barra.cor} v={d.regRef2 != null ? fmtDist(d.regRef2, cfg.ref) : '—'} />;
-    case 'regtrc': return <Cx label="REG TRC" v={d.regTrc != null ? fmtDist(d.regTrc, cfg.trc) : '—'} />;
-    case 'vel': return <Cx label="VELOCIDADE" v={d.spd != null ? Math.round(d.spd * 3.6) : '—'} />;
-    case 'odo': return <Cx label="ODÔMETRO (GPS)" v={(d.odoM / 1000).toFixed(3)} />;
+    case 'tnav': return <Cx label="T.NAV" bg={d.fx.bg} fg={d.fx.fg} v={Number.isFinite(d.tnav) ? fmtTnav(d.tnav, cfg.tnavDec) : '—'} />;
+    case 'regref': return <Cx label="REG REF" fill={barra(d.regRef)} fillCor={cfg.barra.cor} v={Number.isFinite(d.regRef) ? fmtDist(d.regRef, cfg.ref) : '—'} />;
+    case 'regref2': return <Cx label="PRÓXIMA REF" fill={barra(d.regRef2)} fillCor={cfg.barra.cor} v={Number.isFinite(d.regRef2) ? fmtDist(d.regRef2, cfg.ref) : '—'} />;
+    case 'regtrc': return <Cx label="PRÓX. TRECHO" fill={barra(d.regTrc)} fillCor={cfg.barra.cor} v={Number.isFinite(d.regTrc) ? fmtDist(d.regTrc, cfg.trc) : '—'} />;
+    case 'vel': return <Cx label="VELOCIDADE (GPS)" v={Number.isFinite(d.spd) ? Math.round(d.spd * 3.6) : '—'} />;
+    case 'odo': return <Cx label="ODÔMETRO (GPS)" v={fmtDist(Number.isFinite(d.odoM) ? d.odoM : 0, (d.cfg && d.cfg.odo) || { un: 'km', dec: 3 })} />;
     case 'relogio': return <Cx label="RELÓGIO GPS" v={hms(d.clock)} />;
     case 'prec': return <Cx label="PRECISÃO GPS" v={d.acc != null ? `${Math.round(d.acc)} m` : '—'} />;
     case 'trcn': return <Cx label="TRECHO" v={d.trN || '—'} />;
     case 'refn': return <Cx label="REFERÊNCIA" v={d.refN || '—'} />;
-    case 'kmac': return <Cx label="KM ACUMULADO" v={(d.kmAcum / 1000).toFixed(3)} />;
-    case 'cron': return <Cx label="TEMPO DO TRECHO" v={d.elapsed != null ? fmtDur(d.elapsed) : '—'} />;
+    case 'kmac': return <Cx label="KM ACUMULADO" v={((Number.isFinite(d.kmAcum) ? d.kmAcum : 0) / 1000).toFixed(3)} />;
+    case 'cron': return <Cx label="TEMPO DO TRECHO" v={Number.isFinite(d.elapsed) ? fmtDur(d.elapsed) : '—'} />;
     case 'atual': return <Cx label="ATUAL"><Placa tipo="atual" pl={d.pa} w={w} h={h} /></Cx>;
     case 'prox': return <Cx label="PRÓXIMO"><Placa tipo="prox" pl={d.pp} w={w} h={h} /></Cx>;
     case 'bat': return (
@@ -116,6 +116,7 @@ export function Bloco({ tipo, d, w, h }) {
     case 'pc': return <Btn tx="PC" bg="#2e7d32" fg="#fff" on={d.onPc} />;
     case 'rb': return (
       <View style={{ width: w, height: h, overflow: 'hidden', backgroundColor: '#000' }}>
+        {d.fim ? <View style={{ backgroundColor: '#c0392b', paddingVertical: 6, alignItems: 'center' }}><Text style={{ color: '#fff', fontWeight: '900', fontSize: 18 }}>FIM DA PROVA</Text></View> : null}
         {d.rbLinhas ? d.rbLinhas.map((l) => <LinhaRb key={l.key} e={l.e} pct={l.pct} atual={l.atual} w={w} classe={d.classe} grupos={d.grupos} />)
           : <View style={{ flex: 1, backgroundColor: '#fff', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#999' }}><Text style={{ color: '#000', fontWeight: '800', fontSize: 16 }}>ROADBOOK</Text><Text style={{ color: '#555', fontSize: 12 }}>as tulipas aparecem aqui</Text></View>}
       </View>

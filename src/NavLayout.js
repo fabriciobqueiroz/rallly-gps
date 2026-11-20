@@ -9,7 +9,7 @@ export const BLOCOS = {
   odo: { nome: 'Odômetro GPS', w: 0.55, h: 0.12 },
   atual: { nome: 'Média atual', w: 0.33, h: 0.12 },
   prox: { nome: 'Média próxima', w: 0.38, h: 0.12 },
-  regtrc: { nome: 'REG TRC', w: 0.38, h: 0.1 },
+  regtrc: { nome: 'PRÓX. TRECHO', w: 0.38, h: 0.1 },
   relogio: { nome: 'Relógio GPS', w: 0.38, h: 0.08 },
   p10: { nome: 'Botão +10', w: 0.19, h: 0.1, btn: true },
   m10: { nome: 'Botão −10', w: 0.19, h: 0.1, btn: true },

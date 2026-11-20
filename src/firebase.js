@@ -136,6 +136,11 @@ export function ouvirMinhasInscricoes(email, onData, onError) {
 // Organizador: define largada (HH:MM:SS) e ordem de um inscrito.
 export const atualizarInscricao = (prova, numero, patch) =>
   setDoc(doc(db, 'inscricoes', `${slug(prova)}_${slug(numero)}`), { prova: slug(prova), numero: String(numero), ...patch }, { merge: true });
+// Competidor: a inscrição dele nesta prova (achada pelo e-mail), com a largada definida pelo organizador.
+export function ouvirMinhaLargada(prova, email, onData, onError) {
+  const q = query(collection(db, 'inscricoes'), where('prova', '==', slug(prova)), where('email', '==', String(email).trim().toLowerCase()));
+  return onSnapshot(q, (snap) => onData(snap.docs.map((d) => d.data())), onError);
+}
 export function ouvirInscricao(prova, numero, onData, onError) {
   return onSnapshot(doc(db, 'inscricoes', `${slug(prova)}_${slug(numero)}`), (d) => onData(d.exists() ? d.data() : null), onError);
 }
@@ -159,6 +164,11 @@ export async function enviarDatalogger({ prova, numero, nome, classe, points, pc
     uid: auth.currentUser?.uid || '',
     enviadoEm: Date.now(),
   });
+}
+// Competidor: o próprio datalogger (só lê se o organizador liberou o track log).
+export function ouvirMeuDatalogger(prova, uid, onData, onError) {
+  const q = query(collection(db, 'dataloggers'), where('prova', '==', slug(prova)), where('uid', '==', uid));
+  return onSnapshot(q, (snap) => onData(snap.docs.map((d) => d.data())), onError);
 }
 export function ouvirDataloggers(prova, onData, onError) {
   const q = query(collection(db, 'dataloggers'), where('prova', '==', slug(prova)));
