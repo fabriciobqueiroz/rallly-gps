@@ -52,7 +52,7 @@ export default function App() {
   const [odoAdj, setOdoAdj] = useState(0);
   const [piloto, setPiloto] = useState(() => ({ nome: '', numero: '', prova: '', navegador: '', email: '', classe: 'GRADUADO', ...loadJson('piloto', {}) }));
   const [hist, setHist] = useState([]);
-  const [provaMap, setProvaMap] = useState({ wps: [], coords: [], legs: [], kmh: [], tul: [], trechos: [], categorias: [], lib: {}, refs: [], pcl: [] });
+  const [provaMap, setProvaMap] = useState({ wps: [], coords: [], legs: [], kmh: [], tul: [], trechos: [], trs: [], categorias: [], lib: {}, refs: [], pcl: [] });
   const [orgInfo, setOrgInfo] = useState(() => loadJson('org', null));
   const [minhaLarg, setMinhaLarg] = useState('');
   const [enviandoDl, setEnviandoDl] = useState(false);
@@ -251,7 +251,7 @@ export default function App() {
       if (typeof d.largada === 'string') setLargadaTxt(d.largada);
       {
         const pair = (a) => { const o = []; for (let i = 0; i + 1 < a.length; i += 2) o.push([a[i], a[i + 1]]); return o; };
-        setProvaMap({ wps: pair(d.wps || []), coords: pair(d.rota || []), legs: d.legs || [], kmh: d.kmh || [], tul: d.tul || [], trechos: d.trechos || [], categorias: d.categorias || [], lib: d.lib || {}, refs: d.refs || [], pcl: d.pcl || [] });
+        setProvaMap({ wps: pair(d.wps || []), coords: pair(d.rota || []), legs: d.legs || [], kmh: d.kmh || [], tul: d.tul || [], trechos: d.trechos || [], trs: d.trs || [], categorias: d.categorias || [], lib: d.lib || {}, refs: d.refs || [], pcl: d.pcl || [] });
       }
       if (d.intervalo != null) setIntervalo(String(d.intervalo));
     };
