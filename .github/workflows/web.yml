@@ -12,15 +12,12 @@ permissions:
 
 concurrency:
   group: pages
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
-  site:
+  build:
     runs-on: ubuntu-latest
     timeout-minutes: 20
-    environment:
-      name: github-pages
-      url: ${{ steps.deploy.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -31,8 +28,17 @@ jobs:
       - name: Ajustar endereço do site
         run: node -e "const f='app.json',j=require('./'+f);j.expo.experiments={baseUrl:'/'+process.env.GITHUB_REPOSITORY.split('/')[1]};require('fs').writeFileSync(f,JSON.stringify(j,null,2))"
       - run: npx expo export --platform web --output-dir dist
-      - uses: actions/upload-pages-artifact@v3
+      - uses: actions/upload-pages-artifact@v4
         with:
           path: dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
       - id: deploy
         uses: actions/deploy-pages@v4
