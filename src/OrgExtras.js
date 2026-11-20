@@ -29,7 +29,7 @@ export function planilhaLiberada(lib, now = Date.now()) {
 }
 
 const Chip = ({ st, on, onPress, children, small }) => (
-  <TouchableOpacity style={[st.btn2, { flex: 0, paddingHorizontal: small ? 10 : 14, paddingVertical: small ? 4 : 6 }, on && { backgroundColor: '#ff7a2e' }]} onPress={onPress}>
+  <TouchableOpacity style={[st.btn2, { flexGrow: 0, flexShrink: 0, flexBasis: 'auto', paddingHorizontal: small ? 10 : 14, paddingVertical: small ? 4 : 6 }, on && { backgroundColor: '#ff7a2e' }]} onPress={onPress}>
     <Text style={[st.btn2Tx, on && { color: '#0c1014' }]}>{children}</Text>
   </TouchableOpacity>
 );
@@ -66,7 +66,7 @@ export function OrgCategorias({ st, prova, categorias }) {
       ))}
       <View style={[st.row, { marginTop: 10, marginBottom: 0 }]}>
         <TextInput style={[st.field, { flex: 1, marginTop: 0 }]} value={novo} onChangeText={setNovo} placeholder="Nova categoria" placeholderTextColor="#666" autoCapitalize="characters" />
-        <TouchableOpacity style={[st.btn2, { flex: 0, paddingHorizontal: 16 }]} onPress={add}><Text style={st.btn2Tx}>Adicionar</Text></TouchableOpacity>
+        <TouchableOpacity style={[st.btn2, { flexGrow: 0, flexShrink: 0, flexBasis: 'auto', paddingHorizontal: 16 }]} onPress={add}><Text style={st.btn2Tx}>Adicionar</Text></TouchableOpacity>
       </View>
       {categorias.length === 0 && (
         <TouchableOpacity style={[st.btn2, { marginTop: 10 }]} onPress={() => salvar(CATS_PADRAO)}><Text style={st.btn2Tx}>Usar estas categorias na prova</Text></TouchableOpacity>

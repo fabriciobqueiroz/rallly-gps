@@ -9,6 +9,7 @@ import { Roadbook } from './Tulipa';
 import { gruposDe } from './rally';
 import Levantamento from './Levantamento';
 import { OrgTrackLog } from './TrackLog';
+import { Platform } from 'react-native';
 import ListaProvas, { slugProva } from './Provas';
 import { CATS_PADRAO, OrgCategorias, OrgInscricoes, OrgLiberacao, OrgResultados } from './OrgExtras';
 import { compartilharPdf } from './pdf';
@@ -78,7 +79,7 @@ export default function Organizador({ st, prova, provaMap, last, onOrg, onProva,
   const [dif, setDif] = useState('3');
   const [busy, setBusy] = useState('');
   const [inscritos, setInscritos] = useState([]);
-  const [sec, setSec] = useState('levantar');
+  const [sec, setSec] = useState(Platform.OS === 'web' ? 'planilha' : 'levantar');
   const [aberta, setAberta] = useState(false);
   const [pcl, setPcl] = useState([]);
   const [refs, setRefs] = useState([]);
@@ -157,7 +158,7 @@ export default function Organizador({ st, prova, provaMap, last, onOrg, onProva,
       saveJson('org', o); setOrg(o); onOrg && onOrg(o);
       carregado.current = false;
       setWps([]); setRota({ coords: [], legs: [], tul: [] }); setLegs([]); setTrs([]); setRefs([]); setPcl([]); setManual(false); setInscritos([]);
-      setSec('levantar'); setAberta(true);
+      setSec(Platform.OS === 'web' ? 'planilha' : 'levantar'); setAberta(true);
     } catch (e) { Alert.alert('Sem conexão', String(e?.message || e)); }
   };
   useEffect(() => { if (abrirReq && abrirReq.code) abrirProva(abrirReq.code, false); }, [abrirReq && abrirReq.n]);
@@ -196,9 +197,9 @@ export default function Organizador({ st, prova, provaMap, last, onOrg, onProva,
 
   const total = rota.legs.reduce((a, b) => a + b, 0);
   const me = last ? [last.lat, last.lon] : null;
-  const chip = (on) => [st.btn2, { flex: 0, paddingHorizontal: 14, paddingVertical: 6 }, on && { backgroundColor: '#ff7a2e' }];
+  const chip = (on) => [st.btn2, { flexGrow: 0, flexShrink: 0, flexBasis: 'auto', paddingHorizontal: 14, paddingVertical: 6 }, on && { backgroundColor: '#ff7a2e' }];
   const cats = provaMap.categorias;
-  const SEC = [['levantar', 'Levantar'], ['planilha', 'Planilha'], ['categorias', 'Categorias'], ['inscricoes', 'Inscrições'], ['ranking', 'Ranking'], ['resultados', 'Resultados'], ['tracklog', 'Track log'], ['liberacao', 'Liberação']];
+  const SEC = [['levantar', 'Levantar'], ['planilha', 'Planilha'], ['categorias', 'Categorias'], ['inscricoes', 'Inscrições'], ['ranking', 'Ranking'], ['resultados', 'Resultados'], ['tracklog', 'Track log'], ['liberacao', 'Liberação']].filter(([k]) => Platform.OS !== 'web' || (k !== 'levantar' && k !== 'ranking'));
   const nomeProva = (loadJson('lev_index', []).find((x) => x.code === org.prova) || {}).nome || '';
   return (
     <View>
