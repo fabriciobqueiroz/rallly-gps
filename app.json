@@ -3,7 +3,7 @@
     "name": "Rally GPS Teste",
     "slug": "rally-gps-teste",
     "version": "0.1.0",
-    "orientation": "portrait",
+    "orientation": "default",
     "android": {
       "package": "br.com.rallysjrp.gpsteste"
     },

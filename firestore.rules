@@ -1,0 +1,53 @@
+rules_version = '2';
+// Cole em Firebase > Firestore Database > Regras > Publicar (somente DEPOIS de instalar o app novo).
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function logado() { return request.auth != null; }
+    function meuEmail() { return request.auth.token.email.lower(); }
+    function dono(prova) {
+      return logado() && exists(/databases/$(database)/documents/provas/$(prova))
+        && get(/databases/$(database)/documents/provas/$(prova)).data.donoUid == request.auth.uid;
+    }
+    function inscrito(prova) {
+      return logado() && exists(/databases/$(database)/documents/acessos/$(prova + '__' + meuEmail()));
+    }
+
+    // Espelho do navegador para o piloto: só a própria conta lê e escreve.
+    match /espelho/{uid} {
+      allow read, write: if logado() && request.auth.uid == uid;
+    }
+
+    match /usuarios/{uid} {
+      allow read, write: if logado() && request.auth.uid == uid;
+    }
+
+    // Prova: só o dono (organizador que criou) escreve; lê o dono e quem foi inscrito.
+    match /provas/{prova} {
+      allow create: if logado() && request.resource.data.donoUid == request.auth.uid;
+      allow update, delete: if dono(prova);
+      allow read: if logado() && (resource == null || resource.data.donoUid == request.auth.uid || inscrito(prova));
+    }
+
+    // Inscrições: o organizador gerencia; o competidor lê as do seu e-mail.
+    match /inscricoes/{id} {
+      allow create, update, delete: if dono(request.resource != null ? request.resource.data.prova : resource.data.prova);
+      allow read: if logado() && (resource.data.email == meuEmail() || dono(resource.data.prova));
+    }
+    match /acessos/{id} {
+      allow create, update, delete: if dono(request.resource != null ? request.resource.data.prova : resource.data.prova);
+      allow read: if logado() && (resource.data.email == meuEmail() || dono(resource.data.prova));
+    }
+
+    // Resultados e dataloggers: o competidor inscrito grava o seu; o dono lê tudo e grava o oficial.
+    match /resultados/{id} {
+      allow read: if logado() && (inscrito(resource.data.prova) || dono(resource.data.prova));
+      allow create, update: if logado() && (dono(request.resource.data.prova) || (inscrito(request.resource.data.prova) && request.resource.data.uid == request.auth.uid));
+      allow delete: if dono(resource.data.prova);
+    }
+    match /dataloggers/{id} {
+      allow read: if logado() && dono(resource.data.prova);
+      allow create, update: if logado() && inscrito(request.resource.data.prova) && request.resource.data.uid == request.auth.uid;
+      allow delete: if dono(resource.data.prova);
+    }
+  }
+}
