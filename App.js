@@ -218,12 +218,14 @@ export default function App() {
   const setP = (k) => (v) => { const n = { ...piloto, [k]: v }; setPiloto(n); saveJson('piloto', n); };
   const onDatalogger = async () => {
     if (!piloto.nome.trim() || !piloto.numero.trim() || !piloto.prova.trim()) return Alert.alert('Escolha a prova', 'Abra "Minhas provas" e toque em INICIAR na prova em que você está inscrito.');
-    if (points.length < 10) return Alert.alert('Sem trilha', 'Grave o percurso antes de enviar o datalogger.');
+    const jan = loadJson(kJan(), {});
+    const pts = points.filter((p) => (jan.ini == null || p.t >= jan.ini) && (jan.fim == null || p.t <= jan.fim));
+    if (pts.length < 10) return Alert.alert('Sem trilha da prova', 'Não há pontos gravados entre a largada e o fim da prova. O datalogger só envia esse período.');
     setEnviandoDl(true);
     try {
-      await enviarDatalogger({ prova: piloto.prova, numero: piloto.numero, nome: piloto.nome, classe: piloto.classe, points, pcs: stage.pcs });
-      saveJson('dlstat', { ...loadJson('dlstat', {}), [piloto.prova.trim().toUpperCase().replace(/[^A-Z0-9]+/g, '') + '_' + piloto.numero.trim().toUpperCase().replace(/[^A-Z0-9]+/g, '')]: { n: points.length, em: Date.now() } }); setDlTick((x) => x + 1);
-      Alert.alert('Datalogger enviado', `${points.length} pontos. O organizador calcula o resultado oficial com ele.`);
+      await enviarDatalogger({ prova: piloto.prova, numero: piloto.numero, nome: piloto.nome, classe: piloto.classe, points: pts, pcs: stage.pcs, tIni: jan.ini || undefined });
+      saveJson('dlstat', { ...loadJson('dlstat', {}), [piloto.prova.trim().toUpperCase().replace(/[^A-Z0-9]+/g, '') + '_' + piloto.numero.trim().toUpperCase().replace(/[^A-Z0-9]+/g, '')]: { n: pts.length, em: Date.now() } }); setDlTick((x) => x + 1);
+      Alert.alert('Datalogger enviado', `${pts.length} pontos. O organizador calcula o resultado oficial com ele.`);
     } catch (e) { Alert.alert('Não enviou', 'Confira a internet e tente de novo. ' + String(e?.message || e)); }
     setEnviandoDl(false);
   };
@@ -302,9 +304,17 @@ export default function App() {
     setStage((x) => ({ ...x, targetKmh: v > 0 ? v : 0 }));
   };
   const adj = (m) => setStage((x) => ({ ...x, adjust: x.adjust + m }));
+  // Janela do datalogger: da largada (início do 1º trecho) até ENCERRAR PROVA. Só esses pontos são enviados.
+  const kJan = () => 'jan_' + piloto.prova.trim().toUpperCase().replace(/[^A-Z0-9]+/g, '');
+  useEffect(() => {
+    if (!stage.active || !(stage.idx <= 0) || !stage.t0 || !piloto.prova.trim()) return;
+    const j = loadJson(kJan(), {});
+    if (j.ini !== stage.t0) saveJson(kJan(), { ini: stage.t0 });
+  }, [stage.active, stage.idx, stage.t0, piloto.prova]);
   const encerrarProva = () => {
+    const j = loadJson(kJan(), {});
+    saveJson(kJan(), { ...j, fim: Date.now() });
     setStage(newStage()); setHist([]); setNavOpen(false);
-    saveJson('enc_' + piloto.prova.trim().toUpperCase().replace(/[^A-Z0-9]+/g, ''), Date.now());
     Alert.alert('Prova encerrada', 'Agora envie o datalogger na tela da prova (Sincronizar agora).');
   };
   const adjAll = (m) => { adj(m); setOdoAdj((a) => a + m); };
