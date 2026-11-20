@@ -11,7 +11,7 @@ import { loadRoteiro, saveRoteiro, recFile, loadJson, saveJson } from './src/per
 import { Roadbook, tulComp } from './src/Tulipa';
 import * as ScreenOrientation from 'expo-screen-orientation';
 import Organizador from './src/Organizador';
-import { enviarResultado, ouvirRanking, salvarProva, ouvirProva, ouvirInscricao, enviarDatalogger, ouvirAuth, sairConta, lerPerfil } from './src/firebase';
+import { enviarResultado, ouvirRanking, salvarProva, ouvirProva, ouvirInscricao, ouvirMinhaLargada, enviarDatalogger, ouvirAuth, sairConta, lerPerfil } from './src/firebase';
 import Login from './src/Login';
 import Fluxo, { DlTela } from './src/Fluxo';
 import { planilhaLiberada, parseHMS, CATS_PADRAO } from './src/OrgExtras';
@@ -50,6 +50,7 @@ export default function App() {
   const [cfgOpen, setCfgOpen] = useState(false);
   const [odoBase, setOdoBase] = useState(0);
   const [odoAdj, setOdoAdj] = useState(0);
+  const odoAtual = () => { const v = (points.length ? cum[points.length - 1] * factor : 0) + odoAdj; return Number.isFinite(v) ? v : 0; };
   const [piloto, setPiloto] = useState(() => ({ nome: '', numero: '', prova: '', navegador: '', email: '', classe: 'GRADUADO', ...loadJson('piloto', {}) }));
   const [hist, setHist] = useState([]);
   const [provaMap, setProvaMap] = useState({ wps: [], coords: [], legs: [], kmh: [], tul: [], trechos: [], trs: [], categorias: [], lib: {}, refs: [], pcl: [] });
@@ -278,9 +279,17 @@ export default function App() {
   // Minha largada definida pelo organizador (horário HH:MM:SS na inscrição).
   useEffect(() => {
     setMinhaLarg('');
-    if (!piloto.prova.trim() || !piloto.numero.trim()) return;
+    if (!piloto.prova.trim()) return;
+    const email = (user && user.email) || piloto.email;
+    if (email) {
+      return ouvirMinhaLargada(piloto.prova, email, (lista) => {
+        const meu = lista.find((x) => String(x.numero) === String(piloto.numero)) || lista[0];
+        setMinhaLarg((meu && meu.largada) || '');
+      }, () => {});
+    }
+    if (!piloto.numero.trim()) return;
     return ouvirInscricao(piloto.prova, piloto.numero, (d) => setMinhaLarg(d?.largada || ''), () => {});
-  }, [piloto.prova, piloto.numero]);
+  }, [piloto.prova, piloto.numero, user && user.email]);
   useEffect(() => {
     if (tab !== 'ranking' || !piloto.prova.trim()) return;
     setRankErr('');
@@ -293,6 +302,11 @@ export default function App() {
     setStage((x) => ({ ...x, targetKmh: v > 0 ? v : 0 }));
   };
   const adj = (m) => setStage((x) => ({ ...x, adjust: x.adjust + m }));
+  const encerrarProva = () => {
+    setStage(newStage()); setHist([]); setNavOpen(false);
+    saveJson('enc_' + piloto.prova.trim().toUpperCase().replace(/[^A-Z0-9]+/g, ''), Date.now());
+    Alert.alert('Prova encerrada', 'Agora envie o datalogger na tela da prova (Sincronizar agora).');
+  };
   const adjAll = (m) => { adj(m); setOdoAdj((a) => a + m); };
   const refPerto = (() => {
     if (!last || !provaMap.refs.length) return null;
@@ -304,6 +318,8 @@ export default function App() {
   // Posição no percurso: distância planejada dos trechos já feitos + parcial do trecho atual.
   const feitos = stage.idx > 0 ? rot.trechos.slice(0, stage.idx).reduce((a, t) => a + t.km * 1000, 0) : 0;
   const globalDist = feitos + (rs ? rs.dist : 0);
+  const ultE = tulVis.length ? tulVis[tulVis.length - 1] : null;
+  const fimProva = !!(ultE && ultE.t === 'C' && (rs || stage.idx >= 0) && globalDist >= ultE.d - 5);
   const remain = rs ? rs.remain : null;
   const neutroRest = stage.active && last && stage.t0 > last.t ? (stage.t0 - last.t) / 1000 : null;
   const acc = last?.acc;
@@ -421,9 +437,9 @@ export default function App() {
       {soDl && <DlTela st={st} last={last} pointsN={points.length} startedAt={startedAt} onFinalizar={finalizarDl} />}
       {navOpen && (
         <NavTela cfg={loadNav()} stage={stage} rs={rs} last={last} globalDist={rs || stage.idx >= 0 ? globalDist : 0}
-          odoM={(points.length ? cum[points.length - 1] * factor : 0) + odoAdj - odoBase} tul={tulVis} rot={rot} classe={piloto.classe} grupos={grupos}
-          aviso={remLarg != null && remLarg > 0 ? `Largada em ${fmtDur(remLarg)}` : neutroRest != null ? `NEUTRO · PARE · ${fmtDur(neutroRest)}` : stage.idx >= 0 && rs && remain != null && remain <= 0 ? 'CHEGOU — toque em PC' : null}
-          onAdj={adjAll} onPc={onPc} onIniciarAgora={onStage} onZerar={() => setOdoBase((points.length ? cum[points.length - 1] * factor : 0) + odoAdj)} onClose={() => setNavOpen(false)} />
+          odoM={odoAtual() - odoBase} tul={tulVis} rot={rot} trs={provaMap.trs} fim={fimProva} classe={piloto.classe} grupos={grupos}
+          aviso={fimProva ? 'FIM DA PROVA' : remLarg != null && remLarg > 0 ? `Largada em ${fmtDur(remLarg)}` : neutroRest != null ? `NEUTRO · PARE · ${fmtDur(neutroRest)}` : stage.idx >= 0 && rs && remain != null && remain <= 0 ? 'CHEGOU — toque em PC' : null}
+          onAdj={adjAll} onPc={onPc} onIniciarAgora={onStage} onEncerrar={encerrarProva} onZerar={() => setOdoBase(odoAtual())} onClose={() => setNavOpen(false)} />
       )}
       <NavConfig st={st} visible={cfgOpen} onClose={() => setCfgOpen(false)} />
       {pilotoOpen && <PilotoTela cfg={loadNav()} tul={tulVis} classe={piloto.classe} grupos={grupos} onPersonalizar={() => setCfgPiloto(true)} onClose={() => setPilotoOpen(false)} />}
