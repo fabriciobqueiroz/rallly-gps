@@ -45,7 +45,7 @@ service cloud.firestore {
       allow delete: if dono(resource.data.prova);
     }
     match /dataloggers/{id} {
-      allow read: if logado() && dono(resource.data.prova);
+      allow read: if logado() && (dono(resource.data.prova) || (resource.data.uid == request.auth.uid && get(/databases/$(database)/documents/provas/$(resource.data.prova)).data.get('lib', {}).get('track', false) == true));
       allow create, update: if logado() && inscrito(request.resource.data.prova) && request.resource.data.uid == request.auth.uid;
       allow delete: if dono(resource.data.prova);
     }
