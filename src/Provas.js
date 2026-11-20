@@ -4,7 +4,7 @@ import Tela from './Tela';
 import { Alert, KeyboardAvoidingView, ScrollView, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { DateTimePickerAndroid } from './pickers';
 import { File } from 'expo-file-system';
-import { apagarProvaNuvem, criarProva, ouvirMinhasProvas } from './firebase';
+import { apagarProvaNuvem, criarProva, ouvirMinhasProvas, salvarProva } from './firebase';
 import { apagarJson, loadJson, saveJson } from './persist';
 import { parseDataBR } from './Fluxo';
 
@@ -30,6 +30,11 @@ export default function ListaProvas({ st, org, onAbrir, onSairOrg }) {
   const salva = (l) => { setIdx(l); saveJson('lev_index', l); };
   // A lista vem da nuvem (provas criadas na conta); o que o celular guarda (marcas, km) complementa.
   const lista = nuvem.map((n) => { const l = idx.find((x) => x.code === n.code) || {}; return { ...l, code: n.code, nome: n.nome || l.nome || '' }; });
+
+  // Provas antigas só tinham o nome no celular: copia para a nuvem para o site e os outros aparelhos verem.
+  useEffect(() => {
+    nuvem.forEach((n) => { const l = idx.find((x) => x.code === n.code); if (!n.nome && l && l.nome) salvarProva(n.code, { nome: l.nome }).catch(() => {}); });
+  }, [nuvem]);
 
   const criar = async () => {
     const nome = novo.trim();
@@ -67,6 +72,7 @@ export default function ListaProvas({ st, org, onAbrir, onSairOrg }) {
     salva(l);
     const d = loadJson('lev_' + slugProva(it.code), { iniT: null, marks: [] });
     saveJson('lev_' + slugProva(it.code), { ...d, nome: n });
+    salvarProva(it.code, { nome: n }).catch(() => {});
     setRenom(null);
   };
 
