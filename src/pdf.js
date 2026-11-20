@@ -36,11 +36,12 @@ function tipo(nx) {
   return `<div style="background:#2e7d32;color:#fff;padding:3px 6px;font-weight:bold">V ${txt}</div>`;
 }
 
-export function roadbookHtml(prova, tul) {
+export function roadbookHtml(prova, tul0, org) {
+  const tul = org ? tul0 : tul0.filter((e) => e.t !== 'P' || e.nt > 0);
   const rows = tul.map((e) => {
     const mid = e.t === 'T'
       ? `<div style="display:flex;align-items:center;gap:10px">${tulSvg(e, 90)}<span>${e.nm || ''}</span></div>`
-      : `<div style="font-weight:bold;font-size:16px">${e.t === 'L' ? 'LARGADA' : e.t === 'C' ? 'CHEGADA' : 'PC ' + e.n}</div>` +
+      : `<div style="font-weight:bold;font-size:16px">${e.t === 'L' ? 'LARGADA' : e.t === 'C' ? 'CHEGADA' : (org ? 'PC ' + e.n : 'NEUTRO')}</div>` +
         (e.nt > 0 ? `<div style="background:#c0392b;color:#fff;padding:3px 6px;font-weight:bold">N · PARE ${mmss(e.nt)}</div>` : '') + tipo(e.nx);
     return `<tr><td style="width:70px"><div style="font-size:12px">${km2(e.p)}</div><div style="font-size:18px;font-weight:bold">${km2(e.d)}</div></td><td>${mid}</td></tr>`;
   }).join('');
@@ -49,8 +50,8 @@ export function roadbookHtml(prova, tul) {
   <table style="width:100%;border-collapse:collapse" border="1" cellpadding="5">${rows}</table></body></html>`;
 }
 
-export async function compartilharPdf(prova, tul) {
-  const { uri } = await Print.printToFileAsync({ html: roadbookHtml(prova, tul) });
+export async function compartilharPdf(prova, tul, org) {
+  const { uri } = await Print.printToFileAsync({ html: roadbookHtml(prova, tul, org) });
   await Sharing.shareAsync(uri, { mimeType: 'application/pdf', dialogTitle: `Roadbook ${prova}` });
 }
 

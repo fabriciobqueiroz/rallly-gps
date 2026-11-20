@@ -162,9 +162,32 @@ export function crossingTime(points, wp, fromT, maxD = 60) {
   return best ? best.t : null;
 }
 
+// Instante em que a trilha cruza a linha do PC [la1,lo1,la2,lo2] (interpolado entre dois pontos), depois de fromT.
+export function crossingLine(points, line, fromT) {
+  const [la1, lo1, la2, lo2] = line;
+  const la0 = (la1 + la2) / 2, lo0 = (lo1 + lo2) / 2, kx = Math.cos((la0 * Math.PI) / 180) * 111320, ky = 110540;
+  const X = (lo) => (lo - lo0) * kx, Y = (la) => (la - la0) * ky;
+  const ax = X(lo1), ay = Y(la1), bx = X(lo2), by = Y(la2);
+  for (let i = 1; i < points.length; i++) {
+    const p = points[i - 1], q = points[i];
+    if (q.t < fromT) continue;
+    const px = X(p.lon), py = Y(p.lat), qx = X(q.lon), qy = Y(q.lat);
+    const d1x = qx - px, d1y = qy - py, d2x = bx - ax, d2y = by - ay;
+    const den = d1x * d2y - d1y * d2x;
+    if (Math.abs(den) < 1e-9) continue;
+    const u = ((ax - px) * d2y - (ay - py) * d2x) / den; // posição no segmento da trilha
+    const w = ((ax - px) * d1y - (ay - py) * d1x) / den; // posição na linha do PC
+    if (u >= 0 && u <= 1 && w >= 0 && w <= 1) {
+      const t = p.t + u * (q.t - p.t);
+      if (t >= fromT) return t;
+    }
+  }
+  return null;
+}
+
 // Refaz os PCs oficiais: cada PC vale o instante em que o carro passou pelo ponto do mapa.
 // wps = [largada, PC1, ..., chegada]; trechos = trechos publicados; t0 = instante da largada.
-export function oficialDeTrilha(points, wps, trechos, classe, grupos, t0) {
+export function oficialDeTrilha(points, wps, trechos, classe, grupos, t0, pcl = []) {
   const cum = cumulative(points);
   const pcs = [];
   let tIni = t0;
@@ -172,7 +195,8 @@ export function oficialDeTrilha(points, wps, trechos, classe, grupos, t0) {
     const wp = wps[i + 1];
     if (!wp) break;
     const tr = resolverTrecho(trechos[i], classe, grupos);
-    const tc = crossingTime(points, wp, tIni);
+    const ln = pcl.slice((i + 1) * 4, (i + 1) * 4 + 4);
+    const tc = ln.length === 4 && ln.some((x) => x) ? crossingLine(points, ln, tIni) : crossingTime(points, wp, tIni);
     if (tc == null) break;
     const elapsed = (tc - tIni) / 1000;
     const dist = distAt(points, cum, tc) - distAt(points, cum, tIni);

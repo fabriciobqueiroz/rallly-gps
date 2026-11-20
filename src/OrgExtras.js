@@ -76,7 +76,7 @@ export function OrgInscricoes({ st, prova, inscritos, categorias }) {
   const [base, setBaseRaw] = useState(() => loadJson(bk, { h: '09:00:00' }).h);
   const setBase = (v) => { setBaseRaw(v); saveJson(bk, { h: v }); };
   const iv = '60'; // intervalo fixo entre carros: 60 s
-  const [f, setF] = useState({ numero: '', piloto: '', navegador: '', email: '', classe: cats[0] });
+  const [f, setF] = useState({ numero: '', piloto: '', navegador: '', equipe: '', email: '', classe: cats[0] });
   const [edit, setEdit] = useState({});
   const ordenados = [...cats, ...inscritos.map((p) => p.classe).filter((c) => !cats.includes(c))];
 
@@ -93,8 +93,12 @@ export function OrgInscricoes({ st, prova, inscritos, categorias }) {
   const porNumero = () => aplicar(ordenados.flatMap((c) => [...porCat(c)].sort((a, b) => Number(a.numero) - Number(b.numero))));
   const add = async () => {
     if (!f.numero.trim() || !f.piloto.trim()) return Alert.alert('Falta preencher', 'Informe número e piloto.');
-    try { await inscrever({ prova, numero: f.numero.trim(), piloto: f.piloto.trim(), navegador: f.navegador.trim(), classe: f.classe, email: f.email.trim() }); setF({ ...f, numero: '', piloto: '', navegador: '', email: '' }); }
-    catch (e) { Alert.alert('Não inscreveu', String(e?.message || e)); }
+    if (!/^\S+@\S+\.\S+$/.test(f.email.trim())) return Alert.alert('E-mail do competidor', 'Informe o e-mail do competidor principal: é com ele que a prova e a planilha aparecem para a equipe.');
+    try {
+      const provaNome = loadJson('lev_' + String(prova).trim().toUpperCase().replace(/[^A-Z0-9]+/g, ''), {}).nome || '';
+      await inscrever({ prova, provaNome, numero: f.numero.trim(), piloto: f.piloto.trim(), navegador: f.navegador.trim(), equipe: f.equipe.trim(), classe: f.classe, email: f.email.trim() });
+      setF({ ...f, numero: '', piloto: '', navegador: '', equipe: '', email: '' });
+    } catch (e) { Alert.alert('Não inscreveu', String(e?.message || e)); }
   };
   const salvarLarg = (p) => {
     const v = edit[p.numero];
@@ -124,13 +128,14 @@ export function OrgInscricoes({ st, prova, inscritos, categorias }) {
         <TextInput style={st.field} value={f.numero} onChangeText={(v) => setF({ ...f, numero: v })} placeholder="Número" placeholderTextColor="#666" keyboardType="number-pad" />
         <TextInput style={st.field} value={f.piloto} onChangeText={(v) => setF({ ...f, piloto: v })} placeholder="Piloto" placeholderTextColor="#666" />
         <TextInput style={st.field} value={f.navegador} onChangeText={(v) => setF({ ...f, navegador: v })} placeholder="Navegador" placeholderTextColor="#666" />
-        <TextInput style={st.field} value={f.email} onChangeText={(v) => setF({ ...f, email: v })} placeholder="E-mail" placeholderTextColor="#666" autoCapitalize="none" keyboardType="email-address" />
+        <TextInput style={st.field} value={f.email} onChangeText={(v) => setF({ ...f, email: v })} placeholder="E-mail do competidor principal" placeholderTextColor="#666" autoCapitalize="none" keyboardType="email-address" />
+        <TextInput style={st.field} value={f.equipe} onChangeText={(v) => setF({ ...f, equipe: v })} placeholder="Equipe (opcional)" placeholderTextColor="#666" />
         <Wrap>{cats.map((c) => <Chip key={c} st={st} small on={f.classe === c} onPress={() => setF({ ...f, classe: c })}>{c}</Chip>)}</Wrap>
         <TouchableOpacity style={[st.btn, { marginTop: 10, marginBottom: 0 }]} onPress={add}><Text style={st.btnTx}>Adicionar inscrição</Text></TouchableOpacity>
       </View>
       <View style={st.card}>
         <Text style={st.tip}>Inscrições · total {inscritos.length}</Text>
-        {inscritos.length === 0 && <Text style={st.tipTx}>Ninguém inscrito ainda. Os competidores se inscrevem na aba Gravar.</Text>}
+        {inscritos.length === 0 && <Text style={st.tipTx}>Ninguém inscrito ainda. Cadastre acima: o competidor vê a prova em "Minhas provas" ao entrar com o e-mail dele.</Text>}
         {ordenados.filter((c) => porCat(c).length).map((c) => (
           <View key={c} style={{ marginTop: 8 }}>
             <View style={[st.line, { backgroundColor: '#1b6b85', borderRadius: 8, paddingHorizontal: 10, alignItems: 'center' }]}>
@@ -141,9 +146,9 @@ export function OrgInscricoes({ st, prova, inscritos, categorias }) {
               <View key={p.numero} style={{ borderBottomWidth: 1, borderBottomColor: '#262b32', paddingVertical: 8 }}>
                 <View style={st.line}>
                   <Text style={st.v}>#{p.numero} {p.piloto}{p.navegador ? ` / ${p.navegador}` : ''}</Text>
-                  <TouchableOpacity onPress={() => removerInscricao(prova, p.numero).catch(() => {})}><Text style={{ color: '#ff5252', fontWeight: '700' }}>remover</Text></TouchableOpacity>
+                  <TouchableOpacity onPress={() => removerInscricao(prova, p.numero, p.email).catch(() => {})}><Text style={{ color: '#ff5252', fontWeight: '700' }}>remover</Text></TouchableOpacity>
                 </View>
-                {p.email ? <Text style={st.tipTx}>{p.email}</Text> : null}
+                <Text style={st.tipTx}>{p.email || 'sem e-mail'}{p.equipe ? ` · ${p.equipe}` : ''}</Text>
                 <View style={st.line}>
                   <Text style={st.k}>Largada {p.ordem ? `(${p.ordem}º)` : ''}</Text>
                   <TextInput style={st.input} value={edit[p.numero] ?? p.largada ?? ''} placeholder="--:--:--" placeholderTextColor="#666"
@@ -251,7 +256,7 @@ export function OrgResultados({ st, prova, provaMap, grupos, inscritos, categori
     let ok = 0;
     for (const dl of dls) {
       try {
-        const pcs = oficialDeTrilha(pcsDoLogger(dl), provaMap.wps, provaMap.trechos, dl.classe, grupos, dl.tIni || dl.t0);
+        const pcs = oficialDeTrilha(pcsDoLogger(dl), provaMap.wps, provaMap.trechos, dl.classe, grupos, dl.tIni || dl.t0, provaMap.pcl || []);
         await enviarResultado({ prova, numero: dl.numero, nome: dl.nome, classe: dl.classe, pcs, pontos: pontos(pcs), oficial: true });
         ok++;
       } catch (e) { setMsg('Erro: ' + String(e?.message || e)); }

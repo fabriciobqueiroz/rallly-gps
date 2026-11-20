@@ -1,13 +1,17 @@
 // Tela do navegador (durante a prova) e tela de personalização (antes da prova).
 // Durante a prova nada é editável, só os botões de correção (+10 m, -10 m, PC) e o menu ⋮.
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Alert, Modal, ScrollView, Switch, Text, TextInput, TouchableOpacity, View, useWindowDimensions } from 'react-native';
 import * as Battery from 'expo-battery';
+import * as ScreenOrientation from 'expo-screen-orientation';
+import { ouvirEspelho, publicarEspelho } from './firebase';
 import { useKeepAwake } from 'expo-keep-awake';
-import { Tulipa, rotuloNx } from './Tulipa';
-import { DesenhoSvg } from './Desenho';
 import { loadJson, saveJson } from './persist';
-import { fmtDur } from './rally';
+import { Bloco, fmtDist, fmtTnav, faixaDe } from './Blocos';
+import LayoutEditor, { TOPO } from './LayoutEditor';
+import { getLayout, loadLayouts, novoId, padraoDe, saveLayouts } from './NavLayout';
+
+export { fmtDist, fmtTnav, faixaDe };
 
 export const NAV_PADRAO = {
   tiles: { odo: true, tnav: true, vel: true, regref: true, atual: true, prox: true, regtrc: true, pm: true, bat: true, rb: true },
@@ -20,75 +24,31 @@ export const NAV_PADRAO = {
   ref: { un: 'm', dec: 0 },
   trc: { un: 'm', dec: 0 },
   rb: { ant: 1, prox: 2, pAnt: 60, pAtual: 100, pProx: [80, 60, 50] },
+  barra: { on: true, ini: 100, cor: '#e53935' },
 };
 export const loadNav = () => {
   const c = loadJson('navcfg', {});
-  return { ...NAV_PADRAO, ...c, tiles: { ...NAV_PADRAO.tiles, ...(c.tiles || {}) }, ref: { ...NAV_PADRAO.ref, ...(c.ref || {}) }, trc: { ...NAV_PADRAO.trc, ...(c.trc || {}) }, rb: { ...NAV_PADRAO.rb, ...(c.rb || {}) } };
+  return { ...NAV_PADRAO, ...c, tiles: { ...NAV_PADRAO.tiles, ...(c.tiles || {}) }, ref: { ...NAV_PADRAO.ref, ...(c.ref || {}) }, trc: { ...NAV_PADRAO.trc, ...(c.trc || {}) }, rb: { ...NAV_PADRAO.rb, ...(c.rb || {}) }, barra: { ...NAV_PADRAO.barra, ...(c.barra || {}) } };
 };
 export const saveNav = (c) => saveJson('navcfg', c);
 
 const CORES = ['#f5e50f', '#e53935', '#1e88e5', '#43a047', '#fb8c00', '#000000', '#ffffff'];
-const fgDe = (bg) => (['#f5e50f', '#fb8c00', '#ffffff', '#43a047'].includes(bg) ? '#000' : '#fff');
 const num = (s) => { const v = parseFloat(String(s).replace(',', '.')); return isNaN(v) ? 0 : v; };
 
-export function fmtDist(m, c) {
-  const v = Math.max(0, m);
-  return c.un === 'km' ? (v / 1000).toFixed(c.dec).replace('.', ',') : v.toFixed(c.dec).replace('.', ',');
-}
-export function fmtTnav(sec, dec) {
-  const a = Math.abs(sec).toFixed(dec).replace('.', ',');
-  return (sec >= 0 ? '+' : '−') + a;
-}
-export function faixaDe(sec, cfg) {
-  const f = cfg.faixas.find((x) => sec >= x.a && sec <= x.b);
-  return f ? { bg: f.bg, fg: fgDe(f.bg) } : { bg: '#000', fg: '#fff' };
-}
-
-function Box({ label, children, bg = '#000', fg = '#fff', style, lc }) {
-  return (
-    <View style={[{ backgroundColor: bg, borderWidth: 1, borderColor: '#444', padding: 4, alignItems: 'center', justifyContent: 'center' }, style]}>
-      {label ? <Text style={{ color: lc || fg, fontSize: 11 }}>{label}</Text> : null}
-      {children}
-    </View>
-  );
-}
-
-function LinhaRb({ e, pct, atual, w, classe, grupos }) {
-  const h = Math.round((w * 0.46 * pct) / 100), k = Math.max(0.6, pct / 100);
-  const bg = atual ? '#f5e50f' : '#fff';
-  if (e.t !== 'T') {
-    const txt = e.t === 'P' ? `PC ${e.n}${e.nt > 0 ? ' · NEUTRO' : ''}` : e.t === 'L' ? 'LARGADA' : 'CHEGADA';
-    const nx = rotuloNx(e.nx, classe, grupos);
-    return (
-      <View style={{ backgroundColor: e.t === 'C' ? '#c0392b' : '#37474f', paddingVertical: 6 * k, paddingHorizontal: 8, flexDirection: 'row', justifyContent: 'space-between' }}>
-        <Text style={{ color: '#fff', fontWeight: '800', fontSize: 15 * k }}>{txt}  {fmtDist(e.d, { un: 'km', dec: 3 })}</Text>
-        {nx ? <Text style={{ color: '#fff', fontWeight: '800', fontSize: 15 * k }}>{nx.txt}</Text> : null}
-      </View>
-    );
-  }
-  return (
-    <View style={{ backgroundColor: bg, flexDirection: 'row', height: h, borderBottomWidth: 1, borderBottomColor: '#999' }}>
-      <View style={{ flex: 1, paddingHorizontal: 4, paddingVertical: 2 }}>
-        <Text style={{ color: '#000', fontSize: 12 * k, textAlign: 'right' }}>{fmtDist(e.p, { un: 'km', dec: 3 })}</Text>
-        <Text style={{ color: '#000', fontSize: 26 * k, fontWeight: '800' }}>{fmtDist(e.d, { un: 'km', dec: 3 })}</Text>
-        {e.nm ? <Text style={{ color: '#000', fontSize: 11 * k }} numberOfLines={2}>{e.nm}</Text> : null}
-      </View>
-      <View style={{ width: h, height: h }}>
-        {e.dw && e.dw.length ? <DesenhoSvg items={e.dw} size={h} /> : <Tulipa e={e} size={h} />}
-      </View>
-    </View>
-  );
-}
-
-export function NavTela({ cfg, stage, rs, last, globalDist, odoM, tul, rot, classe, grupos, aviso, onAdj, onPc, onZerar, onClose }) {
+export function NavTela({ cfg, stage, rs, last, globalDist, odoM, tul, rot, classe, grupos, aviso, onAdj, onPc, onZerar, onClose, onIniciarAgora }) {
   useKeepAwake();
   const { width } = useWindowDimensions();
   const [t, setT] = useState(Date.now());
   const [menu, setMenu] = useState(false);
   const bat = Battery.useBatteryLevel();
   useEffect(() => { const id = setInterval(() => setT(Date.now()), 200); return () => clearInterval(id); }, []);
-  const T = cfg.tiles;
-  const sc = Math.min(1.2, width / 380);
+  const sc = 1;
+  const [cv, setCv] = useState({ w: width, h: 600 });
+  const lay = getLayout(false);
+  useEffect(() => {
+    ScreenOrientation.lockAsync(lay.orient === 'h' ? ScreenOrientation.OrientationLock.LANDSCAPE : ScreenOrientation.OrientationLock.PORTRAIT_UP).catch(() => {});
+    return () => { ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.PORTRAIT_UP).catch(() => {}); };
+  }, [lay.orient]);
   // velocidade real e T.NAV com extrapolação até o instante atual (o GPS chega ~1 vez por segundo)
   const spd = last && last.spd != null && last.spd >= 0 ? last.spd : null;
   const dt = last ? Math.min(1.5, Math.max(0, (t - last.t) / 1000)) : 0;
@@ -100,84 +60,117 @@ export function NavTela({ cfg, stage, rs, last, globalDist, odoM, tul, rot, clas
   const iAtual = iAt < 0 ? -1 : (tul.findIndex((e) => e.d >= globalDist - 15) < 0 ? tul.length - 1 : iAt);
   const prox = iAtual >= 0 ? tul.find((e, i) => i >= iAtual && e.d - globalDist > 0) : null;
   const regRef = prox ? prox.d - globalDist : null;
+  const prox2 = prox ? tul.find((e) => e.d > prox.d + 0.5) : null;
+  const regRef2 = prox2 ? prox2.d - globalDist : null;
   const trAtual = stage.idx >= 0 ? rot.trechos[stage.idx] : null;
   const trProx = stage.idx >= 0 ? rot.trechos[stage.idx + 1] : null;
   const regTrc = rs && rs.remain != null ? rs.remain : null;
   const placa = (tr) => (tr ? (tr.tipo === 'D' ? { tx: `D${tr.min}'`, d: true } : { tx: String(Math.round(tr.kmh)), d: false }) : null);
-  const pa = placa(trAtual), pp = placa(trProx);
-  const wR = width * 0.62;
   const rb = cfg.rb;
   const linhasRb = [];
-  if (T.rb && iAtual >= 0) {
+  if (iAtual >= 0) {
     for (let k = rb.ant; k >= 1; k--) if (tul[iAtual - k]) linhasRb.push({ e: tul[iAtual - k], pct: rb.pAnt, key: 'a' + k });
     linhasRb.push({ e: tul[iAtual], pct: rb.pAtual, atual: true, key: 'c' });
     for (let k = 1; k <= rb.prox; k++) if (tul[iAtual + k]) linhasRb.push({ e: tul[iAtual + k], pct: rb.pProx[k - 1] ?? 50, key: 'p' + k });
   }
+  const d = {
+    cfg, spd, tnav, fx, odoM, regRef, regRef2, regTrc, pa: placa(trAtual), pp: placa(trProx), clock: last ? last.t : t, acc: last ? last.acc : null,
+    trN: stage.idx >= 0 ? `${stage.idx + 1}/${rot.trechos.length}` : null, refN: iAtual >= 0 ? `${iAtual + 1}/${tul.length}` : null,
+    kmAcum: globalDist, bat: bat, elapsed: rs ? rs.elapsed : null, rbLinhas: iAtual >= 0 ? linhasRb : null, classe, grupos, edit: false, onAdj, onPc,
+  };
+  // Espelho para o celular do piloto (mesma conta): publica os valores a cada 2 s.
+  const espRef = useRef(null);
+  espRef.current = {
+    spd: spd ?? null, tnav: tnav ?? null, odoM: odoM ?? 0, regRef: regRef ?? null, regRef2: regRef2 ?? null, regTrc: regTrc ?? null,
+    pa: d.pa || null, pp: d.pp || null, acc: d.acc ?? null, trN: d.trN || null, refN: d.refN || null, kmAcum: d.kmAcum ?? 0,
+    bat: d.bat ?? -1, elapsed: d.elapsed ?? null, iAtual, aviso: aviso || '',
+  };
+  useEffect(() => { const id = setInterval(() => { publicarEspelho(espRef.current).catch(() => {}); }, 2000); return () => clearInterval(id); }, []);
   const confirma = (tit, msg, fn) => { setMenu(false); Alert.alert(tit, msg, [{ text: 'Cancelar', style: 'cancel' }, { text: 'Confirmar', onPress: fn }]); };
 
   return (
     <Modal visible animationType="fade" onRequestClose={() => setMenu(true)}>
       <View style={{ flex: 1, backgroundColor: '#000', paddingTop: 26 }}>
         {aviso ? <View style={{ backgroundColor: '#c0392b', padding: 6 }}><Text style={{ color: '#fff', textAlign: 'center', fontWeight: '800', fontSize: 16 }}>{aviso}</Text></View> : null}
-        {(T.odo || T.tnav) && (
-          <View style={{ flexDirection: 'row' }}>
-            {T.odo && <Box label="ODÔMETRO (GPS)" style={{ flex: 1.1, height: 118 * sc }}><Text style={{ color: '#fff', fontSize: 46 * sc, fontWeight: '800' }}>{(odoM / 1000).toFixed(3)}</Text></Box>}
-            {T.tnav && (
-              <Box label="T.NAV" bg={fx.bg} fg={fx.fg} style={{ flex: 1, height: 118 * sc }}>
-                <Text style={{ color: fx.fg, fontSize: 52 * sc, fontWeight: '800' }}>{tnav != null ? fmtTnav(tnav, cfg.tnavDec) : '—'}</Text>
-                <TouchableOpacity onPress={() => setMenu((m) => !m)} style={{ position: 'absolute', top: 2, right: 4, padding: 8 }}><Text style={{ color: fx.fg, fontSize: 26, fontWeight: '900' }}>⋮</Text></TouchableOpacity>
-              </Box>
-            )}
-          </View>
-        )}
+        <View style={{ height: TOPO, flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', paddingHorizontal: 10, backgroundColor: '#111' }}>
+          <Text style={{ flex: 1, color: '#777', fontSize: 12 }} numberOfLines={1}>{lay.nome}</Text>
+          <TouchableOpacity onPress={() => setMenu((m) => !m)} style={{ padding: 8 }}><Text style={{ color: '#fff', fontSize: 24, fontWeight: '900' }}>⋮</Text></TouchableOpacity>
+        </View>
+        <View style={{ flex: 1 }} onLayout={(e) => setCv({ w: e.nativeEvent.layout.width, h: e.nativeEvent.layout.height })}>
+          {lay.items.map((it) => (
+            <View key={it.id} style={{ position: 'absolute', left: it.x * cv.w, top: it.y * cv.h, width: it.w * cv.w, height: it.h * cv.h }}>
+              <Bloco tipo={it.tipo} d={d} w={it.w * cv.w} h={it.h * cv.h} />
+            </View>
+          ))}
+        </View>
         {menu && (
-          <View style={{ position: 'absolute', top: 70, right: 10, zIndex: 9, backgroundColor: '#fff', borderRadius: 8, padding: 6, elevation: 8 }}>
+          <View style={{ position: 'absolute', top: 26 + TOPO, right: 10, zIndex: 9, backgroundColor: '#fff', borderRadius: 8, padding: 6, elevation: 8 }}>
             <TouchableOpacity style={{ padding: 12 }} onPress={() => confirma('Zerar odômetro', 'Zerar o odômetro (GPS) agora? Não altera o T.NAV nem a posição no roadbook.', onZerar)}><Text style={{ fontSize: 16, color: '#000' }}>Zerar odômetro</Text></TouchableOpacity>
+            {onIniciarAgora ? <TouchableOpacity style={{ padding: 12 }} onPress={() => confirma('Iniciar agora', 'Iniciar o trecho 1 agora, sem esperar a hora da largada?', onIniciarAgora)}><Text style={{ fontSize: 16, color: '#000' }}>Iniciar trecho agora</Text></TouchableOpacity> : null}
             <TouchableOpacity style={{ padding: 12 }} onPress={() => confirma('Sair da tela de prova', 'Voltar ao menu? O trecho e o GPS continuam.', onClose)}><Text style={{ fontSize: 16, color: '#000' }}>Sair da tela de prova</Text></TouchableOpacity>
             <TouchableOpacity style={{ padding: 12 }} onPress={() => setMenu(false)}><Text style={{ fontSize: 16, color: '#666' }}>Fechar menu</Text></TouchableOpacity>
           </View>
         )}
-        {(T.vel || T.regref || T.atual) && (
-          <View style={{ flexDirection: 'row' }}>
-            {T.vel && <Box label="VELOCIDADE" style={{ flex: 1, height: 96 * sc }}><Text style={{ color: '#fff', fontSize: 40 * sc, fontWeight: '800' }}>{spd != null ? Math.round(spd * 3.6) : '—'}</Text></Box>}
-            {T.regref && <Box label="REG REF" style={{ flex: 1, height: 96 * sc }}><Text style={{ color: '#fff', fontSize: 40 * sc, fontWeight: '800' }}>{regRef != null ? fmtDist(regRef, cfg.ref) : '—'}</Text></Box>}
-            {T.atual && (
-              <Box label="ATUAL" style={{ flex: 1, height: 96 * sc }}>
-                {pa ? <View style={{ backgroundColor: pa.d ? '#f5e50f' : '#fff', borderRadius: 6, paddingHorizontal: 8, paddingVertical: 4, marginTop: 4 }}><Text style={{ color: '#000', fontSize: 26 * sc, fontWeight: '800' }}>{pa.d ? pa.tx : `V ${pa.tx}`}</Text></View> : <Text style={{ color: '#fff', fontSize: 30 }}>—</Text>}
-              </Box>
-            )}
+      </View>
+    </Modal>
+  );
+}
+
+// ---------- Modo piloto: espelho do navegador (mesma conta de e-mail) ----------
+export function PilotoTela({ cfg, tul, classe, grupos, onPersonalizar, onClose }) {
+  useKeepAwake();
+  const { width } = useWindowDimensions();
+  const [t, setT] = useState(Date.now());
+  const [esp, setEsp] = useState(null);
+  const [menu, setMenu] = useState(false);
+  const [cv, setCv] = useState({ w: width, h: 600 });
+  const recv = useRef(0);
+  const lay = getLayout(true);
+  useEffect(() => { const id = setInterval(() => setT(Date.now()), 500); return () => clearInterval(id); }, []);
+  useEffect(() => ouvirEspelho((e) => { recv.current = Date.now(); setEsp(e); }, () => {}), []);
+  useEffect(() => {
+    ScreenOrientation.lockAsync(lay.orient === 'h' ? ScreenOrientation.OrientationLock.LANDSCAPE : ScreenOrientation.OrientationLock.PORTRAIT_UP).catch(() => {});
+    return () => { ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.PORTRAIT_UP).catch(() => {}); };
+  }, [lay.orient]);
+  const idade = recv.current ? (t - recv.current) / 1000 : null;
+  const e = esp || {};
+  const fx = e.tnav != null ? faixaDe(Number(e.tnav.toFixed(cfg.tnavDec)), cfg) : { bg: '#000', fg: '#fff' };
+  const rb = cfg.rb;
+  const iA = e.iAtual != null ? e.iAtual : -1;
+  const linhas = [];
+  if (iA >= 0 && tul[iA]) {
+    for (let k = rb.ant; k >= 1; k--) if (tul[iA - k]) linhas.push({ e: tul[iA - k], pct: rb.pAnt, key: 'a' + k });
+    linhas.push({ e: tul[iA], pct: rb.pAtual, atual: true, key: 'c' });
+    for (let k = 1; k <= rb.prox; k++) if (tul[iA + k]) linhas.push({ e: tul[iA + k], pct: rb.pProx[k - 1] ?? 50, key: 'p' + k });
+  }
+  const d = {
+    cfg, spd: e.spd ?? null, tnav: e.tnav ?? null, fx, odoM: e.odoM || 0, regRef: e.regRef ?? null, regRef2: e.regRef2 ?? null, regTrc: e.regTrc ?? null,
+    pa: e.pa || null, pp: e.pp || null, clock: t, acc: e.acc ?? null, trN: e.trN, refN: e.refN, kmAcum: e.kmAcum || 0, bat: e.bat ?? -1, elapsed: e.elapsed ?? null,
+    rbLinhas: linhas.length ? linhas : null, classe, grupos, edit: false, onAdj: () => {}, onPc: () => {},
+  };
+  const aviso = !esp ? 'Aguardando o navegador… (mesma conta de e-mail, com internet)' : idade != null && idade > 8 ? `Sem sincronismo com o navegador há ${Math.round(idade)} s` : '';
+  return (
+    <Modal visible animationType="fade" onRequestClose={() => setMenu(true)}>
+      <View style={{ flex: 1, backgroundColor: '#000', paddingTop: 26 }}>
+        {aviso ? <View style={{ backgroundColor: '#c0392b', padding: 6 }}><Text style={{ color: '#fff', textAlign: 'center', fontWeight: '800', fontSize: 15 }}>{aviso}</Text></View> : null}
+        <View style={{ height: TOPO, flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', paddingHorizontal: 10, backgroundColor: '#111' }}>
+          <Text style={{ flex: 1, color: '#777', fontSize: 12 }} numberOfLines={1}>Piloto · {lay.nome}</Text>
+          <TouchableOpacity onPress={() => setMenu((m) => !m)} style={{ padding: 8 }}><Text style={{ color: '#fff', fontSize: 24, fontWeight: '900' }}>⋮</Text></TouchableOpacity>
+        </View>
+        <View style={{ flex: 1 }} onLayout={(ev) => setCv({ w: ev.nativeEvent.layout.width, h: ev.nativeEvent.layout.height })}>
+          {lay.items.map((it) => (
+            <View key={it.id} style={{ position: 'absolute', left: it.x * cv.w, top: it.y * cv.h, width: it.w * cv.w, height: it.h * cv.h }}>
+              <Bloco tipo={it.tipo} d={d} w={it.w * cv.w} h={it.h * cv.h} />
+            </View>
+          ))}
+        </View>
+        {menu && (
+          <View style={{ position: 'absolute', top: 26 + TOPO, right: 10, zIndex: 9, backgroundColor: '#fff', borderRadius: 8, padding: 6, elevation: 8 }}>
+            <TouchableOpacity style={{ padding: 12 }} onPress={() => { setMenu(false); onPersonalizar(); }}><Text style={{ fontSize: 16, color: '#000' }}>Personalizar tela</Text></TouchableOpacity>
+            <TouchableOpacity style={{ padding: 12 }} onPress={() => { setMenu(false); Alert.alert('Sair do modo piloto', 'Voltar ao menu?', [{ text: 'Cancelar', style: 'cancel' }, { text: 'Sair', onPress: onClose }]); }}><Text style={{ fontSize: 16, color: '#000' }}>Sair do modo piloto</Text></TouchableOpacity>
+            <TouchableOpacity style={{ padding: 12 }} onPress={() => setMenu(false)}><Text style={{ fontSize: 16, color: '#666' }}>Fechar menu</Text></TouchableOpacity>
           </View>
         )}
-        <View style={{ flex: 1, flexDirection: 'row' }}>
-          <View style={{ width: width - wR }}>
-            {(T.prox || T.regtrc) && (
-              <View>
-                {T.prox && (
-                  <Box label="PRÓXIMO" style={{ height: 84 * sc }}>
-                    {pp ? <View style={{ backgroundColor: pp.d ? '#f5e50f' : '#fff', borderColor: '#1a237e', borderWidth: pp.d ? 0 : 4, borderRadius: pp.d ? 6 : 30, minWidth: 48, height: 48, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 6 }}><Text style={{ color: '#000', fontSize: 20 * sc, fontWeight: '800' }}>{pp.tx}</Text></View> : <Text style={{ color: '#fff', fontSize: 24 }}>—</Text>}
-                  </Box>
-                )}
-                {T.regtrc && <Box label="REG TRC" style={{ height: 70 * sc }}><Text style={{ color: '#fff', fontSize: 28 * sc, fontWeight: '800' }}>{regTrc != null ? fmtDist(regTrc, cfg.trc) : '—'}</Text></Box>}
-              </View>
-            )}
-            {T.pm && (
-              <View style={{ flexDirection: 'row', flexWrap: 'wrap', padding: 2, gap: 4 }}>
-                <TouchableOpacity style={{ flexBasis: '48%', flexGrow: 1, backgroundColor: '#9e9e9e', borderRadius: 8, paddingVertical: 18 * sc, alignItems: 'center' }} onPress={() => onAdj(10)}><Text style={{ fontSize: 24 * sc, fontWeight: '800', color: '#000' }}>+10</Text></TouchableOpacity>
-                <TouchableOpacity style={{ flexBasis: '48%', flexGrow: 1, backgroundColor: '#9e9e9e', borderRadius: 8, paddingVertical: 18 * sc, alignItems: 'center' }} onPress={() => onAdj(-10)}><Text style={{ fontSize: 24 * sc, fontWeight: '800', color: '#000' }}>-10</Text></TouchableOpacity>
-                <TouchableOpacity style={{ flexBasis: '100%', backgroundColor: '#2e7d32', borderRadius: 8, paddingVertical: 14 * sc, alignItems: 'center' }} onPress={onPc}><Text style={{ fontSize: 22 * sc, fontWeight: '800', color: '#fff' }}>PC</Text></TouchableOpacity>
-              </View>
-            )}
-            {T.bat && bat >= 0 && (
-              <View style={{ margin: 2, borderWidth: 2, borderColor: '#fff', borderRadius: 6, height: 40 * sc, justifyContent: 'center' }}>
-                <View style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: `${Math.round(bat * 100)}%`, backgroundColor: bat > 0.3 ? '#1b9e57' : '#e53935' }} />
-                <Text style={{ color: '#fff', fontSize: 22 * sc, fontWeight: '800', textAlign: 'center' }}>{Math.round(bat * 100)}%</Text>
-              </View>
-            )}
-          </View>
-          <View style={{ width: wR, overflow: 'hidden' }}>
-            {linhasRb.map((l) => <LinhaRb key={l.key} e={l.e} pct={l.pct} atual={l.atual} w={wR} classe={classe} grupos={grupos} />)}
-          </View>
-        </View>
       </View>
     </Modal>
   );
@@ -185,11 +178,33 @@ export function NavTela({ cfg, stage, rs, last, globalDist, odoM, tul, rot, clas
 
 // ---------- Personalização (antes da prova) ----------
 function Lin({ st, tx, children }) { return <View style={st.line}><Text style={st.k}>{tx}</Text>{children}</View>; }
-const NOMES = { odo: 'Odômetro (GPS)', tnav: 'T.NAV', vel: 'Velocidade', regref: 'REG REF', atual: 'Atual (média do trecho)', prox: 'Próximo (média)', regtrc: 'REG TRC', pm: 'Botões +10 / −10 / PC', bat: 'Bateria', rb: 'Roadbook' };
-
-export function NavConfig({ st, visible, onClose }) {
+export function NavConfig({ st, visible, onClose, piloto }) {
   const [c, setC] = useState(loadNav);
-  const up = (fn) => setC((o) => { const n = fn(JSON.parse(JSON.stringify(o))); saveNav(n); return n; });
+  const [L, setL] = useState(loadLayouts);
+  const [edit, setEdit] = useState(null);
+  const [nomeNovo, setNomeNovo] = useState('');
+  const [orN, setOrN] = useState('v');
+  const sk = piloto ? 'selP' : 'sel';
+  const gravaL = (n) => { saveLayouts(n); setL(n); };
+  const meus = L.list.filter((x) => !!x.piloto === !!piloto);
+  const todos = [padraoDe('v', piloto), padraoDe('h', piloto), ...meus];
+  const atualL = todos.find((x) => x.id === L[sk]) || todos[0];
+  const copia = (nome, orient) => ({ id: novoId(), nome, piloto: !!piloto, orient, items: padraoDe(orient, piloto).items.map((x, i) => ({ ...x, id: 'n' + i })) });
+  const alterar = () => {
+    if (atualL.id === 'padrao' || atualL.id === 'padraoh') {
+      const novo = copia('Meu layout', atualL.orient);
+      gravaL({ ...L, [sk]: novo.id, list: [...L.list, novo] });
+      setEdit(novo);
+    } else setEdit(atualL);
+  };
+  const criar = () => {
+    const nome = nomeNovo.trim();
+    if (!nome) return Alert.alert('Falta o nome', 'Dê um nome para o novo layout.');
+    const novo = copia(nome, orN);
+    gravaL({ ...L, [sk]: novo.id, list: [...L.list, novo] });
+    setNomeNovo(''); setEdit(novo);
+  };
+  const apagarL = (x) => Alert.alert('Apagar layout', `Apagar "${x.nome}"?`, [{ text: 'Cancelar', style: 'cancel' }, { text: 'Apagar', style: 'destructive', onPress: () => gravaL({ ...L, [sk]: L[sk] === x.id ? 'padrao' : L[sk], list: L.list.filter((y) => y.id !== x.id) }) }]);
   const Opc = ({ on, tx, onPress }) => <TouchableOpacity style={[st.btn2, { flex: 0, paddingHorizontal: 12, paddingVertical: 8 }, on && { backgroundColor: '#ff7a2e' }]} onPress={onPress}><Text style={[st.btn2Tx, on && { color: '#0c1014' }]}>{tx}</Text></TouchableOpacity>;
   const Num = ({ v, on, w = 56 }) => <TextInput style={[st.input, { minWidth: w }]} defaultValue={String(v)} keyboardType="numbers-and-punctuation" onEndEditing={(e) => on(num(e.nativeEvent.text))} />;
   return (
@@ -198,10 +213,21 @@ export function NavConfig({ st, visible, onClose }) {
         <Text style={[st.tip, { paddingHorizontal: 12 }]}>Personalizar a tela da prova</Text>
         <ScrollView contentContainerStyle={{ padding: 12, paddingBottom: 30 }}>
           <View style={st.card}>
-            <Text style={st.tip}>Janelas na tela</Text>
-            {Object.keys(NOMES).map((k) => (
-              <Lin key={k} st={st} tx={NOMES[k]}><Switch value={!!c.tiles[k]} onValueChange={(v) => up((o) => { o.tiles[k] = v; return o; })} /></Lin>
+            <Text style={st.tip}>Layout da tela</Text>
+            <Text style={st.tipTx}>Cada layout é uma tela montada por você: blocos que você arrasta e redimensiona. Toque para escolher o usado na prova.</Text>
+            {todos.map((x) => (
+              <View key={x.id} style={[st.line, { alignItems: 'center', paddingVertical: 8 }]}>
+                <TouchableOpacity style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }} onPress={() => gravaL({ ...L, [sk]: x.id })}>
+                  <View style={{ width: 22, height: 22, borderRadius: 11, borderWidth: 2, borderColor: '#4fc3f7', alignItems: 'center', justifyContent: 'center', marginRight: 10 }}>{L[sk] === x.id ? <View style={{ width: 11, height: 11, borderRadius: 6, backgroundColor: '#4fc3f7' }} /> : null}</View>
+                  <Text style={st.v}>{x.nome} · {x.orient === 'h' ? 'horizontal' : 'vertical'}{x.id.startsWith('padrao') ? ' (original)' : ''}</Text>
+                </TouchableOpacity>
+                {!x.id.startsWith('padrao') && <TouchableOpacity onPress={() => apagarL(x)}><Text style={{ color: '#ff5252', fontWeight: '700' }}>apagar</Text></TouchableOpacity>}
+              </View>
             ))}
+            <TouchableOpacity style={[st.btn, { marginTop: 8, marginBottom: 0 }]} onPress={alterar}><Text style={st.btnTx}>ALTERAR LAYOUT</Text></TouchableOpacity>
+            <TextInput style={st.field} value={nomeNovo} onChangeText={setNomeNovo} placeholder="Nome do novo layout" placeholderTextColor="#666" />
+            <View style={[st.row, { marginTop: 6 }]}>{[['v', 'Vertical'], ['h', 'Horizontal']].map(([k, t]) => <TouchableOpacity key={k} style={[st.btn2, orN === k && { backgroundColor: '#ff7a2e' }]} onPress={() => setOrN(k)}><Text style={[st.btn2Tx, orN === k && { color: '#0c1014' }]}>{t}</Text></TouchableOpacity>)}</View>
+            <TouchableOpacity style={[st.btn2, { marginTop: 6 }]} onPress={criar}><Text style={st.btn2Tx}>+ CRIAR NOVO LAYOUT</Text></TouchableOpacity>
           </View>
           <View style={st.card}>
             <Text style={st.tip}>T.NAV</Text>
@@ -238,6 +264,17 @@ export function NavConfig({ st, visible, onClose }) {
             </View>
           ))}
           <View style={st.card}>
+            <Text style={st.tip}>Barra regressiva (REG REF)</Text>
+            <Text style={st.tipTx}>A janela vai se preenchendo de cor conforme os metros diminuem, e fica cheia em zero. Depois a próxima referência já aparece vazia.</Text>
+            <Lin st={st} tx="Ativar a barra"><Switch value={!!c.barra.on} onValueChange={(v) => up((o) => { o.barra.on = v; return o; })} /></Lin>
+            <Text style={st.tipTx}>Começa a preencher quando faltar (metros):</Text>
+            <View style={[st.row, { marginTop: 6 }]}>
+              {[50, 100, 150, 200].map((m) => <Opc key={m} on={c.barra.ini === m} tx={`${m} m`} onPress={() => up((o) => { o.barra.ini = m; return o; })} />)}
+            </View>
+            <Lin st={st} tx="Outro valor (m)"><Num v={c.barra.ini} on={(v) => up((o) => { o.barra.ini = Math.max(10, Math.min(1000, Math.round(v))); return o; })} /></Lin>
+            <Lin st={st} tx="Cor da barra"><TouchableOpacity onPress={() => up((o) => { o.barra.cor = CORES[(CORES.indexOf(o.barra.cor) + 1) % CORES.length]; return o; })} style={{ width: 44, height: 34, borderRadius: 6, backgroundColor: c.barra.cor, borderWidth: 1, borderColor: '#888' }} /></Lin>
+          </View>
+          <View style={st.card}>
             <Text style={st.tip}>Roadbook na tela</Text>
             <Lin st={st} tx="Tulipas anteriores (0 a 2)"><Num v={c.rb.ant} on={(v) => up((o) => { o.rb.ant = Math.max(0, Math.min(2, Math.round(v))); return o; })} /></Lin>
             <Lin st={st} tx="Tulipas seguintes (0 a 3)"><Num v={c.rb.prox} on={(v) => up((o) => { o.rb.prox = Math.max(0, Math.min(3, Math.round(v))); return o; })} /></Lin>
@@ -249,6 +286,7 @@ export function NavConfig({ st, visible, onClose }) {
           <TouchableOpacity style={[st.btn, { marginTop: 4 }]} onPress={onClose}><Text style={st.btnTx}>Pronto</Text></TouchableOpacity>
         </ScrollView>
       </View>
+      {edit && <LayoutEditor layout={edit} cfg={c} piloto={piloto} onSalvar={(lay) => gravaL({ ...L, list: L.list.map((y) => (y.id === lay.id ? lay : y)) })} onClose={() => setEdit(null)} />}
     </Modal>
   );
 }

@@ -3,11 +3,12 @@ import { useEffect, useRef, useState } from 'react';
 import { Alert, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import MapaWeb from './MapaWeb';
 import { calcularRota } from './osrm';
-import { entrarOrganizador, salvarProva, ouvirInscritos } from './firebase';
+import { salvarProva, ouvirInscritos } from './firebase';
 import { loadJson, saveJson } from './persist';
 import { Roadbook } from './Tulipa';
 import { gruposDe } from './rally';
 import Levantamento from './Levantamento';
+import ListaProvas, { slugProva } from './Provas';
 import { CATS_PADRAO, OrgCategorias, OrgInscricoes, OrgLiberacao, OrgResultados } from './OrgExtras';
 import { compartilharPdf } from './pdf';
 
@@ -24,23 +25,24 @@ export const comTipos = (tul, trechos) => tul.map((e) => {
   return e;
 });
 
-export default function Organizador({ st, prova, provaMap, last, onOrg, onProva }) {
+export default function Organizador({ st, prova, provaMap, last, onOrg, onProva, onTab, abrirReq }) {
   const [org, setOrg] = useState(() => loadJson('org', null));
-  const [pin, setPin] = useState('');
   const [wps, setWps] = useState([]);
   const [rota, setRota] = useState({ coords: [], legs: [], tul: [] });
   const [legs, setLegs] = useState([]);
   const [dif, setDif] = useState('3');
   const [busy, setBusy] = useState('');
   const [inscritos, setInscritos] = useState([]);
-  const [sec, setSec] = useState('planilha');
+  const [sec, setSec] = useState('levantar');
+  const [aberta, setAberta] = useState(false);
+  const [pcl, setPcl] = useState([]);
   const [refs, setRefs] = useState([]);
   const [manual, setManual] = useState(false);
   const nPend = useRef(new Set());
   const grupos = gruposDe(provaMap.categorias);
   const ng = grupos.length;
   const carregado = useRef(false);
-  const logado = org && org.prova === prova.trim().toUpperCase() && !!org.pin;
+  const logado = org && org.prova === prova.trim().toUpperCase();
 
   useEffect(() => {
     if (logado && !carregado.current && !wps.length && provaMap.wps.length) {
@@ -48,6 +50,7 @@ export default function Organizador({ st, prova, provaMap, last, onOrg, onProva 
       setWps(provaMap.wps);
       setRota({ coords: provaMap.coords, legs: provaMap.legs, tul: provaMap.tul });
       setRefs(provaMap.refs || []);
+      setPcl(provaMap.pcl || []);
       setManual(provaMap.tul.some((e) => e.man));
       setLegs((provaMap.trechos || []).map((t) => {
         const v = (t.v || [t.kg, t.ka]).map(String);
@@ -84,10 +87,10 @@ export default function Organizador({ st, prova, provaMap, last, onOrg, onProva 
   }, [ng]);
 
   // Percurso vindo do levantamento dirigindo: usa o rastro e as tulipas marcadas, sem recalcular pelo OSRM.
-  const aplicarLevantamento = ({ wps: w, rota: r, nIdx, refs: rf }) => {
+  const aplicarLevantamento = ({ wps: w, rota: r, nIdx, refs: rf, pcl: pc }) => {
     setManual(true);
-    setWps(w); setRota(r); setRefs(rf);
-    setLegs(r.legs.map((_, i) => novoLeg(num(dif, 3), ng, nIdx.has(i) ? 60 : 0)));
+    setWps(w); setRota(r); setRefs(rf); setPcl(pc || []);
+    setLegs(r.legs.map((_, i) => novoLeg(num(dif, 3), ng, (nIdx.get ? nIdx.get(i) : nIdx.has(i) ? 60 : 0) || 0)));
     setSec('planilha');
   };
   const upd = (i, patch) => setLegs((o) => o.map((l, j) => (j === i ? { ...l, ...patch } : l)));
@@ -95,17 +98,19 @@ export default function Organizador({ st, prova, provaMap, last, onOrg, onProva 
   const onV = (i, g, v) => setLegs((o) => o.map((l, j) => (j !== i ? l : { ...l, v: g === 0 ? vs(v, dif, ng).map((x, k) => (k === 0 ? v : x)) : l.v.map((x, k) => (k === g ? v : x)) })));
   const aplicarDif = (v) => { setDif(v); setLegs((o) => o.map((l) => (l.t === 'V' ? { ...l, v: vs(l.v[0], v, ng).map((x, k) => (k === 0 ? l.v[0] : x)) } : l))); };
 
-  const entrar = async () => {
-    if (!prova.trim() || !pin.trim()) return Alert.alert('Falta preencher', 'Informe o código da prova (aba Gravar) e um PIN.');
+  // Abre uma prova da lista: troca o código, entra como organizador e zera a tela da prova anterior.
+  const abrirProva = async (code, nova) => {
     try {
-      const r = await entrarOrganizador(prova, pin.trim());
-      if (r === 'negado') return Alert.alert('PIN incorreto', 'Esse código de prova já tem outro organizador.');
-      const o = { prova: prova.trim().toUpperCase(), pin: pin.trim() };
+      onProva && onProva(code);
+      const o = { prova: code.trim().toUpperCase() };
       saveJson('org', o); setOrg(o); onOrg && onOrg(o);
-      if (r === 'criada') Alert.alert('Prova criada', 'Você é o organizador desta prova. Guarde o PIN.');
+      carregado.current = false;
+      setWps([]); setRota({ coords: [], legs: [], tul: [] }); setLegs([]); setRefs([]); setPcl([]); setManual(false); setInscritos([]);
+      setSec('levantar'); setAberta(true);
     } catch (e) { Alert.alert('Sem conexão', String(e?.message || e)); }
   };
-  const sair = () => { saveJson('org', null); setOrg(null); setPin(''); onOrg && onOrg(null); };
+  useEffect(() => { if (abrirReq && abrirReq.code) abrirProva(abrirReq.code, false); }, [abrirReq && abrirReq.n]);
+  const sair = () => { saveJson('org', null); setOrg(null); onOrg && onOrg(null); };
 
   const trechos = toTrechos(legs, rota.legs);
   const tulT = comTipos(rota.tul, trechos);
@@ -121,6 +126,7 @@ export default function Organizador({ st, prova, provaMap, last, onOrg, onProva 
         legs: rota.legs.map((k) => Math.round(k * 1000) / 1000),
         tul: JSON.parse(JSON.stringify(tulT)),
         refs,
+        pcl: manual ? pcl : [],
         nome: (loadJson('lev_' + String(prova).trim().toUpperCase().replace(/[^A-Z0-9]+/g, ''), {}).nome || '').slice(0, 60),
         publicadoEm: Date.now(),
       });
@@ -129,32 +135,26 @@ export default function Organizador({ st, prova, provaMap, last, onOrg, onProva 
   };
 
   const pdf = async () => {
-    try { await compartilharPdf(prova.trim().toUpperCase(), tulT); }
+    try { await compartilharPdf(prova.trim().toUpperCase(), tulT, true); }
     catch (e) { Alert.alert('Não gerou o PDF', String(e?.message || e)); }
   };
 
-  if (!logado) {
-    return (
-      <View style={st.card}>
-        <Text style={st.tip}>Acesso do organizador</Text>
-        <Text style={st.tipTx}>Usa o código da prova digitado na aba Gravar ({prova.trim() || 'vazio'}). O primeiro a entrar com um PIN vira o organizador.</Text>
-        <TextInput style={st.field} value={pin} onChangeText={setPin} placeholder="PIN do organizador" placeholderTextColor="#666" secureTextEntry keyboardType="number-pad" />
-        <TouchableOpacity style={[st.btn, { marginTop: 10, marginBottom: 0 }]} onPress={entrar}><Text style={st.btnTx}>Entrar como organizador</Text></TouchableOpacity>
-      </View>
-    );
-  }
+  if (!logado || !aberta) return <ListaProvas st={st} org={org} onAbrir={abrirProva} onSairOrg={sair} />;
 
   const total = rota.legs.reduce((a, b) => a + b, 0);
   const me = last ? [last.lat, last.lon] : null;
   const chip = (on) => [st.btn2, { flex: 0, paddingHorizontal: 14, paddingVertical: 6 }, on && { backgroundColor: '#ff7a2e' }];
   const cats = provaMap.categorias;
-  const SEC = [['planilha', 'Planilha'], ['levantar', 'Levantar'], ['categorias', 'Categorias'], ['inscricoes', 'Inscrições'], ['liberacao', 'Liberação'], ['resultados', 'Resultados']];
+  const SEC = [['levantar', 'Levantar'], ['planilha', 'Planilha'], ['categorias', 'Categorias'], ['inscricoes', 'Inscrições'], ['ranking', 'Ranking'], ['resultados', 'Resultados'], ['liberacao', 'Liberação']];
+  const nomeProva = (loadJson('lev_index', []).find((x) => x.code === org.prova) || {}).nome || '';
   return (
     <View>
+      <TouchableOpacity onPress={() => setAberta(false)}><Text style={[st.v, { marginBottom: 6 }]}>‹ Minhas provas</Text></TouchableOpacity>
+      <Text style={st.tip}>{nomeProva || 'Prova'} · código {org.prova}</Text>
       <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 10 }}>
-        {SEC.map(([k, n]) => <TouchableOpacity key={k} style={chip(sec === k)} onPress={() => setSec(k)}><Text style={[st.btn2Tx, sec === k && { color: '#0c1014' }]}>{n}</Text></TouchableOpacity>)}
+        {SEC.map(([k, n]) => <TouchableOpacity key={k} style={chip(sec === k)} onPress={() => (k === 'ranking' ? onTab && onTab('ranking') : setSec(k))}><Text style={[st.btn2Tx, sec === k && { color: '#0c1014' }]}>{n}</Text></TouchableOpacity>)}
       </View>
-      {sec === 'levantar' && <Levantamento key={org.prova} st={st} onProva={onProva} prova={org.prova} last={last} onAplicar={aplicarLevantamento} />}
+      {sec === 'levantar' && <Levantamento key={org.prova} st={st} prova={org.prova} last={last} onAplicar={aplicarLevantamento} />}
       {sec === 'categorias' && <OrgCategorias st={st} prova={org.prova} categorias={cats} />}
       {sec === 'inscricoes' && <OrgInscricoes key={org.prova} st={st} prova={org.prova} inscritos={inscritos} categorias={cats} />}
       {sec === 'liberacao' && <OrgLiberacao st={st} prova={org.prova} lib={provaMap.lib || {}} />}
@@ -213,7 +213,7 @@ export default function Organizador({ st, prova, provaMap, last, onOrg, onProva 
         ))}
         {rota.legs.length > 0 && <Text style={st.tipTx}>Total: {total.toFixed(3)} km · {rota.legs.length} trecho(s)</Text>}
         {rota.tul.length > 0 && <Text style={[st.tip, { marginTop: 8 }]}>Roadbook gerado: {rota.tul.filter((e) => e.t === 'T').length} tulipas</Text>}
-        {rota.tul.length > 0 && <Roadbook st={st} tul={tulT} dist={null} grupos={grupos} />}
+        {rota.tul.length > 0 && <Roadbook st={st} tul={tulT} dist={null} grupos={grupos} org />}
         <TouchableOpacity style={[st.btn, { marginTop: 10, backgroundColor: '#2e7d32' }]} onPress={publicar}><Text style={[st.btnTx, { color: '#fff' }]}>Publicar prova para os celulares</Text></TouchableOpacity>
         <TouchableOpacity style={[st.btn2, { marginBottom: 8 }]} onPress={pdf}><Text style={st.btn2Tx}>Gerar PDF do roadbook (imprimir)</Text></TouchableOpacity>
         <TouchableOpacity style={st.btn2} onPress={sair}><Text style={st.btn2Tx}>Sair do modo organizador</Text></TouchableOpacity>

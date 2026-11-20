@@ -56,3 +56,17 @@ export async function detectarCruzamento(m, saidaRumo) {
   if (rot && out != null) { const ord = [...arms].sort((a, b) => a - b); ex = ord.indexOf(out) + 1; }
   return { arms, out, rot, ex };
 }
+
+// Ponto a 'm' metros do ponto (lat,lon) no rumo 'brg' (graus).
+export function destino(lat, lon, brg, m) {
+  const d = m / R, b = rad(brg), la1 = rad(lat), lo1 = rad(lon);
+  const la2 = Math.asin(Math.sin(la1) * Math.cos(d) + Math.cos(la1) * Math.sin(d) * Math.cos(b));
+  const lo2 = lo1 + Math.atan2(Math.sin(b) * Math.sin(d) * Math.cos(la1), Math.cos(d) - Math.sin(la1) * Math.sin(la2));
+  return [(la2 * 180) / Math.PI, (lo2 * 180) / Math.PI];
+}
+// Linha do PC perpendicular ao rumo de viagem: [la1,lo1,la2,lo2]; w = largura total (m), rot = giro extra (graus).
+export function linhaPc(m) {
+  const brg = (m.hdg ?? 0) + 90 + (m.lrot || 0), h = (m.lw || 30) / 2;
+  const a = destino(m.lat, m.lon, brg, h), b = destino(m.lat, m.lon, brg + 180, h);
+  return [a[0], a[1], b[0], b[1]].map((x) => Math.round(x * 1e6) / 1e6);
+}

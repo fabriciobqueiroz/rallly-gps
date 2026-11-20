@@ -53,8 +53,12 @@ export function rotuloNx(nx, classe, grupos) {
   return { txt: v != null ? `V ${v}` : `V ${nx.kg} · A ${nx.ka}`, cor: '#2e7d32', fg: '#fff' };
 }
 
-export function Entrada({ e, st, destaque, faltam, classe, grupos }) {
+// O PC (cronometragem) é do organizador: o competidor só vê os pontos com neutro.
+export const tulComp = (tul) => tul.filter((e) => e.t !== 'P' || e.nt > 0);
+
+export function Entrada({ e, st, destaque, faltam, classe, grupos, org }) {
   const marcador = e.t !== 'T';
+  const soNeutro = e.t === 'P' && e.nt > 0 && !org;
   const nx = rotuloNx(e.nx, classe, grupos);
   return (
     <View style={[st.line, { alignItems: 'center', borderLeftWidth: destaque ? 4 : 0, borderLeftColor: '#ff7a2e', paddingLeft: destaque ? 8 : 0 }]}>
@@ -65,10 +69,16 @@ export function Entrada({ e, st, destaque, faltam, classe, grupos }) {
       </View>
       {marcador ? (
         <View style={{ flex: 1, gap: 4 }}>
+          {soNeutro ? (
+            <View style={{ backgroundColor: '#6a1b9a', borderRadius: 10, padding: 8 }}>
+              <Text style={{ color: '#fff', fontWeight: '800' }}>NEUTRO · PARE {mmss(e.nt)}</Text>
+            </View>
+          ) : (
           <View style={{ backgroundColor: e.t === 'C' ? '#c0392b' : '#37474f', borderRadius: 10, padding: 8 }}>
             <Text style={{ color: '#fff', fontWeight: '800' }}>{e.t === 'P' ? `PC ${e.n}` : LABEL[e.t]}</Text>
           </View>
-          {e.nt > 0 && (
+          )}
+          {e.nt > 0 && !soNeutro && (
             <View style={{ backgroundColor: '#c0392b', borderRadius: 10, padding: 8 }}>
               <Text style={{ color: '#fff', fontWeight: '800' }}>N · PARE {mmss(e.nt)}</Text>
             </View>
@@ -90,12 +100,13 @@ export function Entrada({ e, st, destaque, faltam, classe, grupos }) {
 }
 
 // Lista completa. 'dist' = posição atual no percurso (m); null = só pré-visualização.
-export function Roadbook({ st, tul, dist, classe, grupos }) {
+export function Roadbook({ st, tul: tul0, dist, classe, grupos, org }) {
+  const tul = org ? tul0 : tulComp(tul0);
   const atual = dist == null ? -1 : tul.findIndex((e) => e.d >= dist - 15);
   return (
     <View>
       {tul.map((e, i) => (
-        <Entrada key={i} e={e} st={st} classe={classe} grupos={grupos} destaque={i === atual} faltam={i === atual ? e.d - dist : null} />
+        <Entrada key={i} org={org} e={e} st={st} classe={classe} grupos={grupos} destaque={i === atual} faltam={i === atual ? e.d - dist : null} />
       ))}
     </View>
   );
