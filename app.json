@@ -21,6 +21,10 @@
           "cameraPermission": "Permitir que o app use a câmera para fotografar referências do percurso."
         }
       ]
-    ]
+    ],
+    "web": {
+      "bundler": "metro",
+      "output": "single"
+    }
   }
 }

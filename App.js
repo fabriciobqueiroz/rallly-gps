@@ -13,6 +13,7 @@ import * as ScreenOrientation from 'expo-screen-orientation';
 import Organizador from './src/Organizador';
 import { enviarResultado, ouvirRanking, salvarProva, ouvirProva, ouvirInscricao, ouvirMinhaLargada, enviarDatalogger, ouvirAuth, sairConta, lerPerfil } from './src/firebase';
 import Login from './src/Login';
+import { st } from './src/estilos';
 import Fluxo, { DlTela } from './src/Fluxo';
 import { planilhaLiberada, parseHMS, CATS_PADRAO } from './src/OrgExtras';
 import { NavTela, NavConfig, PilotoTela, loadNav } from './src/Nav';
@@ -447,9 +448,9 @@ export default function App() {
       {soDl && <DlTela st={st} last={last} pointsN={points.length} startedAt={startedAt} onFinalizar={finalizarDl} />}
       {navOpen && (
         <NavTela cfg={loadNav()} stage={stage} rs={rs} last={last} globalDist={rs || stage.idx >= 0 ? globalDist : 0}
-          odoM={odoAtual() - odoBase} tul={tulVis} rot={rot} trs={provaMap.trs} fim={fimProva} classe={piloto.classe} grupos={grupos}
+          odoM={odoAtual() - odoBase} tul={tulVis} rot={rot} trs={provaMap.trs} fim={fimProva} cont={remLarg} classe={piloto.classe} grupos={grupos}
           aviso={fimProva ? 'FIM DA PROVA' : remLarg != null && remLarg > 0 ? `Largada em ${fmtDur(remLarg)}` : neutroRest != null ? `NEUTRO · PARE · ${fmtDur(neutroRest)}` : stage.idx >= 0 && rs && remain != null && remain <= 0 ? 'CHEGOU — toque em PC' : null}
-          onAdj={adjAll} onPc={onPc} onIniciarAgora={onStage} onEncerrar={encerrarProva} onZerar={() => setOdoBase(odoAtual())} onClose={() => setNavOpen(false)} />
+          onAdj={adjAll} onIniciarAgora={onStage} onEncerrar={encerrarProva} onZerar={() => setOdoBase(odoAtual())} onClose={() => setNavOpen(false)} />
       )}
       <NavConfig st={st} visible={cfgOpen} onClose={() => setCfgOpen(false)} />
       {pilotoOpen && <PilotoTela cfg={loadNav()} tul={tulVis} classe={piloto.classe} grupos={grupos} onPersonalizar={() => setCfgPiloto(true)} onClose={() => setPilotoOpen(false)} />}
@@ -469,32 +470,4 @@ const Line = ({ k, v }) => (
   <View style={st.line}><Text style={st.k}>{k}</Text><Text style={st.v}>{v}</Text></View>
 );
 
-const st = StyleSheet.create({
-  root: { flex: 1, backgroundColor: '#0c1014' },
-  wrap: { padding: 16, paddingTop: 56, paddingBottom: 40 },
-  h1: { color: '#f5f5f5', fontSize: 24, fontWeight: '800' },
-  sub: { color: '#a8a8a8', marginBottom: 14, marginTop: 2 },
-  row: { flexDirection: 'row', gap: 10, marginBottom: 10 },
-  big: { flex: 1, backgroundColor: '#151a20', borderRadius: 14, padding: 14, borderWidth: 1, borderColor: '#262b32' },
-  bigL: { color: '#a8a8a8', fontSize: 12, textTransform: 'uppercase', letterSpacing: 1 },
-  bigV: { color: '#f5f5f5', fontSize: 30, fontWeight: '800', marginTop: 4 },
-  bigU: { fontSize: 14, color: '#a8a8a8', fontWeight: '400' },
-  card: { backgroundColor: '#151a20', borderRadius: 14, padding: 14, marginBottom: 12, borderWidth: 1, borderColor: '#262b32' },
-  line: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 5 },
-  k: { color: '#a8a8a8', flex: 1 }, v: { color: '#f5f5f5', fontWeight: '700' },
-  btn: { backgroundColor: '#ff7a2e', borderRadius: 12, padding: 16, alignItems: 'center', marginBottom: 10 },
-  btnStop: { backgroundColor: '#c0392b' },
-  btnTx: { color: '#0c1014', fontWeight: '800', fontSize: 16 },
-  btn2: { flex: 1, borderWidth: 1, borderColor: '#ff7a2e', borderRadius: 12, padding: 12, alignItems: 'center' },
-  btn2Tx: { color: '#ff7a2e', fontWeight: '700', fontSize: 13 },
-  input: { color: '#f5f5f5', borderWidth: 1, borderColor: '#262b32', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 4, minWidth: 80, textAlign: 'right', fontWeight: '700' },
-  area: { color: '#f5f5f5', borderWidth: 1, borderColor: '#262b32', borderRadius: 8, padding: 10, minHeight: 90, marginVertical: 8, textAlignVertical: 'top' },
-  gps: { flex: 1, borderWidth: 1, borderRadius: 12, padding: 10, alignItems: 'center' },
-  gpsTx: { fontWeight: '800' },
-  tab: { flex: 1, borderWidth: 1, borderColor: '#ff7a2e', borderRadius: 10, paddingVertical: 10, paddingHorizontal: 2, alignItems: 'center' },
-  tabOn: { backgroundColor: '#ff7a2e' },
-  tabTx: { color: '#ff7a2e', fontWeight: '800', fontSize: 12 },
-  field: { color: '#f5f5f5', borderWidth: 1, borderColor: '#262b32', borderRadius: 8, padding: 10, marginTop: 8 },
-  tip: { color: '#f5f5f5', fontWeight: '800', marginBottom: 6 },
-  tipTx: { color: '#a8a8a8', lineHeight: 22 },
-});
+

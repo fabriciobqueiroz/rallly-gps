@@ -1,6 +1,5 @@
 import { registerRootComponent } from 'expo';
-import './src/persist';
-import './src/gpsTask';
+import './src/boot';
 import App from './App';
 
 registerRootComponent(App);
