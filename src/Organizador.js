@@ -248,7 +248,7 @@ export default function Organizador({ st, prova, provaMap, last, onOrg, onProva,
       <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 10 }}>
         {SEC.map(([k, n]) => <TouchableOpacity key={k} style={chip(sec === k)} onPress={() => setSec(k)}><Text style={[st.btn2Tx, sec === k && { color: '#0c1014' }]}>{n}</Text></TouchableOpacity>)}
       </View>
-      {sec === 'levantar' && <Levantamento key={org.prova + '_' + (Platform.OS === 'web' ? (provaMap.lev ? provaMap.lev.em || 1 : 0) : '')} st={st} prova={org.prova} last={last} onAplicar={aplicarLevantamento} levNuvem={provaMap.lev} trailNuvem={provaMap.coords} />}
+      {sec === 'levantar' && <Levantamento key={org.prova + '_' + (Platform.OS === 'web' ? (provaMap.lev ? provaMap.lev.em || 1 : 0) : '')} st={st} prova={org.prova} last={last} onAplicar={aplicarLevantamento} levNuvem={provaMap.lev} trailNuvem={provaMap.lev && provaMap.lev.trail && provaMap.lev.trail.length >= 4 ? Array.from({ length: provaMap.lev.trail.length >> 1 }, (_, i) => [provaMap.lev.trail[2 * i], provaMap.lev.trail[2 * i + 1]]) : provaMap.coords} />}
       {sec === 'ranking' && <OrgRankingLive st={st} prova={org.prova} />}
       {sec === 'categorias' && <OrgCategorias st={st} prova={org.prova} categorias={cats} />}
       {sec === 'inscricoes' && <OrgInscricoes key={org.prova} st={st} prova={org.prova} inscritos={inscritos} categorias={cats} />}
@@ -260,6 +260,12 @@ export default function Organizador({ st, prova, provaMap, last, onOrg, onProva,
       <View style={st.card}>
         <Text style={st.tip}>Planilha da prova {org.prova}</Text>
         {Platform.OS === 'web' && <Text style={[st.tipTx, { color: provaMap.wps.length ? '#4caf50' : '#ffb74d' }]}>{provaMap.wps.length ? `Dados da prova carregados da nuvem: ${provaMap.wps.length} pontos, ${provaMap.trechos.length} trechos.` : 'Esta prova ainda não tem percurso publicado na nuvem. Publique pelo celular (ou marque o percurso no mapa e toque em Publicar).'}</Text>}
+        {Platform.OS === 'web' && provaMap.lev && (provaMap.lev.marks || []).length > 0 && !provaMap.wps.length && (
+          <View>
+            <Text style={[st.tipTx, { color: '#4caf50' }]}>O levantamento feito no celular chegou: {provaMap.lev.marks.length} marcas. Abra o levantamento para conferir, editar e aplicar à planilha.</Text>
+            <TouchableOpacity style={[st.btn, { marginBottom: 6 }]} onPress={() => setSec('levantar')}><Text style={st.btnTx}>Abrir levantamento</Text></TouchableOpacity>
+          </View>
+        )}
         {planilha.length === 0 ? (
           <Text style={st.tipTx}>Ainda sem percurso. Abra o mapa abaixo e marque a largada, os fins de trecho e a chegada.</Text>
         ) : (
