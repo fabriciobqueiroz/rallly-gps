@@ -1,7 +1,7 @@
 // Levantamento da prova dirigindo: o rastro do GPS vira o percurso, o organizador marca tulipas (com observação e foto)
 // e, ao chegar, edita cada tulipa com calma (desenho do cruzamento, nome, neutro) antes de aplicar à planilha.
-import { useRef, useState } from 'react';
-import { Alert, Image, ScrollView, Text, Vibration, TextInput, TouchableOpacity, View, useWindowDimensions } from 'react-native';
+import { useMemo, useRef, useState } from 'react';
+import { Alert, Image, Platform, ScrollView, Text, Vibration, TextInput, TouchableOpacity, View, useWindowDimensions } from 'react-native';
 import Tela from './Tela';
 import * as ImagePicker from 'expo-image-picker';
 import { File, Paths } from 'expo-file-system';
@@ -12,6 +12,9 @@ import EditorDesenho from './EditorDesenho';
 import { loadJson, saveJson } from './persist';
 import { cumulative } from './rally';
 import { getState } from './store';
+import { calcularRota } from './osrm';
+
+const WEB = Platform.OS === 'web'; // no computador: sem GPS; o percurso vem do mapa ou da nuvem e as marcas são editadas à mão
 import { detectarCruzamento, dist, linhaPc, rumo, satUrl } from './osm';
 
 const km2 = (m) => (m / 1000).toFixed(3).replace('.', ',');
@@ -81,9 +84,26 @@ function EditorTulipa({ st, m, onChange, onDesenhar, onDetectar }) {
 
 const slugProva = (p) => String(p).trim().toUpperCase().replace(/[^A-Z0-9]+/g, '');
 
-export default function Levantamento({ st, prova, last, onAplicar, onProva }) {
-  const chave = 'lev_' + String(prova).trim().toUpperCase().replace(/[^A-Z0-9]+/g, '');
-  const [lev, setLevRaw] = useState(() => loadJson(chave, { iniT: null, marks: [] }));
+export default function Levantamento({ st, prova, last, onAplicar, onProva, levNuvem, trailNuvem }) {
+  const slug0 = String(prova).trim().toUpperCase().replace(/[^A-Z0-9]+/g, '');
+  const chave = 'lev_' + slug0;
+  const chaveW = 'levw_' + slug0;
+  const [trailW, setTrailW] = useState(() => (WEB && levNuvem ? trailNuvem || [] : []));
+  const [wpsNovo, setWpsNovo] = useState([]);
+  const [busyW, setBusyW] = useState('');
+  const [lev, setLevRaw] = useState(() => {
+    if (WEB) {
+      const sv = loadJson(chaveW, null);
+      if (sv && sv.lev && sv.base === ((levNuvem && levNuvem.em) || 0)) return sv.lev;
+      return levNuvem ? { iniT: 0, marks: levNuvem.marks || [], trechos: levNuvem.trechos || [], em: levNuvem.em || 0 } : { iniT: null, marks: [], trechos: [] };
+    }
+    const loc = loadJson(chave, { iniT: null, marks: [] });
+    // Levantamento editado no computador (mais novo): o celular adota, mantendo as fotos que só existem aqui.
+    if (levNuvem && (levNuvem.em || 0) > (loc.em || 0)) {
+      return { ...loc, em: levNuvem.em, trechos: levNuvem.trechos || loc.trechos, marks: (levNuvem.marks || []).map((m) => ({ ...m, foto: ((loc.marks || []).find((x) => x.id === m.id) || {}).foto || null })) };
+    }
+    return loc;
+  });
   const [aberta, setAberta] = useState(null);
   const [tela, setTela] = useState(true);
   const [menuMapa, setMenuMapa] = useState(false);
@@ -98,14 +118,18 @@ export default function Levantamento({ st, prova, last, onAplicar, onProva }) {
   const [rc, setRc] = useState('#ff7a2e');
   const [editorId, setEditorId] = useState(null);
   const [cand, setCand] = useState(null);
+  const pontosW = useMemo(() => (WEB ? trailW.map((c, i) => ({ lat: c[0], lon: c[1], t: i * 1000, acc: 0 })) : null), [trailW]);
+  const getPts = () => (WEB ? pontosW : getState().points);
   const setLev = (fn) => setLevRaw((o) => {
-    const n = typeof fn === 'function' ? fn(o) : fn;
+    const n0 = typeof fn === 'function' ? fn(o) : fn;
+    const n = { ...n0, em: Date.now() };
+    if (WEB) { saveJson(chaveW, { base: (levNuvem && levNuvem.em) || 0, lev: n }); return n; }
     saveJson(chave, n);
     try {
       const cod = String(prova).trim().toUpperCase();
       const old = loadJson('lev_index', []).find((x) => x.code === cod);
       const idx = loadJson('lev_index', []).filter((x) => x.code !== cod);
-      const pts = getState().points;
+      const pts = getPts();
       const ini = n.iniT != null ? pts.findIndex((p) => p.t >= n.iniT) : -1;
       const ult = (n.marks || []).length;
       const kmx = ini >= 0 && pts.length ? Math.max(0, cumulative(pts)[pts.length - 1] - cumulative(pts)[ini]) : (loadJson('lev_index', []).find((x) => x.code === cod)?.km || 0);
@@ -114,11 +138,12 @@ export default function Levantamento({ st, prova, last, onAplicar, onProva }) {
     return n;
   });
 
-  const { points } = getState();
+  const points = getPts();
   const cum = cumulative(points);
   const iniIdx = lev.iniT != null ? Math.max(0, points.findIndex((p) => p.t >= lev.iniT)) : -1;
   const kmAqui = iniIdx >= 0 && points.length ? Math.max(0, cum[points.length - 1] - cum[iniIdx]) : 0;
   const fechado = lev.marks.some((m) => m.k === 'C');
+  const kmScale = (() => { const c = lev.marks.find((m) => m.k === 'C'); const t = iniIdx >= 0 && points.length ? cum[points.length - 1] - cum[iniIdx] : 0; return WEB && c && t > 0 ? c.km / t : 1; })();
   const nTrechos = (o) => o.marks.filter((m) => m.k === 'S').length + 1;
   // trechos garantidos: um por intervalo entre largada, fins de trecho e chegada
   const trAtual = (o) => { const a = [...(o.trechos || [])]; while (a.length < nTrechos(o)) a.push({ ...(a[a.length - 1] || { t: 'V', v: '', min: '15' }) }); return a.slice(0, nTrechos(o)); };
@@ -134,7 +159,7 @@ export default function Levantamento({ st, prova, last, onAplicar, onProva }) {
   const perguntaTrecho = (i) => Alert.alert(`Trecho ${i + 1}`, 'Definir a velocidade (média) ou o deslocamento deste trecho agora?', [{ text: 'Depois', style: 'cancel' }, { text: 'Agora', onPress: () => setTrAsk(i) }]);
   // lê sempre o ponto GPS mais recente na hora do toque (não o da última renderização)
   const pronto = () => {
-    const pts = getState().points;
+    const pts = getPts();
     const l = pts[pts.length - 1];
     if (!l) { Alert.alert('Sem GPS', 'Ainda não chegou nenhuma posição. Espere o GPS ficar verde e toque de novo.'); return null; }
     if (Date.now() - l.t > 20000) { Alert.alert('GPS parado', 'A última posição tem mais de 20 s. Confira se o GPS está ligado e com sinal, e toque de novo.'); return null; }
@@ -145,7 +170,7 @@ export default function Levantamento({ st, prova, last, onAplicar, onProva }) {
     if (Date.now() - ultimoToque.current < 700) return;
     const l = pronto(); if (!l) return;
     ultimoToque.current = Date.now();
-    const pts = getState().points;
+    const pts = getPts();
     const iniI = lev.iniT != null ? Math.max(0, pts.findIndex((p) => p.t >= lev.iniT)) : -1;
     const cumF = cumulative(pts);
     const kmAgora = iniI >= 0 && pts.length ? Math.max(0, cumF[pts.length - 1] - cumF[iniI]) : 0;
@@ -204,7 +229,7 @@ export default function Levantamento({ st, prova, last, onAplicar, onProva }) {
   };
   // rumo do trecho logo depois da marca (35 m à frente no rastro gravado), se o carro já passou dali
   const saidaRumo = (m) => {
-    const pts = getState().points;
+    const pts = getPts();
     let bi = -1, bd = 1e9;
     pts.forEach((p, i) => { const d = dist([m.lat, m.lon], [p.lat, p.lon]); if (d < bd) { bd = d; bi = i; } });
     if (bi < 0 || bd > 30) return null;
@@ -258,7 +283,7 @@ export default function Levantamento({ st, prova, last, onAplicar, onProva }) {
       if (comTulipa(m)) prev = d;
     });
     const legs = pontosKm.slice(1).map((k, i) => Math.round((k - pontosKm[i]) * 1000) / 1000);
-    onAplicar({ wps, rota: { coords: trail, legs, tul }, nIdx: ntMap, refs, pcl, trs: trsOut });
+    onAplicar({ wps, rota: { coords: trail, legs, tul }, nIdx: ntMap, refs, pcl, trs: trsOut, lev: { em: lev.em || Date.now(), marks: lev.marks.map((m) => ({ ...m, foto: null })), trechos: trAtual(lev) } });
     Alert.alert('Aplicado', 'Percurso, tulipas e trechos foram para a aba Planilha. Ajuste as médias e publique.');
   };
 
@@ -266,7 +291,7 @@ export default function Levantamento({ st, prova, last, onAplicar, onProva }) {
   const candDe = (bi) => {
     const p = points[bi], a = points[Math.max(iniIdx, bi - 2)], b = points[Math.min(points.length - 1, bi + 2)];
     const fim = lev.marks.find((x) => x.k === 'C');
-    return { i: bi, lat: Math.round(p.lat * 1e6) / 1e6, lon: Math.round(p.lon * 1e6) / 1e6, hdg: Math.round(rumo([a.lat, a.lon], [b.lat, b.lon])), km: Math.min(Math.round(cum[bi] - cum[iniIdx]), fim ? fim.km : 1e12) };
+    return { i: bi, lat: Math.round(p.lat * 1e6) / 1e6, lon: Math.round(p.lon * 1e6) / 1e6, hdg: Math.round(rumo([a.lat, a.lon], [b.lat, b.lon])), km: Math.min(Math.round((cum[bi] - cum[iniIdx]) * kmScale), fim ? fim.km : 1e12) };
   };
   const tocaTrilha = (lat, lon) => {
     if (!fechado || iniIdx < 0) return;
@@ -302,6 +327,23 @@ export default function Levantamento({ st, prova, last, onAplicar, onProva }) {
     else if (k === 'T' || k === 'P' || k === 'N') setAberta(m.id);
   };
 
+  const addWp = (la, lo) => setWpsNovo((w) => [...w, [Math.round(la * 1e6) / 1e6, Math.round(lo * 1e6) / 1e6]]);
+  const gerarPercurso = async () => {
+    if (wpsNovo.length < 2) return Alert.alert('Faltam pontos', 'Toque no mapa: primeiro a largada, depois (se quiser) pontos para guiar o caminho e por fim a chegada.');
+    setBusyW('Calculando o percurso pelas ruas…');
+    try {
+      const r = await calcularRota(wpsNovo);
+      const total = Math.round(r.legs.reduce((a, b) => a + b, 0) * 1000);
+      const c = r.coords;
+      const L = { id: 1, k: 'L', lat: c[0][0], lon: c[0][1], hdg: Math.round(rumo(c[0], c[Math.min(3, c.length - 1)])), km: 0, nota: '', foto: null };
+      const C = { id: 2, k: 'C', lat: c[c.length - 1][0], lon: c[c.length - 1][1], hdg: Math.round(rumo(c[Math.max(0, c.length - 4)], c[c.length - 1])), km: total, nota: '', foto: null };
+      setTrailW(c);
+      setLev({ iniT: 0, marks: [L, C], trechos: [{ t: 'V', v: '', min: '15' }] });
+      setWpsNovo([]);
+    } catch (e) { Alert.alert('Não calculou', String(e?.message || e)); }
+    setBusyW('');
+  };
+  const novoPercurso = WEB && lev.marks.length === 0;
   const ult = ordenadas[ordenadas.length - 1];
   const nTul = (i) => ordenadas.slice(0, i + 1).filter(comTulipa).length;
   const nPc = (i) => ordenadas.slice(0, i + 1).filter((x) => x.k === 'P').length;
@@ -335,7 +377,7 @@ export default function Levantamento({ st, prova, last, onAplicar, onProva }) {
             <TouchableOpacity style={st.btn2} onPress={() => setTela(false)}><Text style={st.btn2Tx}>✕</Text></TouchableOpacity>
           </View>
           <View style={{ paddingHorizontal: 10 }}>
-            <MapaWeb wps={[]} coords={trail} marks={pinos} lines={linhas} sat editable={fechado} onTap={tocaTrilha} follow={seguir && !fechado} rw={rw} dash={dash} rc={rc} ctr={ctr} me={last ? [last.lat, last.lon] : null} height={Math.round(winH * 0.34)} />
+            <MapaWeb wps={novoPercurso ? wpsNovo : []} coords={trail} marks={pinos} lines={linhas} sat={!novoPercurso} editable={fechado || novoPercurso} onTap={novoPercurso ? addWp : tocaTrilha} follow={!WEB && seguir && !fechado} rw={rw} dash={dash} rc={rc} ctr={ctr} me={last ? [last.lat, last.lon] : null} height={Math.round(winH * (WEB ? 0.5 : 0.34))} />
           </View>
           {menuMapa && (
             <View style={[st.row, { paddingHorizontal: 10, marginBottom: 6, flexWrap: 'wrap' }]}>
@@ -346,7 +388,19 @@ export default function Levantamento({ st, prova, last, onAplicar, onProva }) {
             </View>
           )}
           <View style={{ paddingHorizontal: 10 }}>
-            {!fechado && (
+            {novoPercurso && (
+              <View style={st.card}>
+                <Text style={st.tip}>Percurso pelo mapa</Text>
+                <Text style={st.tipTx}>Toque no mapa: 1º a largada, depois (se quiser) pontos para guiar o caminho, e por fim a chegada. O app calcula o percurso pelas ruas. Depois você insere referências, trechos, PCs e neutros tocando no traçado.</Text>
+                <View style={[st.row, { marginTop: 6, marginBottom: 0 }]}>
+                  <TouchableOpacity style={st.btn2} onPress={() => setWpsNovo((w) => w.slice(0, -1))}><Text style={st.btn2Tx}>Desfazer ponto</Text></TouchableOpacity>
+                  <TouchableOpacity style={st.btn2} onPress={() => setWpsNovo([])}><Text style={st.btn2Tx}>Limpar</Text></TouchableOpacity>
+                </View>
+                <TouchableOpacity style={[st.btn, { marginTop: 8, marginBottom: 0 }]} onPress={gerarPercurso}><Text style={st.btnTx}>Gerar percurso ({wpsNovo.length} pontos)</Text></TouchableOpacity>
+                {busyW ? <Text style={st.tipTx}>{busyW}</Text> : null}
+              </View>
+            )}
+            {!fechado && !WEB && (
               <View style={[st.row, { marginBottom: 6 }]}>
                 {lev.marks.length === 0 ? <B cor="#4caf50" tx="LARGADA" on={() => marcar('L')} /> : (
                   <>
@@ -358,7 +412,7 @@ export default function Levantamento({ st, prova, last, onAplicar, onProva }) {
                 )}
               </View>
             )}
-            {lev.marks.length > 0 && !fechado && (
+            {lev.marks.length > 0 && !fechado && !WEB && (
               <View style={[st.row, { marginBottom: 6 }]}>
                 <B cor="#1565c0" fg="#fff" tx="FOTO" on={fotoRapida} />
                 <View style={{ flex: 2 }}><B cor="#c0392b" fg="#fff" tx="CHEGADA (fim da prova)" on={() => marcar('C')} /></View>
@@ -385,7 +439,7 @@ export default function Levantamento({ st, prova, last, onAplicar, onProva }) {
         )}
             </View>
           <ScrollView ref={listaRef} style={{ flex: 1 }} contentContainerStyle={{ paddingHorizontal: 10, paddingBottom: 16 }} keyboardShouldPersistTaps="handled" onContentSizeChange={() => { if (!fechado) listaRef.current && listaRef.current.scrollToEnd({ animated: true }); }}>
-            {fechado && (
+            {fechado && !WEB && (
               <TouchableOpacity style={[st.btn2, { marginBottom: 8 }]} onPress={() => del(ult.id)}><Text style={st.btn2Tx}>Reabrir (desfazer chegada)</Text></TouchableOpacity>
             )}
       {fechado && lev.marks.length > 0 && (() => {
@@ -456,11 +510,11 @@ export default function Levantamento({ st, prova, last, onAplicar, onProva }) {
                       {m.k !== 'P' && (
                         <View>
                           <TextInput style={st.field} value={m.nota} onChangeText={(v) => upd(m.id, { nota: v })} placeholder="Observação (só para você)" placeholderTextColor="#666" multiline />
-                          <View style={[st.row, { marginTop: 8, marginBottom: 0 }]}>
+                          {!WEB && <View style={[st.row, { marginTop: 8, marginBottom: 0 }]}>
                             <TouchableOpacity style={st.btn2} onPress={() => foto(m.id)}><Text style={st.btn2Tx}>{m.foto ? 'Trocar foto' : 'Tirar foto'}</Text></TouchableOpacity>
                             {m.foto ? <TouchableOpacity style={st.btn2} onPress={() => apagarFoto(m.id)}><Text style={[st.btn2Tx, { color: '#ff5252' }]}>Apagar foto</Text></TouchableOpacity> : null}
-                          </View>
-                          {m.foto ? <Image source={{ uri: m.foto }} style={{ width: '100%', height: 180, borderRadius: 10, marginTop: 8 }} resizeMode="cover" /> : null}
+                          </View>}
+                          {m.foto && !WEB ? <Image source={{ uri: m.foto }} style={{ width: '100%', height: 180, borderRadius: 10, marginTop: 8 }} resizeMode="cover" /> : null}
                           {comTulipa(m) && <EditorTulipa st={st} m={m} onChange={(p) => upd(m.id, p)} onDesenhar={() => setEditorId(m.id)} onDetectar={() => detectar(m)} />}
                         </View>
                       )}

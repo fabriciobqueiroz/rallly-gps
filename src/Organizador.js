@@ -111,6 +111,7 @@ export default function Organizador({ st, prova, provaMap, last, onOrg, onProva,
   const [manual, setManual] = useState(false);
   const [trs, setTrs] = useState([]);
   const [mapaAb, setMapaAb] = useState(null);
+  const [levPub, setLevPub] = useState(null);
   const nPend = useRef(new Set());
   const grupos = gruposDe(provaMap.categorias);
   const ng = grupos.length;
@@ -162,8 +163,8 @@ export default function Organizador({ st, prova, provaMap, last, onOrg, onProva,
   }, [ng]);
 
   // Percurso vindo do levantamento dirigindo: usa o rastro e as tulipas marcadas, sem recalcular pelo OSRM.
-  const aplicarLevantamento = ({ wps: w, rota: r, nIdx, refs: rf, pcl: pc, trs: tn }) => {
-    setManual(true);
+  const aplicarLevantamento = ({ wps: w, rota: r, nIdx, refs: rf, pcl: pc, trs: tn, lev: lv }) => {
+    setManual(true); setLevPub(lv || null);
     setWps(w); setRota(r); setRefs(rf); setPcl(pc || []);
     setLegs(r.legs.map((_, i) => novoLeg(num(dif, 3), ng, (nIdx.get ? nIdx.get(i) : nIdx.has(i) ? 60 : 0) || 0)));
     setTrs((tn || []).map((t) => (t.t === 'D' ? { t: 'D', v: vs(30, dif, ng), min: String(t.min || 15), d0: t.d0 } : { t: 'V', v: vs(t.v, dif, ng).map((x, k) => (k === 0 ? String(t.v).replace(',', '.') : x)), min: '15', d0: t.d0 })));
@@ -182,7 +183,7 @@ export default function Organizador({ st, prova, provaMap, last, onOrg, onProva,
       onProva && onProva(code);
       const o = { prova: code.trim().toUpperCase() };
       saveJson('org', o); setOrg(o); onOrg && onOrg(o);
-      carregado.current = 0;
+      carregado.current = 0; setLevPub(null);
       setWps([]); setRota({ coords: [], legs: [], tul: [] }); setLegs([]); setTrs([]); setRefs([]); setPcl([]); setManual(false); setInscritos([]);
       setSec(Platform.OS === 'web' ? 'planilha' : 'levantar'); setAberta(true);
     } catch (e) { Alert.alert('Sem conexão', String(e?.message || e)); }
@@ -194,6 +195,13 @@ export default function Organizador({ st, prova, provaMap, last, onOrg, onProva,
   const trechos = trsNum.length ? trechosEq(trs, legs, rota.legs, ng) : toTrechos(legs, rota.legs);
   const tulT = comTipos(rota.tul, trechos, trsNum);
 
+  // Marcas do levantamento (sem fotos) vão junto na publicação: assim o computador e o celular editam o mesmo levantamento.
+  const levParaNuvem = () => {
+    if (levPub) return levPub;
+    if (Platform.OS === 'web') return provaMap.lev || null;
+    const l = loadJson('lev_' + slugProva(prova), { marks: [] });
+    return l.marks && l.marks.length ? { em: l.em || 0, marks: l.marks.map((m) => ({ ...m, foto: null })), trechos: l.trechos || [] } : null;
+  };
   const publicar = async () => {
     if (wps.length < 2 || rota.legs.length !== wps.length - 1 || legs.length !== rota.legs.length) return Alert.alert('Falta rota', 'Marque ao menos a largada e a chegada e aguarde o cálculo.');
     try {
@@ -207,6 +215,7 @@ export default function Organizador({ st, prova, provaMap, last, onOrg, onProva,
         tul: JSON.parse(JSON.stringify(tulT)),
         refs,
         pcl: manual ? pcl : [],
+        ...(levParaNuvem() ? { lev: levParaNuvem() } : {}),
         ...(((loadJson('lev_' + String(prova).trim().toUpperCase().replace(/[^A-Z0-9]+/g, ''), {}).nome || '').slice(0, 60)) ? { nome: (loadJson('lev_' + String(prova).trim().toUpperCase().replace(/[^A-Z0-9]+/g, ''), {}).nome || '').slice(0, 60) } : {}),
         publicadoEm: Date.now(),
       });
@@ -230,7 +239,7 @@ export default function Organizador({ st, prova, provaMap, last, onOrg, onProva,
   const me = last ? [last.lat, last.lon] : null;
   const chip = (on) => [st.chip, { paddingHorizontal: 14, paddingVertical: 6 }, on && { backgroundColor: '#ff7a2e' }];
   const cats = provaMap.categorias;
-  const SEC = [['levantar', 'Levantar'], ['planilha', 'Planilha'], ['categorias', 'Categorias'], ['inscricoes', 'Inscrições'], ['ranking', 'Ranking'], ['resultados', 'Resultados'], ['tracklog', 'Track log'], ['liberacao', 'Liberação']].filter(([k]) => Platform.OS !== 'web' || k !== 'levantar');
+  const SEC = [['levantar', 'Levantar'], ['planilha', 'Planilha'], ['categorias', 'Categorias'], ['inscricoes', 'Inscrições'], ['ranking', 'Ranking'], ['resultados', 'Resultados'], ['tracklog', 'Track log'], ['liberacao', 'Liberação']];
   const nomeProva = (loadJson('lev_index', []).find((x) => x.code === org.prova) || {}).nome || '';
   return (
     <View>
@@ -239,7 +248,7 @@ export default function Organizador({ st, prova, provaMap, last, onOrg, onProva,
       <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 10 }}>
         {SEC.map(([k, n]) => <TouchableOpacity key={k} style={chip(sec === k)} onPress={() => setSec(k)}><Text style={[st.btn2Tx, sec === k && { color: '#0c1014' }]}>{n}</Text></TouchableOpacity>)}
       </View>
-      {sec === 'levantar' && <Levantamento key={org.prova} st={st} prova={org.prova} last={last} onAplicar={aplicarLevantamento} />}
+      {sec === 'levantar' && <Levantamento key={org.prova + '_' + (Platform.OS === 'web' ? (provaMap.lev ? provaMap.lev.em || 1 : 0) : '')} st={st} prova={org.prova} last={last} onAplicar={aplicarLevantamento} levNuvem={provaMap.lev} trailNuvem={provaMap.coords} />}
       {sec === 'ranking' && <OrgRankingLive st={st} prova={org.prova} />}
       {sec === 'categorias' && <OrgCategorias st={st} prova={org.prova} categorias={cats} />}
       {sec === 'inscricoes' && <OrgInscricoes key={org.prova} st={st} prova={org.prova} inscritos={inscritos} categorias={cats} />}
