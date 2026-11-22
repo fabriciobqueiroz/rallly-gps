@@ -11,7 +11,7 @@ import { loadRoteiro, saveRoteiro, recFile, loadJson, saveJson } from './src/per
 import { Roadbook, tulComp } from './src/Tulipa';
 import * as ScreenOrientation from 'expo-screen-orientation';
 import Organizador from './src/Organizador';
-import { enviarResultado, ouvirRanking, salvarProva, ouvirProva, ouvirInscricao, ouvirMinhaLargada, enviarDatalogger, ouvirAuth, sairConta, lerPerfil } from './src/firebase';
+import { enviarResultado, ouvirRanking, salvarProva, ouvirProva, ouvirInscricao, ouvirMinhaLargada, enviarDatalogger, ouvirAuth, sairConta, lerPerfil, enviarAoVivo, limparAoVivo } from './src/firebase';
 import Login from './src/Login';
 import { st } from './src/estilos';
 import Fluxo, { DlTela } from './src/Fluxo';
@@ -29,6 +29,7 @@ const fmtTime = (ms) => {
   return `${p(Math.floor(s / 3600))}:${p(Math.floor((s % 3600) / 60))}:${p(s % 60)}`;
 };
 
+const aoVivoActivePrev = (ant, nova) => !!ant && ant !== nova;
 export default function App() {
   const [, setTick] = useState(0);
   const [running, setRunning] = useState(false);
@@ -210,6 +211,8 @@ export default function App() {
     else if (stage.idx >= 0) { Vibration.vibrate([0, 500, 200, 500]); setStage({ ...marked, active: false }); }
     else setStage(marked);
   };
+  const autoPc = useRef(() => {});
+  autoPc.current = () => { if (rs && stage.idx >= 0 && stage.active) onPc(); };
   const onUndo = () => {
     if (!hist.length) return;
     const prev = hist[hist.length - 1];
@@ -398,7 +401,7 @@ export default function App() {
     const w = warned.current;
     if (remain == null || w.idx !== stage.idx) return;
     if (!w.w100 && remain <= 100) { w.w100 = true; Vibration.vibrate(150); }
-    if (!w.w0 && remain <= 0) { w.w0 = true; Vibration.vibrate([0, 500, 200, 500]); }
+    if (!w.w0 && remain <= 0) { w.w0 = true; autoPc.current(); } // PC escondido: registra em silêncio
   }, [remain, stage.idx]);
 
   if (user === undefined) return <View style={[st.root, { justifyContent: 'center' }]}><Text style={[st.sub, { textAlign: 'center' }]}>Carregando…</Text></View>;
@@ -421,6 +424,32 @@ export default function App() {
     { text: 'Cancelar', style: 'cancel' },
     { text: 'Zerar', style: 'destructive', onPress: () => { clear(); if (running) begin(); saveJson(kJan(), {}); setOdoBase(0); setOdoAdj(0); setAferBase(null); setAferUndo(null); setPosOff(0); } },
   ]);
+  // Ao vivo: a cada ~8 s manda só a posição atual (prova em andamento ou trilha gravando). É informativo; o datalogger completo segue gravado no celular.
+  const aoVivoRef = useRef({});
+  aoVivoRef.current = { user, piloto, last, kJan };
+  const aoVivoAtivo = useRef(null);
+  useEffect(() => {
+    const tick = () => {
+      const { user: u, piloto: pl, last: l, kJan: kj } = aoVivoRef.current;
+      if (!u) return;
+      let alvo = null;
+      try {
+        const rec = loadJson('trl_rec', null);
+        if (rec && rec.id && !rec.fim) alvo = { kind: 'trilha', id: rec.id, numero: '' };
+        else if (pl.prova.trim() && pl.numero.trim()) {
+          const j = loadJson(kj(), {});
+          if (j.ini != null && j.fim == null) alvo = { kind: 'prova', id: pl.prova.trim().toUpperCase().replace(/[^A-Z0-9]+/g, ''), numero: pl.numero.trim() };
+        }
+      } catch {}
+      const chave = alvo ? alvo.kind + '_' + alvo.id : null;
+      if (aoVivoActivePrev(aoVivoAtivo.current, chave)) { const [k0, ...r0] = aoVivoAtivo.current.split('_'); limparAoVivo(k0, r0.join('_')).catch(() => {}); }
+      aoVivoAtivo.current = chave;
+      if (!alvo || !l || Date.now() - l.t > 20000) return;
+      enviarAoVivo({ ...alvo, nome: pl.nome || u.email, lat: l.lat, lon: l.lon, t: l.t, spd: l.spd, acc: l.acc }).catch(() => {});
+    };
+    const id = setInterval(tick, 8000);
+    return () => clearInterval(id);
+  }, []);
   const janN = (() => { const j = loadJson(kJan(), {}); return j.ini == null ? 0 : points.filter((p) => p.t >= j.ini && (j.fim == null || p.t <= j.fim)).length; })();
   const onPlanilha = () => {
     if (!libOk) return Alert.alert('Planilha não liberada', 'Aguarde a liberação do organizador. Você pode usar "Apenas datalogger".');
@@ -520,7 +549,7 @@ export default function App() {
       {navOpen && (
         <Erro onClose={() => setNavOpen(false)}><NavTela cfg={loadNav()} stage={stage} rs={rs} last={last} globalDist={rs || stage.idx >= 0 ? globalDist : Math.max(0, odoAtual() - odoBase)}
           odoM={odoAtual() - odoBase} tul={tulVis} rot={rot} trs={provaMap.trs} fim={fimProva} cont={remLarg} classe={piloto.classe} grupos={grupos}
-          aviso={fimProva ? 'FIM DA PROVA' : remLarg != null && remLarg > 0 ? `Largada em ${fmtDur(remLarg)}` : neutroRest != null ? `NEUTRO · PARE · ${fmtDur(neutroRest)}` : stage.idx >= 0 && rs && remain != null && remain <= 0 ? 'CHEGOU — toque em PC' : null}
+          aviso={fimProva ? 'FIM DA PROVA' : remLarg != null && remLarg > 0 ? `Largada em ${fmtDur(remLarg)}` : neutroRest != null ? `NEUTRO · PARE · ${fmtDur(neutroRest)}` : null}
           onAdj={adjAll} onIniciarAgora={onStage} onEncerrar={encerrarProva} onZerar={() => setOdoBase(odoAtual())} factor={factor} aferRef={aferRef} onAfer={onAfer} podeDesfazer={!!aferUndo} onDesfazer={desfazerAfer} onW={ajustarW} onEstouAqui={estouAqui} onClose={() => setNavOpen(false)} /></Erro>
       )}
       <NavConfig st={st} visible={cfgOpen} onClose={() => setCfgOpen(false)} />

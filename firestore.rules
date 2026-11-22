@@ -77,5 +77,13 @@ service cloud.firestore {
       allow create, update: if logado() && request.resource.data.uid == request.auth.uid;
       allow delete: if logado() && (resource.data.uid == request.auth.uid || donoT(resource.data.trilha));
     }
+    // Posição ao vivo: cada um escreve a própria; só o organizador (da prova ou da trilha) lê as dos outros.
+    match /aoVivo/{id} {
+      allow read: if logado() && (resource.data.uid == request.auth.uid
+        || (resource.data.kind == 'prova' && dono(resource.data.id))
+        || (resource.data.kind == 'trilha' && donoT(resource.data.id)));
+      allow create, update: if logado() && request.resource.data.uid == request.auth.uid;
+      allow delete: if logado() && resource.data.uid == request.auth.uid;
+    }
   }
 }

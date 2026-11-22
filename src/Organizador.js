@@ -8,6 +8,8 @@ import { loadJson, saveJson } from './persist';
 import { Roadbook } from './Tulipa';
 import { gruposDe, rank } from './rally';
 import Levantamento from './Levantamento';
+import PainelAoVivo from './AoVivo';
+const pairs = (a) => { const o = []; for (let i = 0; i + 1 < a.length; i += 2) o.push([a[i], a[i + 1]]); return o; };
 import { OrgTrackLog } from './TrackLog';
 import { Platform } from 'react-native';
 import ListaProvas, { slugProva } from './Provas';
@@ -240,7 +242,7 @@ export default function Organizador({ st, prova, provaMap, last, onOrg, onProva,
   const me = last ? [last.lat, last.lon] : null;
   const chip = (on) => [st.chip, { paddingHorizontal: 14, paddingVertical: 6 }, on && { backgroundColor: '#ff7a2e' }];
   const cats = provaMap.categorias;
-  const SEC = [['levantar', 'Levantar'], ['planilha', 'Planilha'], ['categorias', 'Categorias'], ['inscricoes', 'Inscrições'], ['ranking', 'Ranking'], ['resultados', 'Resultados'], ['tracklog', 'Track log'], ['liberacao', 'Liberação']];
+  const SEC = [['levantar', 'Levantar'], ['planilha', 'Planilha'], ['categorias', 'Categorias'], ['inscricoes', 'Inscrições'], ['aovivo', 'Ao vivo'], ['ranking', 'Ranking'], ['resultados', 'Resultados'], ['tracklog', 'Track log'], ['liberacao', 'Liberação']];
   const nomeProva = (loadJson('lev_index', []).find((x) => x.code === org.prova) || {}).nome || '';
   return (
     <View>
@@ -250,6 +252,7 @@ export default function Organizador({ st, prova, provaMap, last, onOrg, onProva,
         {SEC.map(([k, n]) => <TouchableOpacity key={k} style={chip(sec === k)} onPress={() => setSec(k)}><Text style={[st.btn2Tx, sec === k && { color: '#0c1014' }]}>{n}</Text></TouchableOpacity>)}
       </View>
       {sec === 'levantar' && <Levantamento key={org.prova + '_' + (Platform.OS === 'web' ? (provaMap.lev ? provaMap.lev.em || 1 : 0) : '')} st={st} prova={org.prova} last={last} onAplicar={aplicarLevantamento} levNuvem={provaMap.lev} trailNuvem={provaMap.lev && provaMap.lev.trail && provaMap.lev.trail.length >= 4 ? Array.from({ length: provaMap.lev.trail.length >> 1 }, (_, i) => [provaMap.lev.trail[2 * i], provaMap.lev.trail[2 * i + 1]]) : provaMap.coords} />}
+      {sec === 'aovivo' && <PainelAoVivo st={st} kind="prova" id={org.prova} rota={provaMap.rota ? pairs(provaMap.rota) : rota.coords} />}
       {sec === 'ranking' && <OrgRankingLive st={st} prova={org.prova} />}
       {sec === 'categorias' && <OrgCategorias st={st} prova={org.prova} categorias={cats} />}
       {sec === 'inscricoes' && <OrgInscricoes key={org.prova} st={st} prova={org.prova} inscritos={inscritos} categorias={cats} />}

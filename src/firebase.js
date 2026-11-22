@@ -238,3 +238,21 @@ export function ouvirMeusTracksTrilha(onData, onError) {
 export function ouvirTracksPublicosTrilha(trilha, onData, onError) {
   return onSnapshot(query(collection(db, 'trilhaTracks'), where('trilha', '==', trilha), where('publico', '==', true)), (snap) => onData(snap.docs.map((d) => d.data())), onError);
 }
+
+// ---------- Ao vivo (posição em tempo real; só informativo, o resultado oficial vem do datalogger) ----------
+export async function enviarAoVivo({ kind, id, nome, numero, lat, lon, t, spd, acc }) {
+  const u = auth.currentUser;
+  if (!u) return;
+  await setDoc(doc(db, 'aoVivo', `${kind}_${id}_${u.uid}`), {
+    kind, id, uid: u.uid, nome: nome || '', numero: numero || '', lat: Math.round(lat * 1e6) / 1e6, lon: Math.round(lon * 1e6) / 1e6,
+    t: t || Date.now(), spd: spd != null ? Math.round(spd * 3.6) : null, acc: acc != null ? Math.round(acc) : null, em: Date.now(),
+  });
+}
+export async function limparAoVivo(kind, id) {
+  const u = auth.currentUser;
+  if (!u) return;
+  await deleteDoc(doc(db, 'aoVivo', `${kind}_${id}_${u.uid}`));
+}
+export function ouvirAoVivo(kind, id, onData, onError) {
+  return onSnapshot(query(collection(db, 'aoVivo'), where('kind', '==', kind), where('id', '==', id)), (snap) => onData(snap.docs.map((d) => d.data())), onError);
+}

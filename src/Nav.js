@@ -79,20 +79,21 @@ export function NavTela({ cfg, stage, rs, last, globalDist, odoM, tul, rot, trs,
   // próxima referência (tulipa) e fim do trecho
   const [br, setBr] = useState(null); // índice da referência em consulta (null = segue o GPS)
   useEffect(() => { if (br == null) return; const id = setTimeout(() => setBr(null), 40000); return () => clearTimeout(id); }, [br]);
-  const iAt = tul.length ? Math.max(0, tul.findIndex((e) => e.d >= globalDist - 15)) : -1;
-  const iAtual = iAt < 0 ? -1 : (tul.findIndex((e) => e.d >= globalDist - 15) < 0 ? tul.length - 1 : iAt);
+  const troca = Math.max(0, Number(cfg.rbTroca) || 0);
+  const iAt = tul.length ? Math.max(0, tul.findIndex((e) => e.d >= globalDist - troca)) : -1;
+  const iAtual = iAt < 0 ? -1 : (tul.findIndex((e) => e.d >= globalDist - troca) < 0 ? tul.length - 1 : iAt);
   const prox = iAtual >= 0 ? tul.find((e, i) => i >= iAtual && e.d - globalDist > -0.5) : null;
   const regRef = prox ? Math.max(0, prox.d - globalDist) : null;
   const prox2 = prox ? tul.find((e) => e.d > prox.d + 0.5) : null;
   const regRef2 = prox2 ? prox2.d - globalDist : null;
-  const trAtual = trsN ? (trIdx >= 0 ? resolve(trsN[trIdx]) : null) : stage.idx >= 0 ? rot.trechos[stage.idx] : null;
-  const trProx = trsN ? (trIdx >= 0 ? resolve(trsN[trIdx + 1]) : null) : stage.idx >= 0 ? rot.trechos[stage.idx + 1] : null;
   const gi = classe ? grupoIdx(classe, grupos) : 0;
   const trsN = trs && trs.length ? trs : null;
   let trIdx = -1;
   if (trsN) trsN.forEach((t, i) => { if (t.d0 <= globalDist + 1.5) trIdx = i; });
   const dFim = tul.length ? tul[tul.length - 1].d : 0;
   const resolve = (t) => (t ? (t.t === 'D' ? { tipo: 'D', min: t.min, kmh: 0 } : { tipo: 'V', kmh: (t.v && (t.v[gi] ?? t.v[0])) || 0 }) : null);
+  const trAtual = trsN ? resolve(trsN[Math.max(0, trIdx)]) : stage.idx >= 0 ? rot.trechos[stage.idx] : null;
+  const trProx = trsN ? resolve(trsN[Math.max(0, trIdx) + 1]) : stage.idx >= 0 ? rot.trechos[stage.idx + 1] : null;
   const regTrc0 = trsN ? (stage.idx >= 0 ? Math.max(0, (trIdx + 1 < trsN.length ? trsN[trIdx + 1].d0 : dFim) - globalDist) : null) : (rs && rs.remain != null ? rs.remain : null);
   const regTrc = Number.isFinite(regTrc0) ? regTrc0 : null;
   const placa = (tr) => (tr ? (tr.tipo === 'D' ? { tx: `D${tr.min}'`, d: true } : { tx: String(Math.round(tr.kmh)), d: false }) : null);
@@ -322,6 +323,7 @@ export function NavConfig({ st, visible, onClose, piloto }) {
           </View>
           <View style={st.card}>
             <Text style={st.tip}>Roadbook na tela</Text>
+            <Lin st={st} tx="Trocar tulipa após passar (m) — 0 = na hora"><Num st={st} v={c.rbTroca || 0} on={(v) => up((o) => { o.rbTroca = Math.max(0, Math.min(100, Math.round(v))); return o; })} /></Lin>
             <Lin st={st} tx="Tulipas anteriores (0 a 4)"><Num st={st} v={c.rb.ant} on={(v) => up((o) => { o.rb.ant = Math.max(0, Math.min(4, Math.round(v))); return o; })} /></Lin>
             <Lin st={st} tx="Tulipas seguintes (0 a 8)"><Num st={st} v={c.rb.prox} on={(v) => up((o) => { o.rb.prox = Math.max(0, Math.min(8, Math.round(v))); return o; })} /></Lin>
             <Text style={st.tipTx}>A janela do roadbook é dividida entre as tulipas nessa proporção (30 a 150):</Text>

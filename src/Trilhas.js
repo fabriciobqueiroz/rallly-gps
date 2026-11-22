@@ -6,6 +6,7 @@ import { calcularRota } from './osrm';
 import { escolherDT, fmtBR, parseDT } from './OrgExtras';
 import { loadJson, saveJson } from './persist';
 import { haversine } from './store';
+import PainelAoVivo from './AoVivo';
 import {
   apagarTrilha, atualizarInscTrilha, enviarTrackTrilha, idTrilha, ouvirInscTrilha, ouvirMeusTracksTrilha, ouvirMinhasInscTrilhas,
   ouvirMinhasTrilhasOrg, ouvirTracksPublicosTrilha, ouvirTrilhasAbertas, pedirVagaTrilha, publicarTrackTrilha, removerInscTrilha, salvarTrilha,
@@ -29,25 +30,32 @@ function Etiqueta({ st, k }) {
 // ---------- Organizador: formulário ----------
 function FormTrilha({ st, ini, onFim }) {
   const [f, setF] = useState(() => ({ nome: '', quando: '', cidade: '', nivel: 'Média', vagas: '20', obs: '', aberta: false, encontro: null, rota: [], km: 0, ...ini }));
-  const [modo, setModo] = useState('enc');
-  const [wps, setWps] = useState([]);
+  const [pts, setPts] = useState(() => (ini && ini.pts && ini.pts.length ? pair(ini.pts) : ini && ini.encontro ? [[ini.encontro.lat, ini.encontro.lon]] : []));
   const [busy, setBusy] = useState('');
+  const req = useRef(0);
   const set = (p) => setF((o) => ({ ...o, ...p }));
   const coords = pair(f.rota);
-  const onTap = (la, lo) => {
-    if (modo === 'enc') set({ encontro: { lat: Math.round(la * 1e6) / 1e6, lon: Math.round(lo * 1e6) / 1e6 } });
-    else setWps((w) => [...w, [la, lo]]);
-  };
-  const gerar = async () => {
-    if (wps.length < 2) return Alert.alert('Percurso', 'Toque no mapa ao menos 2 pontos (saída e chegada).');
-    setBusy('Calculando o percurso pelas ruas…');
+  // pts[0] = encontro, pts[1] = largada, demais = chegadas; o traçado segue as ruas do mapa, da largada até a última chegada
+  const refaz = async (arr) => {
+    const n = ++req.current;
+    if (arr.length < 3) { set({ rota: [], km: 0 }); setBusy(''); return; }
+    setBusy('Traçando o percurso pelas ruas…');
     try {
-      const r = await calcularRota(wps);
+      const r = await calcularRota(arr.slice(1));
+      if (n !== req.current) return;
       set({ rota: flat(r.coords), km: Math.round(r.legs.reduce((a, b) => a + b, 0) * 10) / 10 });
-      setWps([]);
-    } catch (e) { Alert.alert('Não consegui o percurso', String(e?.message || e)); }
-    setBusy('');
+      setBusy('');
+    } catch (e) { if (n === req.current) setBusy('Sem internet para traçar. Toque em "Refazer traçado".'); }
   };
+  const aplica = (arr) => {
+    setPts(arr);
+    const q = (x) => Math.round(x * 1e6) / 1e6;
+    set({ encontro: arr[0] ? { lat: q(arr[0][0]), lon: q(arr[0][1]) } : null, pts: flat(arr) });
+    refaz(arr);
+  };
+  const onTap = (la, lo) => aplica([...pts, [la, lo]]);
+  const marks = pts.map((p, i) => ({ lat: p[0], lon: p[1], txt: i === 0 ? 'Encontro' : i === 1 ? 'Largada' : `Chegada ${i - 1}`, cls: i === 0 ? 'l' : i === 1 ? 'c' : 's' }));
+  const dica = pts.length === 0 ? 'Toque no mapa: 1º toque = ponto de ENCONTRO.' : pts.length === 1 ? 'Agora toque a LARGADA.' : 'Cada novo toque marca uma CHEGADA e o traçado segue as ruas até ele.';
   const salvar = async (aberta) => {
     if (!f.nome.trim()) return Alert.alert('Falta o nome', 'Dê um nome para a trilha.');
     if (aberta && (!f.quando || !f.encontro)) return Alert.alert('Falta informação', 'Para publicar, escolha a data e hora e marque o ponto de encontro no mapa.');
@@ -55,7 +63,7 @@ function FormTrilha({ st, ini, onFim }) {
     try {
       await salvarTrilha(id, {
         nome: f.nome.trim(), quando: f.quando || '', quandoTs: parseDT(f.quando), cidade: f.cidade || '', nivel: f.nivel, vagas: parseInt(f.vagas, 10) || 0, obs: f.obs || '',
-        encontro: f.encontro || null, rota: f.rota || [], km: f.km || 0, aberta: !!aberta,
+        encontro: f.encontro || null, pts: f.pts || [], rota: f.rota || [], km: f.km || 0, aberta: !!aberta,
       });
       Alert.alert(aberta ? 'Trilha publicada' : 'Rascunho salvo', aberta ? 'Ela já aparece para os competidores.' : 'Só você vê. Publique quando estiver pronta.');
       onFim();
@@ -75,19 +83,13 @@ function FormTrilha({ st, ini, onFim }) {
       </View>
       <View style={st.card}>
         <Text style={st.tip}>Mapa</Text>
+        <Text style={st.tipTx}>{dica}</Text>
+        <MapaWeb wps={[]} coords={coords} marks={marks} editable onTap={onTap} height={Platform.OS === 'web' ? 420 : 300} />
         <View style={st.row}>
-          <TouchableOpacity style={chipS(st, modo === 'enc')} onPress={() => setModo('enc')}><Text style={[st.btn2Tx, modo === 'enc' && { color: '#0c1014' }]}>Marcar encontro</Text></TouchableOpacity>
-          <TouchableOpacity style={chipS(st, modo === 'rota')} onPress={() => setModo('rota')}><Text style={[st.btn2Tx, modo === 'rota' && { color: '#0c1014' }]}>Desenhar percurso</Text></TouchableOpacity>
+          <TouchableOpacity style={st.btn2} onPress={() => aplica(pts.slice(0, -1))}><Text style={st.btn2Tx}>Desfazer último ponto</Text></TouchableOpacity>
+          {pts.length >= 3 && <TouchableOpacity style={st.btn2} onPress={() => refaz(pts)}><Text style={st.btn2Tx}>Refazer traçado</Text></TouchableOpacity>}
+          {pts.length > 0 && <TouchableOpacity style={st.btn2} onPress={() => aplica([])}><Text style={[st.btn2Tx, { color: '#ff5252' }]}>Apagar tudo</Text></TouchableOpacity>}
         </View>
-        <Text style={st.tipTx}>{modo === 'enc' ? (f.encontro ? 'Encontro marcado. Toque de novo para mudar.' : 'Toque no mapa onde o grupo vai se encontrar.') : 'Toque os pontos do caminho (saída, passagens, chegada) e gere o percurso. É opcional: o percurso real é o que cada um grava.'}</Text>
-        <MapaWeb wps={wps} coords={coords} marks={f.encontro ? [{ lat: f.encontro.lat, lon: f.encontro.lon, txt: 'Encontro', cls: 'l' }] : []} editable onTap={onTap} height={Platform.OS === 'web' ? 420 : 300} />
-        {modo === 'rota' && (
-          <View style={st.row}>
-            <TouchableOpacity style={st.btn2} onPress={() => setWps((w) => w.slice(0, -1))}><Text style={st.btn2Tx}>Desfazer ponto</Text></TouchableOpacity>
-            <TouchableOpacity style={st.btn2} onPress={gerar}><Text style={st.btn2Tx}>Gerar percurso ({wps.length})</Text></TouchableOpacity>
-            {coords.length > 0 && <TouchableOpacity style={st.btn2} onPress={() => set({ rota: [], km: 0 })}><Text style={[st.btn2Tx, { color: '#ff5252' }]}>Apagar</Text></TouchableOpacity>}
-          </View>
-        )}
         {busy ? <Text style={st.tipTx}>{busy}</Text> : null}
         {f.km > 0 && <Text style={st.tipTx}>Percurso: {f.km} km</Text>}
       </View>
@@ -155,6 +157,7 @@ function Participantes({ st, t, onVoltar }) {
         <TextInput style={[st.field, { minHeight: 60 }]} value={aviso} onChangeText={setAviso} placeholder="Ex.: saída adiantada para 06:30" placeholderTextColor="#666" multiline />
         <TouchableOpacity style={[st.btn2, { marginTop: 8 }]} onPress={publicarAviso}><Text style={st.btn2Tx}>Publicar aviso</Text></TouchableOpacity>
       </View>
+      <PainelAoVivo st={st} kind="trilha" id={t.id} rota={pair(t.rota || [])} />
       <View style={st.card}>
         <Text style={st.tip}>Participantes</Text>
         {ord.length === 0 && <Text style={st.tipTx}>Ainda não há pedidos de vaga.</Text>}
@@ -265,7 +268,8 @@ function Detalhe({ st, t, insc, gps, onVoltar }) {
   const pedir = () => pedirVagaTrilha(t.id, { nome: gps.nome, veiculo: veic.trim(), pessoas: parseInt(pes, 10) || 1 }).then(() => Alert.alert('Pedido enviado', 'O organizador vai analisar. Você vê a resposta aqui.')).catch((e) => Alert.alert('Erro', String(e?.message || e)));
   const mudar = (status, msg) => atualizarInscTrilha(t.id, gps.uid, { status }).then(() => msg && Alert.alert(msg)).catch((e) => Alert.alert('Erro', String(e?.message || e)));
   const sair = () => Alert.alert('Cancelar', 'Cancelar sua participação nesta trilha?', [{ text: 'Voltar', style: 'cancel' }, { text: 'Cancelar participação', style: 'destructive', onPress: () => mudar('cancelado') }]);
-  const marks = t.encontro ? [{ lat: t.encontro.lat, lon: t.encontro.lon, txt: 'Encontro', cls: 'l' }] : [];
+  const marks = pair(t.pts || []).map((p, i) => ({ lat: p[0], lon: p[1], txt: i === 0 ? 'Encontro' : i === 1 ? 'Largada' : `Chegada ${i - 1}`, cls: i === 0 ? 'l' : i === 1 ? 'c' : 's' }));
+  if (!marks.length && t.encontro) marks.push({ lat: t.encontro.lat, lon: t.encontro.lon, txt: 'Encontro', cls: 'l' });
   const coords = verPub != null ? trackCoords(pub.find((x) => x.uid === verPub)) : pair(t.rota);
   return (
     <View>
