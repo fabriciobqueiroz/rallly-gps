@@ -131,7 +131,7 @@ export default function Organizador({ st, prova, provaMap, last, onOrg, onProva,
         while (v.length < ng) v.push(String(num(v[0]) - num(dif, 3) * v.length));
         return { t: t.t, v, min: String(t.min), nt: String(t.nt || 0) };
       }));
-      setTrs((provaMap.trs || []).map((t) => { const v = (t.v || []).map(String); while (v.length < ng) v.push(String(num(v[0]) - num(dif, 3) * v.length)); return { t: t.t, v, min: String(t.min), d0: t.d0 }; }));
+      setTrs((provaMap.trs || []).map((t) => { const v = (t.v || []).map(String); while (v.length < ng) v.push(String(num(v[0]) - num(dif, 3) * v.length)); return { t: t.t, v, min: String(t.min), d0: t.d0, zr: !!t.zr }; }));
     }
   }, [logado, provaMap]);
 
@@ -165,9 +165,11 @@ export default function Organizador({ st, prova, provaMap, last, onOrg, onProva,
   // Percurso vindo do levantamento dirigindo: usa o rastro e as tulipas marcadas, sem recalcular pelo OSRM.
   const aplicarLevantamento = ({ wps: w, rota: r, nIdx, refs: rf, pcl: pc, trs: tn, lev: lv }) => {
     setManual(true); setLevPub(lv || null);
-    setWps(w); setRota(r); setRefs(rf); setPcl(pc || []);
+    const aferAnt = new Set((refs || []).filter((x) => x.afer).map((x) => x.n));
+    const zrAnt = trs.map((x) => !!x.zr);
+    setWps(w); setRota(r); setRefs((rf || []).map((x) => (aferAnt.has(x.n) ? { ...x, afer: true } : x))); setPcl(pc || []);
     setLegs(r.legs.map((_, i) => novoLeg(num(dif, 3), ng, (nIdx.get ? nIdx.get(i) : nIdx.has(i) ? 60 : 0) || 0)));
-    setTrs((tn || []).map((t) => (t.t === 'D' ? { t: 'D', v: vs(30, dif, ng), min: String(t.min || 15), d0: t.d0 } : { t: 'V', v: vs(t.v, dif, ng).map((x, k) => (k === 0 ? String(t.v).replace(',', '.') : x)), min: '15', d0: t.d0 })));
+    setTrs((tn || []).map((t, i) => (t.t === 'D' ? { t: 'D', v: vs(30, dif, ng), min: String(t.min || 15), d0: t.d0, zr: !!zrAnt[i] } : { t: 'V', v: vs(t.v, dif, ng).map((x, k) => (k === 0 ? String(t.v).replace(',', '.') : x)), min: '15', d0: t.d0, zr: !!zrAnt[i] })));
     setSec('planilha');
   };
   const updT = (i, patch) => setTrs((o) => o.map((l, j) => (j === i ? { ...l, ...patch } : l)));
@@ -191,7 +193,7 @@ export default function Organizador({ st, prova, provaMap, last, onOrg, onProva,
   useEffect(() => { if (abrirReq && abrirReq.code && abrirReq.n !== reqFeito) { reqFeito = abrirReq.n; abrirProva(abrirReq.code, false); } }, [abrirReq && abrirReq.n]);
   const sair = () => { saveJson('org', null); setOrg(null); onOrg && onOrg(null); };
 
-  const trsNum = trs.map((t) => ({ t: t.t, v: t.v.map((x) => num(x, 30)), min: num(t.min, 15), d0: Math.round(t.d0 || 0) }));
+  const trsNum = trs.map((t) => ({ t: t.t, v: t.v.map((x) => num(x, 30)), min: num(t.min, 15), d0: Math.round(t.d0 || 0), zr: !!t.zr }));
   const trechos = trsNum.length ? trechosEq(trs, legs, rota.legs, ng) : toTrechos(legs, rota.legs);
   const tulT = comTipos(rota.tul, trechos, trsNum);
 
@@ -318,6 +320,7 @@ export default function Organizador({ st, prova, provaMap, last, onOrg, onProva,
                 <TouchableOpacity style={chip(l.t === 'V')} onPress={() => updT(i, { t: 'V' })}><Text style={[st.btn2Tx, l.t === 'V' && { color: '#0c1014' }]}>V média</Text></TouchableOpacity>
                 <TouchableOpacity style={chip(l.t === 'D')} onPress={() => updT(i, { t: 'D' })}><Text style={[st.btn2Tx, l.t === 'D' && { color: '#0c1014' }]}>D deslocamento</Text></TouchableOpacity>
               </View>
+              {i > 0 && <TouchableOpacity style={[chip(!!l.zr), { marginBottom: 6 }]} onPress={() => updT(i, { zr: !l.zr })}><Text style={[st.btn2Tx, l.zr && { color: '#0c1014' }]}>{l.zr ? '✓ Zera o hodômetro neste trecho' : 'Zerar hodômetro neste trecho'}</Text></TouchableOpacity>}
               {l.t === 'V' ? grupos.map((g, gi) => (
                 <View key={gi} style={st.line}>
                   <Text style={st.k}>Grupo {g.nome} · {g.cats.join(', ') || '—'}</Text>
@@ -332,6 +335,13 @@ export default function Organizador({ st, prova, provaMap, last, onOrg, onProva,
             </View>
           );
         })}
+        {refs.length > 0 && <Text style={[st.tip, { marginTop: 8 }]}>Aferição: marque as referências onde o competidor pode aferir o hodômetro</Text>}
+        {refs.map((r, i) => (
+          <View key={'rf' + i} style={st.line}>
+            <Text style={st.k}>Ref {r.n} · km {Number(r.km || 0).toFixed(3)}</Text>
+            <TouchableOpacity style={chip(!!r.afer)} onPress={() => setRefs((o) => o.map((x, j) => (j === i ? { ...x, afer: !x.afer } : x)))}><Text style={[st.btn2Tx, r.afer && { color: '#0c1014' }]}>{r.afer ? '✓ AFER' : 'AFER'}</Text></TouchableOpacity>
+          </View>
+        ))}
         {trs.length > 0 && legs.length > 1 && <Text style={[st.tip, { marginTop: 8 }]}>Neutros (parada no ponto)</Text>}
         {trs.length > 0 && legs.slice(0, -1).map((l, i) => {
           const pt = rota.tul.filter((e) => e.t === 'P')[i];

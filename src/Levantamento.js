@@ -12,7 +12,7 @@ import EditorDesenho from './EditorDesenho';
 import { loadJson, saveJson } from './persist';
 import { salvarProva } from './firebase';
 import { cumulative } from './rally';
-import { getState } from './store';
+import { getState, passoGps } from './store';
 import { calcularRota } from './osrm';
 
 const WEB = Platform.OS === 'web'; // no computador: sem GPS; o percurso vem do mapa ou da nuvem e as marcas são editadas à mão
@@ -140,7 +140,9 @@ export default function Levantamento({ st, prova, last, onAplicar, onProva, levN
     if (c.first !== pts[0] || pts.length < c.n) { c.first = pts[0]; c.n = 0; c.cum = []; c.dist = 0; c.last = null; }
     for (let i = c.n; i < pts.length; i++) {
       const p = pts[i];
-      if (!(p.acc != null && p.acc > 25)) { if (c.last) { const d = dist([c.last.lat, c.last.lon], [p.lat, p.lon]); if (d > 1) c.dist += d; } c.last = p; }
+      if (!(p.acc != null && p.acc > 25)) {
+        if (c.last) { const st = passoGps(c.last, p); c.dist += st.d; if (st.mover) c.last = p; } else c.last = p;
+      }
       c.cum[i] = c.dist;
     }
     c.n = pts.length;

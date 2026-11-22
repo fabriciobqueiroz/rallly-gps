@@ -22,8 +22,8 @@ export const BLOCOS = {
   kmac: { nome: 'KM acumulado', w: 0.4, h: 0.1 },
   cron: { nome: 'Cronômetro do trecho', w: 0.4, h: 0.1 },
   rb: { nome: 'Roadbook (tulipas)', w: 0.62, h: 0.7 },
-  wpct: { nome: 'W% (em breve)', w: 0.25, h: 0.08, breve: true },
-  afer: { nome: 'AFER (em breve)', w: 0.25, h: 0.08, breve: true },
+  wpct: { nome: 'W% (calibração)', w: 0.25, h: 0.08 },
+  afer: { nome: 'AFER (aferir)', w: 0.25, h: 0.08 },
   regtb: { nome: 'Regressivo do trecho (em breve)', w: 0.4, h: 0.08, breve: true },
 };
 

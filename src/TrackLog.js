@@ -33,7 +33,7 @@ export function calcDl(dl, provaMap, grupos) {
     const fora = !neu && !p.miss && p.tipo !== 'D' && p.diff != null && Math.abs(p.diff) > JANELA;
     const falta = !neu && (!!p.miss || fora);
     const pts = neu ? 0 : falta ? max : p.diff != null && p.tipo !== 'D' ? Math.abs(p.diff) * esc : 0;
-    return { n: p.n, lab: neu ? 'N' : String(pcN), trc: trs.length ? k + 1 : p.trecho, km, tprova: p.miss ? null : (p.t - larg) / 1000, tipo: p.tipo, neu, miss: !!p.miss, fora, falta, prev: neu ? null : prev, real: p.miss ? null : p.t, diff: p.diff, pts };
+    return { n: p.n, lab: neu ? 'N' : String(pcN), trc: trs.length ? k + 1 : p.trecho, km, tprova: p.miss ? null : (p.t - larg) / 1000, tipo: p.tipo, neu, miss: !!p.miss, sent: !!p.sent, fora, falta, prev: neu ? null : prev, real: p.miss ? null : p.t, diff: p.diff, pts };
   });
   const validos = rows.filter((x) => !x.neu);
   const passou = validos.filter((x) => !x.falta).length;
@@ -57,7 +57,7 @@ function Tabela({ st, dl, provaMap, grupos }) {
           <C t={x.trc ?? '—'} w="8%" />
           <C t={x.km.toFixed(3).replace('.', ',')} w="13%" />
           <C t={x.prev != null ? clock(x.prev) : '—'} w="19%" />
-          <C t={x.real != null ? clock(x.real) : '****'} w="19%" c={x.falta ? '#ff5252' : undefined} />
+          <C t={x.real != null ? clock(x.real) : x.sent ? 'SENT.' : '****'} w="19%" c={x.falta ? '#ff5252' : undefined} />
           <C t={x.tprova != null ? hms(x.tprova) : '—'} w="19%" />
           <C t={x.neu ? 'NEUTRO' : x.falta ? String(r.max) : x.tipo === 'D' ? '0' : x.diff != null ? String(Math.round(x.diff * r.esc)) : '—'} w="14%" c={x.falta ? '#ff5252' : x.diff == null ? undefined : x.diff > 0.5 ? '#ff7a2e' : x.diff < -0.5 ? '#4caf50' : undefined} />
         </View>
@@ -67,7 +67,7 @@ function Tabela({ st, dl, provaMap, grupos }) {
         <View style={st.line}><Text style={st.v}>Total</Text><Text style={st.v}>{Math.round(r.total)}</Text></View>
         <View style={st.line}><Text style={st.v}>Total PC zerado</Text><Text style={st.v}>{r.zerados}</Text></View>
         <Text style={st.tipTx}>{r.npcs} de {r.totalPcs} PC válidos. {r.classif ? 'Classificado.' : `NÃO CLASSIFICADO: precisa passar por ${r.minimo} PC (2/3).`} Neutro não pontua.</Text>
-        {r.rows.some((x) => x.falta) && <Text style={[st.tipTx, { color: '#ff5252' }]}>**** = não passou ou passou fora de ±10 min: {r.max} pontos.</Text>}
+        {r.rows.some((x) => x.falta) && <Text style={[st.tipTx, { color: '#ff5252' }]}>**** = não passou ou passou fora de ±10 min · SENT. = passou no sentido contrário: {r.max} pontos.</Text>}
       </View>
       <Text style={st.tipTx}>Atrasado (+) ou adiantado (−), {r.esc === 10 ? '1 ponto por décimo de segundo' : '1 ponto por segundo'}. Menos pontos vence.</Text>
     </View>

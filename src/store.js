@@ -64,6 +64,14 @@ export function haversine(a, b) {
 
 // Só soma trechos com precisão aceitável, para o ruído do GPS não inflar a distância.
 const MAX_ACC = 25;
+// Carro parado: o GPS "anda" alguns metros sozinho. Se a velocidade medida (efeito Doppler) é menor que 0,8 m/s
+// (ou, sem velocidade, se o passo é menor que o erro do GPS), não conta distância e o ponto de referência fica parado.
+export function passoGps(last, p) {
+  const d = haversine(last, p);
+  const v = p.spd != null && p.spd >= 0 ? p.spd : null;
+  if (v != null ? v < 0.8 : d <= Math.max(3, p.acc || 0)) return { d: 0, mover: false };
+  return { d: d > 1 ? d : 0, mover: true };
+}
 export function summarize(points) {
   let dist = 0;
   let last = null;
@@ -73,8 +81,9 @@ export function summarize(points) {
     if (i > 0) maxGap = Math.max(maxGap, p.t - points[i - 1].t);
     if (p.acc != null && p.acc > MAX_ACC) continue;
     if (last) {
-      const d = haversine(last, p);
-      if (d > 1) dist += d; // ignora tremor abaixo de 1 m
+      const s = passoGps(last, p);
+      dist += s.d;
+      if (!s.mover) continue; // parado: mantém o ponto de referência
     }
     last = p;
   }

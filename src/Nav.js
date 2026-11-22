@@ -1,5 +1,6 @@
 // Tela do navegador (durante a prova) e tela de personalização (antes da prova).
 // Durante a prova nada é editável, só os botões de correção (+10 m, -10 m, PC) e o menu ⋮.
+import { zeroOff } from './rally';
 import { useEffect, useRef, useState } from 'react';
 import { Alert, Modal, ScrollView, Switch, Text, TextInput, TouchableOpacity, View, useWindowDimensions } from 'react-native';
 import Tela from './Tela';
@@ -48,7 +49,7 @@ function montarRb(tul, iA, rb) {
   for (let k = 1; k <= rb.prox; k++) if (tul[iA + k]) out.push({ e: tul[iA + k], pct: rb.pProx[k - 1] ?? 40, key: 'p' + k });
   return out;
 }
-export function NavTela({ cfg, stage, rs, last, globalDist, odoM, tul, rot, trs, fim, classe, grupos, aviso, cont, onAdj, onPc, onZerar, onClose, onIniciarAgora, onEncerrar }) {
+export function NavTela({ cfg, stage, rs, last, globalDist, odoM, tul, rot, trs, fim, classe, grupos, aviso, cont, onAdj, onPc, onZerar, onClose, onIniciarAgora, onEncerrar, factor, aferRef, onAfer, podeDesfazer, onDesfazer, onW }) {
   useKeepAwake();
   const { width } = useWindowDimensions();
   const [t, setT] = useState(Date.now());
@@ -91,11 +92,12 @@ export function NavTela({ cfg, stage, rs, last, globalDist, odoM, tul, rot, trs,
   const regTrc = Number.isFinite(regTrc0) ? regTrc0 : null;
   const placa = (tr) => (tr ? (tr.tipo === 'D' ? { tx: `D${tr.min}'`, d: true } : { tx: String(Math.round(tr.kmh)), d: false }) : null);
   const rb = cfg.rb;
-  const linhasRb = montarRb(tul, iAtual, rb);
+  const zO = trsN ? zeroOff(trsN, globalDist) : 0;
+  const linhasRb = montarRb(tul, iAtual, rb).map((l) => (trsN && l.e.d != null ? { ...l, e: { ...l.e, d: l.e.d - zeroOff(trsN, l.e.d) } } : l));
   const d = {
-    cfg, spd, tnav, fx, odoM, regRef, regRef2, regTrc, pa: placa(trAtual), pp: placa(trProx), clock: last ? last.t : t, acc: last ? last.acc : null,
+    cfg, spd, tnav, fx, odoM: odoM - zO, factor, aferRef, onAfer: () => confirma('Aferir hodômetro', `Você está na referência ${aferRef ? aferRef.n : ''} (km ${aferRef ? aferRef.kmShow.toFixed(3) : ''}). Ajuste o hodômetro até bater com o km da tulipa e confirme. O app recalcula o W%.`, onAfer), regRef, regRef2, regTrc, pa: placa(trAtual), pp: placa(trProx), clock: last ? last.t : t, acc: last ? last.acc : null,
     trN: trsN ? (stage.idx >= 0 && trIdx >= 0 ? `${trIdx + 1}/${trsN.length}` : null) : stage.idx >= 0 ? `${stage.idx + 1}/${rot.trechos.length}` : null, fim: !!fim, refN: iAtual >= 0 ? `${iAtual + 1}/${tul.length}` : null,
-    kmAcum: globalDist, bat: bat, elapsed: fim && fz.current ? fz.current.elapsed : rs && Number.isFinite(rs.elapsed) ? rs.elapsed : null, rbLinhas: iAtual >= 0 ? linhasRb : null, classe, grupos, edit: false, onAdj, onPc,
+    kmAcum: globalDist - zO, bat: bat, elapsed: fim && fz.current ? fz.current.elapsed : rs && Number.isFinite(rs.elapsed) ? rs.elapsed : null, rbLinhas: iAtual >= 0 ? linhasRb : null, classe, grupos, edit: false, onAdj, onPc,
   };
   // Espelho para o celular do piloto (mesma conta): publica os valores a cada 2 s.
   const espRef = useRef(null);
@@ -136,6 +138,15 @@ export function NavTela({ cfg, stage, rs, last, globalDist, odoM, tul, rot, trs,
         ) : null}
         {menu && (
           <View style={{ position: 'absolute', top: 26 + TOPO, right: 10, zIndex: 9, backgroundColor: '#fff', borderRadius: 8, padding: 6, elevation: 8 }}>
+            {aferRef ? <TouchableOpacity style={{ padding: 12 }} onPress={() => confirma('Aferir hodômetro', `Referência ${aferRef.n} · km ${aferRef.kmShow.toFixed(3)}. Confirma aferir agora? O app recalcula o W%.`, onAfer)}><Text style={{ fontSize: 16, color: '#000', fontWeight: '800' }}>AFERIR agora (W% {(factor * 1000).toFixed(2)})</Text></TouchableOpacity> : null}
+            <View style={{ flexDirection: 'row', alignItems: 'center', padding: 8 }}>
+              <TouchableOpacity style={{ padding: 10 }} onPress={() => onW && onW(-1)}><Text style={{ fontSize: 18, color: '#000' }}>−1</Text></TouchableOpacity>
+              <TouchableOpacity style={{ padding: 10 }} onPress={() => onW && onW(-0.1)}><Text style={{ fontSize: 18, color: '#000' }}>−0,1</Text></TouchableOpacity>
+              <Text style={{ fontSize: 16, color: '#000', fontWeight: '800', paddingHorizontal: 6 }}>W% {(factor * 1000).toFixed(2)}</Text>
+              <TouchableOpacity style={{ padding: 10 }} onPress={() => onW && onW(0.1)}><Text style={{ fontSize: 18, color: '#000' }}>+0,1</Text></TouchableOpacity>
+              <TouchableOpacity style={{ padding: 10 }} onPress={() => onW && onW(1)}><Text style={{ fontSize: 18, color: '#000' }}>+1</Text></TouchableOpacity>
+            </View>
+            {podeDesfazer ? <TouchableOpacity style={{ padding: 12 }} onPress={() => confirma('Desfazer aferição', 'Voltar ao W% e ao hodômetro de antes da última aferição?', onDesfazer)}><Text style={{ fontSize: 16, color: '#c0392b', fontWeight: '800' }}>Desfazer última aferição</Text></TouchableOpacity> : null}
             <TouchableOpacity style={{ padding: 12 }} onPress={() => confirma('Zerar odômetro', 'Zerar o odômetro (GPS) agora? Não altera o T.NAV nem a posição no roadbook.', onZerar)}><Text style={{ fontSize: 16, color: '#000' }}>Zerar odômetro</Text></TouchableOpacity>
             {onIniciarAgora ? <TouchableOpacity style={{ padding: 12 }} onPress={() => confirma('Iniciar agora', 'Iniciar o trecho 1 agora, sem esperar a hora da largada?', onIniciarAgora)}><Text style={{ fontSize: 16, color: '#000' }}>Iniciar trecho agora</Text></TouchableOpacity> : null}
             <TouchableOpacity style={{ padding: 12 }} onPress={() => confirma('Sair da tela de prova', 'Voltar ao menu? O trecho e o GPS continuam.', onClose)}><Text style={{ fontSize: 16, color: '#000' }}>Sair da tela de prova</Text></TouchableOpacity>

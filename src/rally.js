@@ -1,5 +1,5 @@
 // Lógica do odômetro de rally e do cronômetro de PC (sem tela, fácil de testar).
-import { haversine } from './store.js';
+import { haversine, passoGps } from './store.js';
 
 const MAX_ACC = 25;
 
@@ -12,10 +12,10 @@ export function cumulative(points) {
     const p = points[i];
     if (!(p.acc != null && p.acc > MAX_ACC)) {
       if (last) {
-        const d = haversine(last, p);
-        if (d > 1) dist += d;
-      }
-      last = p;
+        const st = passoGps(last, p);
+        dist += st.d;
+        if (st.mover) last = p;
+      } else last = p;
     }
     cum[i] = dist;
   }
@@ -163,19 +163,36 @@ export function crossingTime(points, wp, fromT, maxD = 60, dir = null) {
     if (nv < 15 || nd < 1) return true;
     return (vx * dir[0] + vy * dir[1]) / (nv * nd) >= -0.5;
   };
-  for (const p of points) {
+  // Refina o instante entre duas leituras do GPS (1 por segundo): projeta o PC sobre o segmento percorrido.
+  // Sem isso o erro seria de até ±0,5 s só por escolher a leitura mais próxima.
+  const refinar = (i) => {
+    const P = (q) => [(q.lon - wp[1]) * kx, (q.lat - wp[0]) * ky];
+    let melhor = null;
+    for (const [a, b] of [[points[i - 1], points[i]], [points[i], points[i + 1]]]) {
+      if (!a || !b || b.t <= a.t) continue;
+      const [ax, ay] = P(a), [bx, by] = P(b), sx = bx - ax, sy = by - ay, n2 = sx * sx + sy * sy;
+      if (n2 < 4) continue;
+      const u = -(ax * sx + ay * sy) / n2;
+      if (u < 0 || u > 1) continue;
+      const perp = Math.hypot(ax + u * sx, ay + u * sy);
+      if (!melhor || perp < melhor.perp) melhor = { perp, t: a.t + u * (b.t - a.t) };
+    }
+    return melhor ? melhor.t : points[i].t;
+  };
+  for (let i = 0; i < points.length; i++) {
+    const p = points[i];
     if (p.t < fromT) continue;
     const d = haversine({ lat: wp[0], lon: wp[1] }, p);
     if (d <= maxD) {
       if (!inside) { inside = true; first = p; best = null; }
       last = p;
-      if (!best || d < best.d) best = { d, t: p.t };
+      if (!best || d < best.d) best = { d, i };
     } else if (inside) {
-      if (sentidoOk()) return best.t;
+      if (sentidoOk()) return refinar(best.i);
       inside = false; best = null;
     }
   }
-  return inside && best && sentidoOk() ? best.t : null;
+  return inside && best && sentidoOk() ? refinar(best.i) : null;
 }
 
 // Instante em que a trilha cruza a linha do PC [la1,lo1,la2,lo2] (interpolado entre dois pontos), depois de fromT.
@@ -227,11 +244,15 @@ export function oficialDeTrilha(points, wps, trechos, classe, grupos, t0, pcl = 
     const tr = resolverTrecho(trechos[i], classe, grupos);
     const ln = pcl.slice((i + 1) * 4, (i + 1) * 4 + 4);
     const dir = direcaoNoPonto(coords, wp);
-    const tc = ln.length === 4 && ln.some((x) => x) ? crossingLine(points, ln, tIni, dir) : crossingTime(points, wp, tIni, 60, dir);
+    const porLinha = ln.length === 4 && ln.some((x) => x);
+    const cruza = (dd) => (porLinha ? crossingLine(points, ln, tIni, dd) : crossingTime(points, wp, tIni, 60, dd));
+    const tc = cruza(dir);
+    // Passou pelo PC, mas no sentido contrário ao do percurso: vale como falta e aparece como SENT.
+    const sent = tc == null && dir != null && cruza(null) != null;
     const v = tr.kmh / 3.6;
     const idealTime = tr.tipo === 'D' ? tr.min * 60 : v > 0 ? (tr.km * 1000) / v : null;
     if (tc == null) {
-      pcs.push({ n: i + 1, tipo: tr.tipo, trecho: i + 1, miss: true, neu: tr.nt > 0, diff: null, idealTime, t0: tIni });
+      pcs.push({ n: i + 1, tipo: tr.tipo, trecho: i + 1, miss: true, sent, neu: tr.nt > 0, diff: null, idealTime, t0: tIni });
       // Não passou: os PCs seguintes são medidos a partir do horário ideal do PC perdido.
       if (idealTime != null) tIni = tIni + idealTime * 1000 + (tr.nt > 0 ? tr.nt * 1000 : 0);
       continue;
@@ -247,4 +268,11 @@ export function oficialDeTrilha(points, wps, trechos, classe, grupos, t0, pcl = 
 export function pcsDoLogger(dl) {
   const t0 = dl.t0 || 0;
   return dl.t.map((dt, i) => ({ t: t0 + dt * 1000, lat: dl.la[i] / 1e5, lon: dl.lo[i] / 1e5, acc: null }));
+}
+
+// Hodômetro zerado por trecho: devolve o deslocamento (m) do último trecho com zerar (zr) já iniciado em dist (m).
+export function zeroOff(trs, dist) {
+  let o = 0;
+  if (trs) trs.forEach((t) => { if (t.zr && t.d0 <= dist + 1.5) o = t.d0; });
+  return o;
 }

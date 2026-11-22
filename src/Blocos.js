@@ -111,6 +111,10 @@ export function Bloco({ tipo, d, w, h }) {
         <Text style={{ color: '#fff', fontSize: Math.max(11, Math.min(h * 0.6, 28)), fontWeight: '800', textAlign: 'center' }}>{d.bat >= 0 ? Math.round(d.bat * 100) + '%' : '—'}</Text>
       </View>
     );
+    case 'wpct': return <Cx label="W%" v={Number.isFinite(d.factor) ? (d.factor * 1000).toFixed(2).replace('.', ',') : '1000,00'} />;
+    case 'afer': return d.aferRef
+      ? <Btn tx={`AFER ${d.aferRef.n}`} bg="#f5e50f" on={d.onAfer} />
+      : <Btn tx="AFER" bg="#555" fg="#aaa" on={() => {}} />;
     case 'p10': return <Btn tx="+10" bg="#9e9e9e" on={() => d.onAdj(10)} />;
     case 'm10': return <Btn tx="−10" bg="#9e9e9e" on={() => d.onAdj(-10)} />;
     case 'p1': return <Btn tx="+1" bg="#9e9e9e" on={() => d.onAdj(1)} />;

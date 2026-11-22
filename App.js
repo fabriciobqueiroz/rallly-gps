@@ -19,7 +19,7 @@ import { planilhaLiberada, parseHMS, CATS_PADRAO } from './src/OrgExtras';
 import { NavTela, NavConfig, PilotoTela, loadNav } from './src/Nav';
 import { compartilharPdf } from './src/pdf';
 import { begin, clear, getState, subscribe, summarize, toCsv, haversine } from './src/store';
-import { gruposDe, cumulative, newStage, startStage, status, markPc, parseRoteiro, resolverTrecho, pontos, rank, fmtDur, fmtSigned, pcsToText } from './src/rally';
+import { gruposDe, cumulative, newStage, startStage, status, markPc, parseRoteiro, resolverTrecho, pontos, rank, fmtDur, fmtSigned, pcsToText, zeroOff } from './src/rally';
 
 const fmtTime = (ms) => {
   const s = Math.floor(ms / 1000);
@@ -33,7 +33,9 @@ export default function App() {
   const [keepOn, setKeepOn] = useState(false);
   const [now, setNow] = useState(Date.now());
   const [stage, setStage] = useState(newStage());
-  const [factor, setFactor] = useState(1);
+  const [factor, setFactorRaw] = useState(() => { const f = Number(loadJson('wfactor', 1)); return f > 0.5 && f < 1.5 ? f : 1; });
+  const setFactor = (f) => { setFactorRaw(f); saveJson('wfactor', f); };
+  const [aferUndo, setAferUndo] = useState(null);
   const [kmhTxt, setKmhTxt] = useState('');
   const [rotTxt, setRotTxt] = useState(() => loadRoteiro());
   const [largManual, setLargManualRaw] = useState('');
@@ -51,6 +53,7 @@ export default function App() {
   const [cfgOpen, setCfgOpen] = useState(false);
   const [odoBase, setOdoBase] = useState(0);
   const [odoAdj, setOdoAdj] = useState(0);
+  const [aferBase, setAferBase] = useState(null); // {cum, km}: ponto da última aferição (cum = GPS bruto em m, km = posição oficial em km)
   const odoAtual = () => { const v = (points.length ? cum[points.length - 1] * factor : 0) + odoAdj; return Number.isFinite(v) ? v : 0; };
   const [piloto, setPiloto] = useState(() => ({ nome: '', numero: '', prova: '', navegador: '', email: '', classe: 'GRADUADO', ...loadJson('piloto', {}) }));
   const [hist, setHist] = useState([]);
@@ -327,6 +330,48 @@ export default function App() {
     for (const r of provaMap.refs) { const d = haversine(last, r); if (!b || d < b.d) b = { r, d }; }
     return b && b.d <= 80 ? b : null;
   })();
+  useEffect(() => {
+    if (stage.active && !aferBase && points.length) setAferBase({ cum: cum[points.length - 1], km: 0 });
+    if (!stage.active && aferBase) setAferBase(null);
+  }, [stage.active]);
+  const desfazerAfer = () => {
+    if (!aferUndo) return;
+    setFactor(aferUndo.factor); setOdoBase(aferUndo.odoBase); setOdoAdj(aferUndo.odoAdj);
+    setStage((x) => ({ ...x, adjust: aferUndo.adjust })); setAferBase(aferUndo.aferBase); setAferUndo(null);
+    Alert.alert('Aferição desfeita', `W% voltou para ${(aferUndo.factor * 1000).toFixed(2)}.`);
+  };
+  // Ajuste manual do W% (delta em unidades de W%, ex.: 0,1). Mantém o hodômetro e o trecho sem salto.
+  const ajustarW = (dw) => {
+    const f = factor + dw / 1000;
+    if (f < 0.9 || f > 1.1) return;
+    const cn = points.length ? cum[points.length - 1] : 0, df = f - factor;
+    setFactor(f); setOdoBase((b) => b + cn * df); setStage((x) => ({ ...x, adjust: x.adjust - cn * df }));
+  };
+  const aferRef = (() => {
+    if (!last || !provaMap.refs.length || !stage.active || stage.idx < 0) return null;
+    let b = null;
+    for (const r of provaMap.refs) { if (!r.afer) continue; const d = haversine(last, r); if (!b || d < b.d) b = { r, d }; }
+    if (!b || b.d > 80) return null;
+    const km = Number(b.r.km) || 0;
+    return { n: b.r.n, km, kmShow: (km * 1000 - zeroOff(provaMap.trs, km * 1000)) / 1000 };
+  })();
+  const onAfer = () => {
+    if (!aferRef || !points.length) return;
+    const cumNow = cum[points.length - 1];
+    const base = aferBase || { cum: 0, km: 0 };
+    const raw = cumNow - base.cum, verd = (aferRef.km - base.km) * 1000;
+    if (!(raw > 200) || !(verd > 200)) { Alert.alert('Aferição', 'Distância percorrida muito curta para aferir (mínimo 200 m desde a largada/última aferição).'); return; }
+    const f = verd / raw;
+    if (f < 0.9 || f > 1.1) { Alert.alert('Aferição recusada', `Fator ${f.toFixed(4)} fora do normal (0,90–1,10). Confira se está na referência certa.`); return; }
+    const pos = aferRef.km * 1000;
+    setAferUndo({ factor, odoBase, odoAdj, adjust: stage.adjust, aferBase });
+    setStage((x) => ({ ...x, adjust: (pos - feitos) - cumNow * f + x.d0 }));
+    setOdoBase(cumNow * f - (pos - zeroOff(provaMap.trs, pos)));
+    setOdoAdj(0);
+    setFactor(f);
+    setAferBase({ cum: cumNow, km: aferRef.km });
+    Alert.alert('Aferição feita', `W% = ${(f * 1000).toFixed(2)}. Hodômetro ajustado para o km ${(aferRef.kmShow).toFixed(3)}.`);
+  };
   const ahead = rs && rs.aheadSec != null ? rs.aheadSec : null;
   // Posição no percurso: distância planejada dos trechos já feitos + parcial do trecho atual.
   const feitos = stage.idx > 0 ? rot.trechos.slice(0, stage.idx).reduce((a, t) => a + t.km * 1000, 0) : 0;
@@ -452,7 +497,7 @@ export default function App() {
         <NavTela cfg={loadNav()} stage={stage} rs={rs} last={last} globalDist={rs || stage.idx >= 0 ? globalDist : 0}
           odoM={odoAtual() - odoBase} tul={tulVis} rot={rot} trs={provaMap.trs} fim={fimProva} cont={remLarg} classe={piloto.classe} grupos={grupos}
           aviso={fimProva ? 'FIM DA PROVA' : remLarg != null && remLarg > 0 ? `Largada em ${fmtDur(remLarg)}` : neutroRest != null ? `NEUTRO · PARE · ${fmtDur(neutroRest)}` : stage.idx >= 0 && rs && remain != null && remain <= 0 ? 'CHEGOU — toque em PC' : null}
-          onAdj={adjAll} onIniciarAgora={onStage} onEncerrar={encerrarProva} onZerar={() => setOdoBase(odoAtual())} onClose={() => setNavOpen(false)} />
+          onAdj={adjAll} onIniciarAgora={onStage} onEncerrar={encerrarProva} onZerar={() => setOdoBase(odoAtual())} factor={factor} aferRef={aferRef} onAfer={onAfer} podeDesfazer={!!aferUndo} onDesfazer={desfazerAfer} onW={ajustarW} onClose={() => setNavOpen(false)} />
       )}
       <NavConfig st={st} visible={cfgOpen} onClose={() => setCfgOpen(false)} />
       {pilotoOpen && <PilotoTela cfg={loadNav()} tul={tulVis} classe={piloto.classe} grupos={grupos} onPersonalizar={() => setCfgPiloto(true)} onClose={() => setPilotoOpen(false)} />}
