@@ -31,6 +31,7 @@ export default function App() {
   useEffect(() => ouvirAuth((u) => setUser(u || null)), []);
   useEffect(() => {
     if (!prova.trim()) { setProvaMap(VAZIO); return undefined; }
+    setProvaMap(VAZIO);
     return ouvirProva(prova, (d) => setProvaMap({ wps: pair(d.wps || []), coords: pair(d.rota || []), legs: d.legs || [], kmh: d.kmh || [], tul: d.tul || [], trechos: d.trechos || [], trs: d.trs || [], categorias: d.categorias || [], lib: d.lib || {}, refs: d.refs || [], pcl: d.pcl || [], pub: d.publicadoEm || 1, lev: d.lev || null }), () => {});
   }, [prova]);
   const escolher = (p) => { setProva(p); saveJson('piloto', { ...loadJson('piloto', {}), prova: p }); };

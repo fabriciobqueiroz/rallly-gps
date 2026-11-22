@@ -110,7 +110,7 @@ export default function Levantamento({ st, prova, last, onAplicar, onProva, levN
     }
     const loc = loadJson(chave, { iniT: null, marks: [] });
     // Levantamento editado no computador (mais novo): o celular adota, mantendo as fotos que só existem aqui.
-    if (levNuvem && (levNuvem.em || 0) > (loc.em || 0)) {
+    if (levNuvem && loc.iniT != null && (loc.marks || []).length && (levNuvem.em || 0) > (loc.em || 0)) {
       return { ...loc, em: levNuvem.em, trechos: levNuvem.trechos || loc.trechos, marks: (levNuvem.marks || []).map((m) => ({ ...m, foto: ((loc.marks || []).find((x) => x.id === m.id) || {}).foto || null })) };
     }
     return loc;
@@ -534,6 +534,11 @@ export default function Levantamento({ st, prova, last, onAplicar, onProva, levN
           </View>
         );
       })()}
+      {ordenadas.length > 0 && !WEB && (
+        <TouchableOpacity style={[st.btn2, { marginBottom: 8 }]} onPress={() => Alert.alert('Recomeçar o levantamento?', 'Apaga todas as marcas e o rastro marcado desta prova (no celular e na nuvem). A prova em si continua.', [{ text: 'Cancelar', style: 'cancel' }, { text: 'Apagar e recomeçar', style: 'destructive', onPress: () => { setLev({ iniT: null, marks: [], trechos: [] }); salvarProva(prova, { lev: null }).catch(() => {}); } }])}>
+          <Text style={st.btn2Tx}>Recomeçar levantamento (apaga as marcas)</Text>
+        </TouchableOpacity>
+      )}
       {ordenadas.length > 0 && (
         <View style={st.card}>
           <Text style={st.tip}>{fechado ? 'Marcas (editar)' : 'Marcas (toque para anotar e fotografar)'}</Text>

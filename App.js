@@ -248,6 +248,8 @@ export default function App() {
     const slugP = piloto.prova.trim().toUpperCase().replace(/[^A-Z0-9]+/g, '');
     setLargManualRaw(loadJson('largm', {})[slugP] || '');
     const cache = loadJson('prova_' + slugP, null);
+    // Ao trocar de prova, começa vazio: nada da prova anterior pode aparecer na nova.
+    setProvaMap({ wps: [], coords: [], legs: [], kmh: [], tul: [], trechos: [], trs: [], categorias: [], lib: {}, refs: [], pcl: [], lev: null });
     const aplica = (d, nuvem) => {
       if (nuvem) saveJson('prova_' + slugP, d);
       if (nuvem && Date.now() - lastEdit.current < 2500) return; // não sobrescreve o que você está digitando
