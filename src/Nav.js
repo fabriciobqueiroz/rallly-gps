@@ -12,6 +12,8 @@ import Svg, { Text as SvgText } from 'react-native-svg';
 import { useKeepAwake } from 'expo-keep-awake';
 import { loadJson, saveJson } from './persist';
 import { Bloco, fmtDist, fmtTnav, faixaDe } from './Blocos';
+import Erro from './Erro';
+import Seguro from './Seguro';
 import LayoutEditor, { TOPO } from './LayoutEditor';
 import { getLayout, loadLayouts, novoId, padraoDe, saveLayouts } from './NavLayout';
 
@@ -115,7 +117,7 @@ export function NavTela({ cfg, stage, rs, last, globalDist, odoM, tul, rot, trs,
   const confirma = (tit, msg, fn) => { setMenu(false); Alert.alert(tit, msg, [{ text: 'Cancelar', style: 'cancel' }, { text: 'Confirmar', onPress: fn }]); };
 
   return (
-    <Modal visible animationType="fade" onRequestClose={() => setMenu(true)}>
+    <Modal visible animationType="fade" onRequestClose={() => setMenu(true)}><Seguro>
       <View style={{ flex: 1, backgroundColor: '#000', paddingTop: 26 }}>
         {aviso ? <View style={{ backgroundColor: '#c0392b', padding: 6 }}><Text style={{ color: '#fff', textAlign: 'center', fontWeight: '800', fontSize: 16 }}>{aviso}</Text></View> : null}
         <View style={{ height: TOPO, flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', paddingHorizontal: 10, backgroundColor: '#111' }}>
@@ -159,7 +161,7 @@ export function NavTela({ cfg, stage, rs, last, globalDist, odoM, tul, rot, trs,
           </View>
         )}
       </View>
-    </Modal>
+    </Seguro></Modal>
   );
 }
 
@@ -192,7 +194,7 @@ export function PilotoTela({ cfg, tul, classe, grupos, onPersonalizar, onClose }
   };
   const aviso = !esp ? 'Aguardando o navegador… (mesma conta de e-mail, com internet)' : idade != null && idade > 8 ? `Sem sincronismo com o navegador há ${Math.round(idade)} s` : '';
   return (
-    <Modal visible animationType="fade" onRequestClose={() => setMenu(true)}>
+    <Modal visible animationType="fade" onRequestClose={() => setMenu(true)}><Seguro>
       <View style={{ flex: 1, backgroundColor: '#000', paddingTop: 26 }}>
         {aviso ? <View style={{ backgroundColor: '#c0392b', padding: 6 }}><Text style={{ color: '#fff', textAlign: 'center', fontWeight: '800', fontSize: 15 }}>{aviso}</Text></View> : null}
         <View style={{ height: TOPO, flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', paddingHorizontal: 10, backgroundColor: '#111' }}>
@@ -214,7 +216,7 @@ export function PilotoTela({ cfg, tul, classe, grupos, onPersonalizar, onClose }
           </View>
         )}
       </View>
-    </Modal>
+    </Seguro></Modal>
   );
 }
 
@@ -328,7 +330,7 @@ export function NavConfig({ st, visible, onClose, piloto }) {
           <TouchableOpacity style={[st.btn, { marginTop: 4 }]} onPress={onClose}><Text style={st.btnTx}>Pronto</Text></TouchableOpacity>
         </ScrollView>
       </View>
-      {edit && <LayoutEditor layout={edit} cfg={c} piloto={piloto} onSalvar={(lay) => gravaL({ ...L, list: L.list.map((y) => (y.id === lay.id ? lay : y)) })} onClose={() => setEdit(null)} />}
+      {edit && <Erro onClose={() => setEdit(null)}><LayoutEditor layout={edit} cfg={c} piloto={piloto} onSalvar={(lay) => gravaL({ ...L, list: L.list.map((y) => (y.id === lay.id ? lay : y)) })} onClose={() => setEdit(null)} /></Erro>}
     </Tela>
   );
 }

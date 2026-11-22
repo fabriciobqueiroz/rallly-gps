@@ -4,6 +4,7 @@ import { useEffect } from 'react';
 import { Alert, Modal, PanResponder, ScrollView, Text, TouchableOpacity, View } from 'react-native';
 import * as ScreenOrientation from 'expo-screen-orientation';
 import { Bloco } from './Blocos';
+import Seguro from './Seguro';
 import { BLOCOS, novoId } from './NavLayout';
 
 export const TOPO = 44; // faixa superior igual na prova e no editor, para o desenho ficar idêntico
@@ -18,25 +19,38 @@ const EXEMPLO = {
 function Item({ it, sel, cv, onSel, onSet, d, nome }) {
   const P = useRef({}); P.current = { it, cv, onSel, onSet };
   const ini = useRef(null);
+  // Durante o arrasto só este bloco é redesenhado (posição local); o layout inteiro é atualizado ao soltar.
+  const [drag, setDrag] = useState(null);
+  const dragR = useRef(null);
+  const fim = () => { if (dragR.current) P.current.onSet(dragR.current); dragR.current = null; setDrag(null); };
   const mover = useRef(PanResponder.create({
     onStartShouldSetPanResponder: () => true,
-    onPanResponderGrant: () => { ini.current = { x: P.current.it.x, y: P.current.it.y }; P.current.onSel(); },
+    onPanResponderGrant: () => { ini.current = { x: P.current.it.x, y: P.current.it.y }; dragR.current = null; P.current.onSel(); },
     onPanResponderMove: (_, g) => {
       const { it: a, cv: c } = P.current;
-      P.current.onSet({ x: snap(clamp(ini.current.x + g.dx / c.w, 0, 1 - a.w)), y: snap(clamp(ini.current.y + g.dy / c.h, 0, 1 - a.h)) });
+      if (!ini.current) return;
+      const v = { x: snap(clamp(ini.current.x + g.dx / c.w, 0, 1 - a.w)), y: snap(clamp(ini.current.y + g.dy / c.h, 0, 1 - a.h)) };
+      dragR.current = v; setDrag(v);
     },
+    onPanResponderRelease: fim,
+    onPanResponderTerminate: fim,
   })).current;
   const redim = useRef(PanResponder.create({
     onStartShouldSetPanResponder: () => true,
-    onPanResponderGrant: () => { ini.current = { w: P.current.it.w, h: P.current.it.h }; P.current.onSel(); },
+    onPanResponderGrant: () => { ini.current = { w: P.current.it.w, h: P.current.it.h }; dragR.current = null; P.current.onSel(); },
     onPanResponderMove: (_, g) => {
       const { it: a, cv: c } = P.current;
-      P.current.onSet({ w: snap(clamp(ini.current.w + g.dx / c.w, 0.06, 1 - a.x)), h: snap(clamp(ini.current.h + g.dy / c.h, 0.04, 1 - a.y)) });
+      if (!ini.current) return;
+      const v = { w: snap(clamp(ini.current.w + g.dx / c.w, 0.06, 1 - a.x)), h: snap(clamp(ini.current.h + g.dy / c.h, 0.04, 1 - a.y)) };
+      dragR.current = v; setDrag(v);
     },
+    onPanResponderRelease: fim,
+    onPanResponderTerminate: fim,
   })).current;
-  const W = it.w * cv.w, H = it.h * cv.h;
+  const q = drag ? { ...it, ...drag } : it;
+  const W = Math.max(8, q.w * cv.w), H = Math.max(8, q.h * cv.h);
   return (
-    <View style={{ position: 'absolute', left: it.x * cv.w, top: it.y * cv.h, width: W, height: H }}>
+    <View style={{ position: 'absolute', left: q.x * cv.w, top: q.y * cv.h, width: W, height: H }}>
       <View pointerEvents="none"><Bloco tipo={it.tipo} d={d} w={W} h={H} /></View>
       <View {...mover.panHandlers} style={{ position: 'absolute', left: 0, top: 0, right: 0, bottom: 0, borderWidth: sel ? 2 : 0, borderColor: '#4fc3f7' }} />
       {sel && <View {...redim.panHandlers} style={{ position: 'absolute', right: -10, bottom: -10, width: 26, height: 26, backgroundColor: '#fff', borderWidth: 2, borderColor: '#4fc3f7', borderRadius: 4 }} />}
@@ -72,7 +86,7 @@ export default function LayoutEditor({ layout, cfg, piloto, onSalvar, onClose })
     setDirty(true); setItems((l) => l.filter((x) => x.id !== sel)); setSel(null); setMenu(false);
   };
   const adicionar = (tipo) => {
-    const b = BLOCOS[tipo];
+    const b = BLOCOS[tipo] || { w: 0.3, h: 0.1 };
     const id = novoId();
     setDirty(true);
     setItems((l) => [...l, { id, tipo, x: 0.1, y: 0.1, w: Math.min(b.w, 0.8), h: Math.min(b.h, 0.8) }]);
@@ -86,11 +100,11 @@ export default function LayoutEditor({ layout, cfg, piloto, onSalvar, onClose })
   };
 
   return (
-    <Modal visible animationType="slide" onRequestClose={fechar}>
+    <Modal visible animationType="slide" onRequestClose={fechar}><Seguro>
       <View style={{ flex: 1, backgroundColor: '#000', paddingTop: 26 }}>
         <View style={{ height: TOPO, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 10, backgroundColor: '#111' }}>
           <TouchableOpacity onPress={fechar}><Text style={{ color: '#4fc3f7', fontWeight: '800', fontSize: 16 }}>‹ Fechar</Text></TouchableOpacity>
-          <Text style={{ flex: 1, color: '#fff', textAlign: 'center', fontSize: 13 }} numberOfLines={1}>{selIt ? BLOCOS[selIt.tipo].nome : nome + ' · ' + (orient === 'h' ? 'horizontal' : 'vertical') + (dirty ? ' •' : '')}</Text>
+          <Text style={{ flex: 1, color: '#fff', textAlign: 'center', fontSize: 13 }} numberOfLines={1}>{selIt ? ((BLOCOS[selIt.tipo] || {}).nome || selIt.tipo) : nome + ' · ' + (orient === 'h' ? 'horizontal' : 'vertical') + (dirty ? ' •' : '')}</Text>
           <TouchableOpacity onPress={() => setMenu((m) => !m)} style={{ padding: 8 }}><Text style={{ color: '#fff', fontSize: 24, fontWeight: '900' }}>⋮</Text></TouchableOpacity>
         </View>
         <View style={{ flex: 1 }} onLayout={(e) => setCv({ w: e.nativeEvent.layout.width, h: e.nativeEvent.layout.height })}>
@@ -120,6 +134,6 @@ export default function LayoutEditor({ layout, cfg, piloto, onSalvar, onClose })
           </View>
         </Modal>
       </View>
-    </Modal>
+    </Seguro></Modal>
   );
 }
