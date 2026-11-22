@@ -404,26 +404,6 @@ export default function App() {
     if (!w.w0 && remain <= 0) { w.w0 = true; autoPc.current(); } // PC escondido: registra em silêncio
   }, [remain, stage.idx]);
 
-  if (user === undefined) return <View style={[st.root, { justifyContent: 'center' }]}><Text style={[st.sub, { textAlign: 'center' }]}>Carregando…</Text></View>;
-  if (!user) return (
-    <ScrollView style={st.root} contentContainerStyle={st.wrap}>
-      <StatusBar style="light" />
-      <Text style={st.h1}>Rally GPS</Text>
-      <Login st={st} onEntrou={(p) => setPapel(p)} />
-    </ScrollView>
-  );
-  const minhasAbas = papel === 'organizador' ? ['provas', 'organizar', 'ranking', 'trilhas'] : ['provas', 'tulipas', 'ranking', 'trilhas'];
-  const setLargManual = (v) => { setLargManualRaw(v); const k = piloto.prova.trim().toUpperCase().replace(/[^A-Z0-9]+/g, ''); saveJson('largm', { ...loadJson('largm', {}), [k]: v }); };
-  // Os pontos de GPS ficam intactos (o levantamento do organizador usa o mesmo rastro). A prova só conta a partir da largada
-  // (janela do datalogger) e o hodômetro é zerado aqui, então nada se mistura e nada é apagado.
-  const prepararInicio = (cont) => {
-    if (!stage.active) { setOdoBase(odoAtual()); setOdoAdj(0); setAferBase(null); setAferUndo(null); }
-    cont();
-  };
-  const zerarDatalogger = () => Alert.alert('Zerar datalogger', 'Apaga todos os pontos de GPS gravados neste celular (inclusive o rastro de um levantamento, se for o mesmo aparelho do organizador) e zera o hodômetro. O W% é mantido. Se a prova está em andamento, não faça isso. Confirma?', [
-    { text: 'Cancelar', style: 'cancel' },
-    { text: 'Zerar', style: 'destructive', onPress: () => { clear(); if (running) begin(); saveJson(kJan(), {}); setOdoBase(0); setOdoAdj(0); setAferBase(null); setAferUndo(null); setPosOff(0); } },
-  ]);
   // Ao vivo: a cada ~8 s manda só a posição atual (prova em andamento ou trilha gravando). É informativo; o datalogger completo segue gravado no celular.
   const aoVivoRef = useRef({});
   aoVivoRef.current = { user, piloto, last, kJan };
@@ -450,6 +430,26 @@ export default function App() {
     const id = setInterval(tick, 8000);
     return () => clearInterval(id);
   }, []);
+  if (user === undefined) return <View style={[st.root, { justifyContent: 'center' }]}><Text style={[st.sub, { textAlign: 'center' }]}>Carregando…</Text></View>;
+  if (!user) return (
+    <ScrollView style={st.root} contentContainerStyle={st.wrap}>
+      <StatusBar style="light" />
+      <Text style={st.h1}>Rally GPS</Text>
+      <Login st={st} onEntrou={(p) => setPapel(p)} />
+    </ScrollView>
+  );
+  const minhasAbas = papel === 'organizador' ? ['provas', 'organizar', 'ranking', 'trilhas'] : ['provas', 'tulipas', 'ranking', 'trilhas'];
+  const setLargManual = (v) => { setLargManualRaw(v); const k = piloto.prova.trim().toUpperCase().replace(/[^A-Z0-9]+/g, ''); saveJson('largm', { ...loadJson('largm', {}), [k]: v }); };
+  // Os pontos de GPS ficam intactos (o levantamento do organizador usa o mesmo rastro). A prova só conta a partir da largada
+  // (janela do datalogger) e o hodômetro é zerado aqui, então nada se mistura e nada é apagado.
+  const prepararInicio = (cont) => {
+    if (!stage.active) { setOdoBase(odoAtual()); setOdoAdj(0); setAferBase(null); setAferUndo(null); }
+    cont();
+  };
+  const zerarDatalogger = () => Alert.alert('Zerar datalogger', 'Apaga todos os pontos de GPS gravados neste celular (inclusive o rastro de um levantamento, se for o mesmo aparelho do organizador) e zera o hodômetro. O W% é mantido. Se a prova está em andamento, não faça isso. Confirma?', [
+    { text: 'Cancelar', style: 'cancel' },
+    { text: 'Zerar', style: 'destructive', onPress: () => { clear(); if (running) begin(); saveJson(kJan(), {}); setOdoBase(0); setOdoAdj(0); setAferBase(null); setAferUndo(null); setPosOff(0); } },
+  ]);
   const janN = (() => { const j = loadJson(kJan(), {}); return j.ini == null ? 0 : points.filter((p) => p.t >= j.ini && (j.fim == null || p.t <= j.fim)).length; })();
   const onPlanilha = () => {
     if (!libOk) return Alert.alert('Planilha não liberada', 'Aguarde a liberação do organizador. Você pode usar "Apenas datalogger".');
