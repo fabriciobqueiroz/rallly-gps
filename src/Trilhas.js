@@ -29,7 +29,8 @@ function Etiqueta({ st, k }) {
 
 // ---------- Organizador: formulário ----------
 function FormTrilha({ st, ini, onFim }) {
-  const [f, setF] = useState(() => ({ nome: '', quando: '', cidade: '', nivel: 'Média', vagas: '20', obs: '', aberta: false, encontro: null, rota: [], km: 0, ...ini }));
+  const [f, setF] = useState(() => ({ nome: '', quando: '', cidade: '', nivel: 'Média', vagas: '20', obs: '', aberta: false, encontro: null, rota: [], km: 0, paradas: [], ...ini }));
+  const [modo, setModo] = useState('rota');
   const [pts, setPts] = useState(() => (ini && ini.pts && ini.pts.length ? pair(ini.pts) : ini && ini.encontro ? [[ini.encontro.lat, ini.encontro.lon]] : []));
   const [busy, setBusy] = useState('');
   const req = useRef(0);
@@ -53,9 +54,18 @@ function FormTrilha({ st, ini, onFim }) {
     set({ encontro: arr[0] ? { lat: q(arr[0][0]), lon: q(arr[0][1]) } : null, pts: flat(arr) });
     refaz(arr);
   };
-  const onTap = (la, lo) => aplica([...pts, [la, lo]]);
-  const marks = pts.map((p, i) => ({ lat: p[0], lon: p[1], txt: i === 0 ? 'Encontro' : i === 1 ? 'Largada' : `Chegada ${i - 1}`, cls: i === 0 ? 'l' : i === 1 ? 'c' : 's' }));
-  const dica = pts.length === 0 ? 'Toque no mapa: 1º toque = ponto de ENCONTRO.' : pts.length === 1 ? 'Agora toque a LARGADA.' : 'Cada novo toque marca uma CHEGADA e o traçado segue as ruas até ele.';
+  const q6 = (x) => Math.round(x * 1e6) / 1e6;
+  const paradas = f.paradas || [];
+  const setPar = (i, patch) => set({ paradas: paradas.map((x, j) => (j === i ? { ...x, ...patch } : x)) });
+  const hhmm = (v) => { const d = v.replace(/[^0-9]/g, '').slice(0, 4); return d.length > 2 ? d.slice(0, 2) + ':' + d.slice(2) : d; };
+  const onTap = (la, lo) => {
+    if (modo === 'parada') set({ paradas: [...paradas, { lat: q6(la), lon: q6(lo), obs: '', hora: '' }] });
+    else aplica([...pts, [la, lo]]);
+  };
+  const marks = pts.map((p, i) => ({ lat: p[0], lon: p[1], txt: i === 0 ? 'Encontro' : i === 1 ? 'Largada' : 'Chegada', cls: i === 0 ? 'l' : i === 1 ? 'c' : 's', i }))
+    .filter((m) => m.i < 2 || m.i === pts.length - 1)
+    .concat(paradas.map((x, i) => ({ lat: x.lat, lon: x.lon, txt: `Parada ${i + 1}${x.hora ? ' · ' + x.hora : ''}`, cls: '' })));
+  const dica = modo === 'parada' ? 'Toque no mapa onde será a parada.' : pts.length === 0 ? 'Toque no mapa: 1º toque = ponto de ENCONTRO.' : pts.length === 1 ? 'Agora toque a LARGADA.' : 'Cada novo toque estende o traçado pelas ruas; a CHEGADA fica no último ponto.';
   const salvar = async (aberta) => {
     if (!f.nome.trim()) return Alert.alert('Falta o nome', 'Dê um nome para a trilha.');
     if (aberta && (!f.quando || !f.encontro)) return Alert.alert('Falta informação', 'Para publicar, escolha a data e hora e marque o ponto de encontro no mapa.');
@@ -63,7 +73,7 @@ function FormTrilha({ st, ini, onFim }) {
     try {
       await salvarTrilha(id, {
         nome: f.nome.trim(), quando: f.quando || '', quandoTs: parseDT(f.quando), cidade: f.cidade || '', nivel: f.nivel, vagas: parseInt(f.vagas, 10) || 0, obs: f.obs || '',
-        encontro: f.encontro || null, pts: f.pts || [], rota: f.rota || [], km: f.km || 0, aberta: !!aberta,
+        encontro: f.encontro || null, pts: f.pts || [], paradas: (f.paradas || []).map((x) => ({ lat: x.lat, lon: x.lon, obs: x.obs || '', hora: x.hora || '' })), rota: f.rota || [], km: f.km || 0, aberta: !!aberta,
       });
       Alert.alert(aberta ? 'Trilha publicada' : 'Rascunho salvo', aberta ? 'Ela já aparece para os competidores.' : 'Só você vê. Publique quando estiver pronta.');
       onFim();
@@ -83,6 +93,10 @@ function FormTrilha({ st, ini, onFim }) {
       </View>
       <View style={st.card}>
         <Text style={st.tip}>Mapa</Text>
+        <View style={st.row}>
+          <TouchableOpacity style={chipS(st, modo === 'rota')} onPress={() => setModo('rota')}><Text style={[st.btn2Tx, modo === 'rota' && { color: '#0c1014' }]}>Traçar percurso</Text></TouchableOpacity>
+          <TouchableOpacity style={chipS(st, modo === 'parada')} onPress={() => setModo('parada')}><Text style={[st.btn2Tx, modo === 'parada' && { color: '#0c1014' }]}>+ Adicionar parada</Text></TouchableOpacity>
+        </View>
         <Text style={st.tipTx}>{dica}</Text>
         <MapaWeb wps={[]} coords={coords} marks={marks} editable onTap={onTap} height={Platform.OS === 'web' ? 420 : 300} />
         <View style={st.row}>
@@ -90,6 +104,16 @@ function FormTrilha({ st, ini, onFim }) {
           {pts.length >= 3 && <TouchableOpacity style={st.btn2} onPress={() => refaz(pts)}><Text style={st.btn2Tx}>Refazer traçado</Text></TouchableOpacity>}
           {pts.length > 0 && <TouchableOpacity style={st.btn2} onPress={() => aplica([])}><Text style={[st.btn2Tx, { color: '#ff5252' }]}>Apagar tudo</Text></TouchableOpacity>}
         </View>
+        {paradas.map((x, i) => (
+          <View key={'pa' + i} style={{ borderTopWidth: 1, borderTopColor: '#262b32', paddingTop: 8, marginTop: 8 }}>
+            <View style={st.line}>
+              <Text style={st.v}>Parada {i + 1}</Text>
+              <TouchableOpacity onPress={() => set({ paradas: paradas.filter((_, j) => j !== i) })}><Text style={{ color: '#ff5252', fontWeight: '700' }}>Remover</Text></TouchableOpacity>
+            </View>
+            <View style={st.line}><Text style={st.k}>Horário previsto (HH:MM)</Text><TextInput style={st.input} value={x.hora || ''} onChangeText={(v) => setPar(i, { hora: hhmm(v) })} keyboardType="number-pad" placeholder="09:30" placeholderTextColor="#666" maxLength={5} /></View>
+            <TextInput style={[st.field, { minHeight: 56 }]} value={x.obs || ''} onChangeText={(v) => setPar(i, { obs: v })} placeholder="O que será (ex.: café da manhã, mirante, abastecimento)" placeholderTextColor="#666" multiline />
+          </View>
+        ))}
         {busy ? <Text style={st.tipTx}>{busy}</Text> : null}
         {f.km > 0 && <Text style={st.tipTx}>Percurso: {f.km} km</Text>}
       </View>
@@ -268,7 +292,9 @@ function Detalhe({ st, t, insc, gps, onVoltar }) {
   const pedir = () => pedirVagaTrilha(t.id, { nome: gps.nome, veiculo: veic.trim(), pessoas: parseInt(pes, 10) || 1 }).then(() => Alert.alert('Pedido enviado', 'O organizador vai analisar. Você vê a resposta aqui.')).catch((e) => Alert.alert('Erro', String(e?.message || e)));
   const mudar = (status, msg) => atualizarInscTrilha(t.id, gps.uid, { status }).then(() => msg && Alert.alert(msg)).catch((e) => Alert.alert('Erro', String(e?.message || e)));
   const sair = () => Alert.alert('Cancelar', 'Cancelar sua participação nesta trilha?', [{ text: 'Voltar', style: 'cancel' }, { text: 'Cancelar participação', style: 'destructive', onPress: () => mudar('cancelado') }]);
-  const marks = pair(t.pts || []).map((p, i) => ({ lat: p[0], lon: p[1], txt: i === 0 ? 'Encontro' : i === 1 ? 'Largada' : `Chegada ${i - 1}`, cls: i === 0 ? 'l' : i === 1 ? 'c' : 's' }));
+  const pp = pair(t.pts || []);
+  const marks = pp.map((p, i) => ({ lat: p[0], lon: p[1], txt: i === 0 ? 'Encontro' : i === 1 ? 'Largada' : 'Chegada', cls: i === 0 ? 'l' : i === 1 ? 'c' : 's', i })).filter((m) => m.i < 2 || m.i === pp.length - 1);
+  (t.paradas || []).forEach((x, i) => marks.push({ lat: x.lat, lon: x.lon, txt: `Parada ${i + 1}${x.hora ? ' · ' + x.hora : ''}`, cls: '' }));
   if (!marks.length && t.encontro) marks.push({ lat: t.encontro.lat, lon: t.encontro.lon, txt: 'Encontro', cls: 'l' });
   const coords = verPub != null ? trackCoords(pub.find((x) => x.uid === verPub)) : pair(t.rota);
   return (
@@ -281,6 +307,12 @@ function Detalhe({ st, t, insc, gps, onVoltar }) {
         {t.obs ? <Text style={[st.v, { marginTop: 8 }]}>{t.obs}</Text> : null}
       </View>
       {(t.encontro || coords.length > 0) && <MapaWeb coords={coords} marks={marks} height={260} />}
+      {(t.paradas || []).length > 0 && (
+        <View style={st.card}>
+          <Text style={st.tip}>Paradas</Text>
+          {t.paradas.map((x, i) => <Text key={'pr' + i} style={[st.v, { marginTop: 4 }]}>{i + 1}. {x.hora ? x.hora + ' · ' : ''}{x.obs || 'Parada'}</Text>)}
+        </View>
+      )}
       <View style={st.card}>
         <Text style={st.tip}>Minha participação</Text>
         {!s && (
