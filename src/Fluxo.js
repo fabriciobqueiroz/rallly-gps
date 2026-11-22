@@ -6,7 +6,7 @@ import * as Location from 'expo-location';
 import * as Battery from 'expo-battery';
 import { useKeepAwake } from 'expo-keep-awake';
 import { loadJson, saveJson } from './persist';
-import { lerProva, ouvirMinhasInscricoes, ouvirMinhasProvas, ouvirRanking } from './firebase';
+import { removerInscricao, lerProva, ouvirMinhasInscricoes, ouvirMinhasProvas, ouvirRanking } from './firebase';
 import { parseHMS, planilhaLiberada } from './OrgExtras';
 import { fmtDur, gruposDe, rank } from './rally';
 
@@ -36,6 +36,7 @@ function Eventos({ st, user, onEvento, onAdmin }) {
   const [donos, setDonos] = useState(c0.donos);
   const [provas, setProvas] = useState(c0.provas);
   const [erro, setErro] = useState('');
+  const [ocultas, setOcultas] = useState(() => loadJson('evocultas', []));
   const [sumidas, setSumidas] = useState({}); // provas que não existem mais na nuvem (canceladas/apagadas)
   useEffect(() => ouvirMinhasInscricoes(user.email, (l) => { setInsc(l); setErro(''); }, () => setErro('Sem conexão: mostrando o que está salvo no celular.')), [user.email]);
   useEffect(() => ouvirMinhasProvas(setDonos, () => {}), [user.uid]);
@@ -47,12 +48,20 @@ function Eventos({ st, user, onEvento, onAdmin }) {
   const hoje = new Date(); hoje.setHours(0, 0, 0, 0);
   const dias = (ts) => (ts == null ? null : Math.round((ts - hoje.getTime()) / 86400000));
   const adm = donos.map((x) => ({ kind: 'adm', code: x.code, nome: x.nome || 'Prova ' + x.code, cidade: x.cidade, data: x.data, ts: x.dataTs ?? parseDataBR(x.data) }));
-  const comp = insc.filter((i) => !sumidas[i.prova]).map((i) => { const p = provas[i.prova] || {}; return { kind: 'comp', code: i.prova, nome: i.provaNome || p.nome || 'Prova ' + i.prova, cidade: p.cidade, data: p.data, ts: p.dataTs ?? parseDataBR(p.data), insc: i }; });
+  const comp = insc.filter((i) => !sumidas[i.prova] && !ocultas.includes(i.prova + '_' + i.numero)).map((i) => { const p = provas[i.prova] || {}; return { kind: 'comp', code: i.prova, nome: i.provaNome || p.nome || 'Prova ' + i.prova, cidade: p.cidade, data: p.data, ts: p.dataTs ?? parseDataBR(p.data), insc: i }; });
   const ord = (a) => [...a].sort((x, y) => (y.ts ?? -1) - (x.ts ?? -1));
   const todos = [...adm, ...comp];
   const sHoje = todos.filter((x) => dias(x.ts) === 0);
   const sAman = todos.filter((x) => dias(x.ts) === 1);
   const resto = (a) => ord(a.filter((x) => ![0, 1].includes(dias(x.ts))));
+  const remover = (x) => Alert.alert('Remover da lista', `Tirar "${x.nome}" da sua lista de eventos inscritos?`, [
+    { text: 'Cancelar', style: 'cancel' },
+    { text: 'Remover', style: 'destructive', onPress: () => {
+      const chave = x.code + '_' + (x.insc?.numero || '');
+      const n = [...ocultas, chave]; setOcultas(n); saveJson('evocultas', n);
+      removerInscricao(x.code, x.insc?.numero, user.email).catch(() => {}); // se a conta permitir, apaga também na nuvem
+    } },
+  ]);
   const Cartao = ({ x, tag }) => (
     <TouchableOpacity style={[st.card, { marginBottom: 8 }]} onPress={() => (x.kind === 'adm' ? onAdmin(x) : onEvento(x))}>
       <Text style={{ color: '#fff', fontSize: 18, fontWeight: '700' }}>{x.nome}</Text>
@@ -61,6 +70,7 @@ function Eventos({ st, user, onEvento, onAdmin }) {
       </View>
       {tag ? <Text style={[st.tipTx, { color: '#4fc3f7' }]}>{x.kind === 'adm' ? 'Organizador' : 'Competidor'}</Text> : null}
       {x.kind === 'comp' && temCache(x.code) ? <Text style={[st.tipTx, { color: '#4caf50' }]}>Disponível offline ✓</Text> : null}
+      {x.kind === 'comp' ? <TouchableOpacity onPress={() => remover(x)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}><Text style={{ color: '#ff5252', fontWeight: '700', marginTop: 6 }}>Remover da lista</Text></TouchableOpacity> : null}
     </TouchableOpacity>
   );
   const Sec = ({ t, a, tag }) => (a.length ? <View style={{ marginTop: 6 }}><Text style={[st.tip, { marginBottom: 6 }]}>{t}</Text>{a.map((x) => <Cartao key={x.kind + x.code + (x.insc?.numero || '')} x={x} tag={tag} />)}</View> : null);
