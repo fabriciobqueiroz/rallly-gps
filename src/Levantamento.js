@@ -95,6 +95,22 @@ function EditorTulipa({ st, m, onChange, onDesenhar, onDetectar }) {
 
 const slugProva = (p) => String(p).trim().toUpperCase().replace(/[^A-Z0-9]+/g, '');
 
+
+// Tempo parado do neutro: campos controlados (min/seg) que gravam a cada digitação, na web e no celular.
+function NtEdit({ st, nt, on }) {
+  const [mn, setMn] = useState(String(Math.floor(nt / 60)));
+  const [sg, setSg] = useState(String(nt % 60));
+  const commit = (m, g) => on(Math.max(1, (parseInt(m, 10) || 0) * 60 + Math.min(59, parseInt(g, 10) || 0)));
+  return (
+    <View style={[st.line, { justifyContent: 'flex-start', gap: 8, alignItems: 'center' }]}>
+      <TextInput style={[st.input, { minWidth: 56 }]} value={mn} keyboardType="number-pad" onChangeText={(v) => { const x = v.replace(/[^0-9]/g, ''); setMn(x); commit(x, sg); }} />
+      <Text style={st.k}>min</Text>
+      <TextInput style={[st.input, { minWidth: 56 }]} value={sg} keyboardType="number-pad" onChangeText={(v) => { const x = v.replace(/[^0-9]/g, ''); setSg(x); commit(mn, x); }} />
+      <Text style={st.k}>seg</Text>
+    </View>
+  );
+}
+
 export default function Levantamento({ st, prova, last, onAplicar, onProva, levNuvem, trailNuvem }) {
   const slug0 = String(prova).trim().toUpperCase().replace(/[^A-Z0-9]+/g, '');
   const chave = 'lev_' + slug0;
@@ -371,7 +387,7 @@ export default function Levantamento({ st, prova, last, onAplicar, onProva, levN
       else if (m.k === 'T') { refN++; tul.push({ ...tulipaDe(m, p), rn: refN }); }
       else if (m.k === 'S') { refN++; trI++; trsOut.push({ ...trsL[trI], d0: d }); tul.push({ ...tulipaDe(m, p), rn: refN, ptr: trI }); }
       else if (m.k === 'P') { pcN++; pcNum++; tul.push({ t: 'P', n: pcN, pn: pcNum, d, p, man: true, ...(m.nm ? { nm: m.nm } : {}) }); }
-      else if (m.k === 'N') { pcN++; tul.push({ ...(temDesenho(m) ? entradaDe(m, p) : {}), t: 'P', n: pcN, d, p, man: true, neu: true }); }
+      else if (m.k === 'N') { pcN++; refN++; tul.push({ ...(temDesenho(m) ? entradaDe(m, p) : { ty: 'turn', mo: '', b: [180], i: 0, o: -1, ex: 0, nm: m.nm || m.nota || '' }), rn: refN, t: 'P', n: pcN, d, p, man: true, neu: true }); }
       else if (m.k === 'C') { refN++; if (temDesenho(m)) tul.push({ ...entradaDe(m, p), rn: refN }); tul.push({ t: 'C', n: pcN + 1, d, p: temDesenho(m) ? 0 : p, man: true, rn: refN }); }
       if (m.k === 'L' || m.k === 'P' || m.k === 'N' || m.k === 'C') {
         wps.push([m.lat, m.lon]); pontosKm.push(d / 1000);
@@ -622,12 +638,7 @@ export default function Levantamento({ st, prova, last, onAplicar, onProva, levN
                       {m.k === 'N' && (
                         <View>
                           <Text style={st.tipTx}>Tempo parado</Text>
-                          <View style={[st.line, { justifyContent: 'flex-start', gap: 8, alignItems: 'center' }]}>
-                            <TextInput style={[st.input, { minWidth: 56 }]} defaultValue={String(Math.floor(nt / 60))} keyboardType="number-pad" onEndEditing={(e) => upd(m.id, { nt: Math.max(1, (parseInt(e.nativeEvent.text, 10) || 0) * 60 + (nt % 60)) })} />
-                            <Text style={st.k}>min</Text>
-                            <TextInput style={[st.input, { minWidth: 56 }]} defaultValue={String(nt % 60)} keyboardType="number-pad" onEndEditing={(e) => upd(m.id, { nt: Math.max(1, Math.floor(nt / 60) * 60 + Math.min(59, parseInt(e.nativeEvent.text, 10) || 0)) })} />
-                            <Text style={st.k}>seg</Text>
-                          </View>
+                          <NtEdit st={st} nt={nt} on={(v) => upd(m.id, { nt: v })} />
                           <Text style={st.tipTx}>O relógio do trecho seguinte só começa depois desse tempo.</Text>
                         </View>
                       )}

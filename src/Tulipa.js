@@ -59,7 +59,7 @@ export const tulComp = (tul) => tul.filter((e) => e.t !== 'P' || e.nt > 0);
 const hms = (sec) => { const t = Math.max(0, Math.round(sec)); return `${String(Math.floor(t / 3600)).padStart(2, '0')}:${String(Math.floor((t % 3600) / 60)).padStart(2, '0')}:${String(t % 60).padStart(2, '0')}`; };
 
 export function Entrada({ e, st, destaque, faltam, classe, grupos, org }) {
-  const neuDw = e.t === 'P' && e.nt > 0 && !!(e.dw && e.dw.length);
+  const neuDw = e.t === 'P' && e.nt > 0 && !!((e.dw && e.dw.length) || Array.isArray(e.b));
   const marcador = e.t !== 'T' && !neuDw;
   const soNeutro = e.t === 'P' && e.nt > 0 && !org;
   const nx = rotuloNx(e.nx, classe, grupos);
@@ -87,7 +87,7 @@ export function Entrada({ e, st, destaque, faltam, classe, grupos, org }) {
     </View>
   ) : null;
   return (
-    <View style={{ borderBottomWidth: 1, borderBottomColor: '#262b32', paddingVertical: 6, borderLeftWidth: destaque ? 4 : 0, borderLeftColor: '#ff7a2e', paddingLeft: destaque ? 8 : 0 }}>
+    <View style={{ borderBottomWidth: 1, borderBottomColor: '#262b32', backgroundColor: neuDw ? '#3b1d4a' : undefined, paddingVertical: 6, borderLeftWidth: destaque ? 4 : 0, borderLeftColor: '#ff7a2e', paddingLeft: destaque ? 8 : 0 }}>
       <View style={{ flexDirection: 'row', alignItems: 'center' }}>
         {colKm}
         {marcador ? (

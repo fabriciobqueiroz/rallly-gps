@@ -121,7 +121,8 @@ export default function Organizador({ st, prova, provaMap, last, onOrg, onProva,
   const logado = org && org.prova === prova.trim().toUpperCase();
 
   useEffect(() => {
-    if (logado && provaMap.wps.length && carregado.current !== (provaMap.pub || 1) && !(carregado.current && wps.length)) {
+    // carrega a versão publicada na primeira vez e sempre que OUTRO aparelho publicar algo mais novo (ex.: edição feita no computador)
+    if (logado && provaMap.wps.length && (carregado.current === 0 || (provaMap.pub || 1) > carregado.current)) {
       carregado.current = provaMap.pub || 1;
       setWps(provaMap.wps);
       setRota({ coords: provaMap.coords, legs: provaMap.legs, tul: provaMap.tul });
@@ -207,6 +208,7 @@ export default function Organizador({ st, prova, provaMap, last, onOrg, onProva,
   };
   const publicar = async () => {
     if (wps.length < 2 || rota.legs.length !== wps.length - 1 || legs.length !== rota.legs.length) return Alert.alert('Falta rota', 'Marque ao menos a largada e a chegada e aguarde o cálculo.');
+    const stampPub = Date.now();
     try {
       await salvarProva(prova, {
         roteiro: trechos.map((t) => `${t.km.toFixed(3)} ${t.kg}`).join('\n'),
@@ -220,8 +222,9 @@ export default function Organizador({ st, prova, provaMap, last, onOrg, onProva,
         pcl: manual ? pcl : [],
         ...(levParaNuvem() ? { lev: levParaNuvem() } : {}),
         ...(((loadJson('lev_' + String(prova).trim().toUpperCase().replace(/[^A-Z0-9]+/g, ''), {}).nome || '').slice(0, 60)) ? { nome: (loadJson('lev_' + String(prova).trim().toUpperCase().replace(/[^A-Z0-9]+/g, ''), {}).nome || '').slice(0, 60) } : {}),
-        publicadoEm: Date.now(),
+        publicadoEm: stampPub,
       });
+      carregado.current = stampPub;
       Alert.alert('Prova publicada', 'Planilha e roadbook enviados. Os celulares com este código recebem sozinhos.');
     } catch (e) { Alert.alert('Não publicou', String(e?.message || e)); }
   };
@@ -387,6 +390,7 @@ export default function Organizador({ st, prova, provaMap, last, onOrg, onProva,
         {rota.tul.length > 0 && <Text style={[st.tip, { marginTop: 8 }]}>Roadbook gerado: {rota.tul.filter((e) => e.t === 'T').length} tulipas</Text>}
         {rota.tul.length > 0 && <Roadbook st={st} tul={tulT} dist={null} grupos={grupos} org />}
         <TouchableOpacity style={[st.btn, { marginTop: 10, backgroundColor: '#2e7d32' }]} onPress={publicar}><Text style={[st.btnTx, { color: '#fff' }]}>Publicar prova para os celulares</Text></TouchableOpacity>
+        {provaMap.pub > 1 && <Text style={st.tipTx}>Versão publicada: {new Date(provaMap.pub).toLocaleString('pt-BR')}. Os celulares só recebem o que foi publicado.</Text>}
         <TouchableOpacity style={[st.btn2, { marginBottom: 8 }]} onPress={pdf}><Text style={st.btn2Tx}>Gerar PDF do roadbook (imprimir)</Text></TouchableOpacity>
         <TouchableOpacity style={st.btn2} onPress={sair}><Text style={st.btn2Tx}>Sair do modo organizador</Text></TouchableOpacity>
       </View>

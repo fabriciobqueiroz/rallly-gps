@@ -98,6 +98,7 @@ function Evento({ st, user, x, provaMap, lib, dlStat, pointsN, onDl, enviandoDl,
       {aba === 'info' ? (
         <View>
           <Text style={{ color: '#fff', fontSize: 24, fontWeight: '800', marginTop: 6 }}>{x.nome}</Text>
+          {provaMap && provaMap.pub > 1 ? <Text style={{ color: '#9aa3ad', marginTop: 2 }}>Planilha do organizador: versão de {new Date(provaMap.pub).toLocaleString('pt-BR')}</Text> : null}
           <View style={[st.line, { marginTop: 8 }]}>
             <Text style={st.v}>{x.data || 'data a definir'}{x.cidade ? ` · ${x.cidade}` : ''}</Text>
             <TouchableOpacity onPress={atualizar}><Text style={{ color: '#4fc3f7', fontSize: 24 }}>↻</Text></TouchableOpacity>

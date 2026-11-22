@@ -34,9 +34,9 @@ function velDoTrecho(e, trs, classe, grupos) {
 }
 
 export function LinhaRb({ e, pct, atual, w, hh, classe, grupos, trs }) {
-  const neuDw = e.t === 'P' && e.nt > 0 && !!(e.dw && e.dw.length);
+  const neuDw = e.t === 'P' && e.nt > 0 && !!((e.dw && e.dw.length) || Array.isArray(e.b));
   const h = hh != null ? Math.max(20, Math.floor(hh)) : Math.round((w * 0.46 * pct) / 100), k = Math.max(0.6, Math.min(1.6, hh != null ? hh / (w * 0.46) : pct / 100));
-  const bg = atual ? '#f5e50f' : '#fff';
+  const bg = atual ? '#f5e50f' : neuDw ? '#e1bee7' : '#fff';
   const vel = velDoTrecho(e, trs, classe, grupos);
   if (e.t !== 'T' && !neuDw) {
     const mm = (s) => `${Math.floor(s / 60)}:${String(Math.round(s % 60)).padStart(2, '0')}`;
@@ -55,7 +55,7 @@ export function LinhaRb({ e, pct, atual, w, hh, classe, grupos, trs }) {
         <Text style={{ color: '#000', fontSize: 12 * k, textAlign: 'right' }}>{fmtDist(e.p, { un: 'km', dec: 3 })}</Text>
         <Text style={{ color: '#000', fontSize: 26 * k, fontWeight: '800' }}>{fmtDist(e.d, { un: 'km', dec: 3 })}</Text>
         {e.afer ? <Text style={{ color: '#fff', backgroundColor: '#000', fontSize: 16 * k, fontWeight: '900', fontStyle: 'italic', paddingHorizontal: 8, alignSelf: 'flex-start' }}>AFER</Text> : null}
-        {neuDw ? <Text style={{ color: '#fff', backgroundColor: '#6a1b9a', fontSize: 12 * k, fontWeight: '800', paddingHorizontal: 6, alignSelf: 'flex-start', borderRadius: 4 }}>NEUTRO · PARE {Math.floor(e.nt / 60)}:{String(Math.round(e.nt % 60)).padStart(2, '0')}</Text> : null}
+        {neuDw ? <Text style={{ color: '#fff', backgroundColor: '#6a1b9a', fontSize: 15 * k, fontWeight: '900', paddingHorizontal: 8, alignSelf: 'flex-start', borderRadius: 4 }}>NEUTRO · PARE {Math.floor(e.nt / 60)}:{String(Math.round(e.nt % 60)).padStart(2, '0')}</Text> : null}
         {e.nm ? <Text style={{ color: '#000', fontSize: 11 * k }} numberOfLines={2}>{e.nm}</Text> : null}
       </View>
       {vel ? (
