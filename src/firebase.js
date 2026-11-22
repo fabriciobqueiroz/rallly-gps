@@ -176,3 +176,65 @@ export function ouvirDataloggers(prova, onData, onError) {
   const q = query(collection(db, 'dataloggers'), where('prova', '==', slug(prova)));
   return onSnapshot(q, (snap) => onData(snap.docs.map((d) => d.data())), onError);
 }
+
+// ---------- Trilhas ----------
+// trilhas/{id}: dados da trilha (organizador). trilhaInsc/{id_uid}: pedido de vaga. trilhaTracks/{id_uid}: percurso gravado.
+export const idTrilha = () => 'T' + Date.now().toString(36) + Math.floor(Math.random() * 1296).toString(36);
+export async function salvarTrilha(id, data) {
+  const u = auth.currentUser;
+  if (!u) throw new Error('Entre na sua conta primeiro.');
+  await setDoc(doc(db, 'trilhas', id), { ...data, donoUid: u.uid, donoEmail: (u.email || '').toLowerCase(), atualizadaEm: Date.now() }, { merge: true });
+}
+export function ouvirTrilhasAbertas(onData, onError) {
+  return onSnapshot(query(collection(db, 'trilhas'), where('aberta', '==', true)), (snap) => onData(snap.docs.map((d) => ({ id: d.id, ...d.data() }))), onError);
+}
+export function ouvirMinhasTrilhasOrg(onData, onError) {
+  const u = auth.currentUser;
+  if (!u) return () => {};
+  return onSnapshot(query(collection(db, 'trilhas'), where('donoUid', '==', u.uid)), (snap) => onData(snap.docs.map((d) => ({ id: d.id, ...d.data() }))), onError);
+}
+export async function apagarTrilha(id) {
+  for (const col of ['trilhaInsc', 'trilhaTracks']) {
+    const snap = await getDocs(query(collection(db, col), where('trilha', '==', id)));
+    for (const d of snap.docs) await deleteDoc(d.ref);
+  }
+  await deleteDoc(doc(db, 'trilhas', id));
+}
+export function ouvirInscTrilha(id, onData, onError) {
+  return onSnapshot(query(collection(db, 'trilhaInsc'), where('trilha', '==', id)), (snap) => onData(snap.docs.map((d) => d.data())), onError);
+}
+export function ouvirMinhasInscTrilhas(onData, onError) {
+  const u = auth.currentUser;
+  if (!u) return () => {};
+  return onSnapshot(query(collection(db, 'trilhaInsc'), where('uid', '==', u.uid)), (snap) => onData(snap.docs.map((d) => d.data())), onError);
+}
+export async function pedirVagaTrilha(trilha, { nome, veiculo, pessoas }) {
+  const u = auth.currentUser;
+  if (!u) throw new Error('Entre na sua conta primeiro.');
+  await setDoc(doc(db, 'trilhaInsc', `${trilha}_${u.uid}`), { trilha, uid: u.uid, email: (u.email || '').toLowerCase(), nome: nome || '', veiculo: veiculo || '', pessoas: pessoas || 1, status: 'pedido', em: Date.now() });
+}
+// Participante: confirma presença ou cancela. Organizador: aprova, recusa, ordem sugerida.
+export const atualizarInscTrilha = (trilha, uid, patch) => setDoc(doc(db, 'trilhaInsc', `${trilha}_${uid}`), { ...patch, em: Date.now() }, { merge: true });
+export const removerInscTrilha = (trilha, uid) => deleteDoc(doc(db, 'trilhaInsc', `${trilha}_${uid}`));
+export async function enviarTrackTrilha({ trilha, nome, points, km, titulo }) {
+  const u = auth.currentUser;
+  if (!u) throw new Error('Entre na sua conta primeiro.');
+  let pts = points;
+  if (pts.length > 14000) pts = pts.filter((_, i) => i % 2 === 0);
+  if (pts.length < 2) throw new Error('Poucos pontos gravados.');
+  const t0 = pts[0].t;
+  await setDoc(doc(db, 'trilhaTracks', `${trilha}_${u.uid}`), {
+    trilha, uid: u.uid, nome: nome || '', titulo: titulo || '', km: Math.round((km || 0) * 10) / 10, t0,
+    t: pts.map((p) => Math.round((p.t - t0) / 1000)), la: pts.map((p) => Math.round(p.lat * 1e5)), lo: pts.map((p) => Math.round(p.lon * 1e5)),
+    publico: false, em: Date.now(),
+  }, { merge: true });
+}
+export const publicarTrackTrilha = (trilha, uid, publico) => setDoc(doc(db, 'trilhaTracks', `${trilha}_${uid}`), { publico: !!publico }, { merge: true });
+export function ouvirMeusTracksTrilha(onData, onError) {
+  const u = auth.currentUser;
+  if (!u) return () => {};
+  return onSnapshot(query(collection(db, 'trilhaTracks'), where('uid', '==', u.uid)), (snap) => onData(snap.docs.map((d) => d.data())), onError);
+}
+export function ouvirTracksPublicosTrilha(trilha, onData, onError) {
+  return onSnapshot(query(collection(db, 'trilhaTracks'), where('trilha', '==', trilha), where('publico', '==', true)), (snap) => onData(snap.docs.map((d) => d.data())), onError);
+}

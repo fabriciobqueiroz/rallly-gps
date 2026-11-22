@@ -19,6 +19,7 @@ import { planilhaLiberada, parseHMS, CATS_PADRAO } from './src/OrgExtras';
 import { NavTela, NavConfig, PilotoTela, loadNav } from './src/Nav';
 import { compartilharPdf } from './src/pdf';
 import Erro from './src/Erro';
+import { TrilhasComp, TrilhasOrg } from './src/Trilhas';
 import { begin, clear, getState, subscribe, summarize, toCsv, haversine } from './src/store';
 import { gruposDe, cumulative, newStage, startStage, status, markPc, parseRoteiro, resolverTrecho, pontos, rank, fmtDur, fmtSigned, pcsToText, zeroOff } from './src/rally';
 
@@ -408,7 +409,7 @@ export default function App() {
       <Login st={st} onEntrou={(p) => setPapel(p)} />
     </ScrollView>
   );
-  const minhasAbas = papel === 'organizador' ? ['provas', 'organizar', 'ranking'] : ['provas', 'tulipas', 'ranking'];
+  const minhasAbas = papel === 'organizador' ? ['provas', 'organizar', 'ranking', 'trilhas'] : ['provas', 'tulipas', 'ranking', 'trilhas'];
   const setLargManual = (v) => { setLargManualRaw(v); const k = piloto.prova.trim().toUpperCase().replace(/[^A-Z0-9]+/g, ''); saveJson('largm', { ...loadJson('largm', {}), [k]: v }); };
   // Os pontos de GPS ficam intactos (o levantamento do organizador usa o mesmo rastro). A prova só conta a partir da largada
   // (janela do datalogger) e o hodômetro é zerado aqui, então nada se mistura e nada é apagado.
@@ -456,7 +457,7 @@ export default function App() {
       <View style={st.row}>
         {minhasAbas.map((t) => (
           <TouchableOpacity key={t} style={[st.tab, tab === t && st.tabOn]} onPress={() => setTab(t)}>
-            <Text style={[st.tabTx, tab === t && { color: '#0c1014' }]}>{{ provas: 'Provas', gravar: 'Gravar', ranking: 'Ranking', tulipas: 'Iniciar', organizar: 'Organizar' }[t]}</Text>
+            <Text style={[st.tabTx, tab === t && { color: '#0c1014' }]}>{{ provas: 'Provas', gravar: 'Gravar', ranking: 'Ranking', tulipas: 'Iniciar', organizar: 'Organizar', trilhas: 'Trilhas' }[t]}</Text>
           </TouchableOpacity>
         ))}
       </View>
@@ -486,6 +487,10 @@ export default function App() {
             </TouchableOpacity>
           )}
         </View>
+      ) : tab === 'trilhas' ? (
+        papel === 'organizador'
+          ? <TrilhasOrg st={st} />
+          : <TrilhasComp st={st} gps={{ nome: piloto.nome || user.email, uid: user.uid, running, start, getPoints: () => getState().points }} />
       ) : tab === 'ranking' ? (
         <View>
           <View style={st.card}>

@@ -49,5 +49,33 @@ service cloud.firestore {
       allow create, update: if logado() && inscrito(request.resource.data.prova) && request.resource.data.uid == request.auth.uid;
       allow delete: if dono(resource.data.prova);
     }
+
+    // ---------- Trilhas ----------
+    function donoT(t) {
+      return logado() && exists(/databases/$(database)/documents/trilhas/$(t))
+        && get(/databases/$(database)/documents/trilhas/$(t)).data.donoUid == request.auth.uid;
+    }
+    match /trilhas/{t} {
+      allow create: if logado() && request.resource.data.donoUid == request.auth.uid;
+      allow update, delete: if donoT(t);
+      allow read: if logado();
+    }
+    // Pedido de vaga: o participante cria (status pedido), confirma presença (só se aprovado) ou cancela; o organizador decide.
+    match /trilhaInsc/{id} {
+      allow read: if logado() && (resource.data.uid == request.auth.uid || donoT(resource.data.trilha));
+      allow create: if logado() && request.resource.data.uid == request.auth.uid && request.resource.data.status == 'pedido';
+      allow update: if logado() && (donoT(resource.data.trilha)
+        || (resource.data.uid == request.auth.uid
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'em'])
+            && (request.resource.data.status == 'cancelado'
+                || (request.resource.data.status == 'confirmado' && resource.data.status in ['aprovado', 'confirmado']))));
+      allow delete: if logado() && (resource.data.uid == request.auth.uid || donoT(resource.data.trilha));
+    }
+    // Percurso gravado: o dono do percurso grava e escolhe publicar; o organizador lê todos; os outros só os públicos.
+    match /trilhaTracks/{id} {
+      allow read: if logado() && (resource.data.uid == request.auth.uid || donoT(resource.data.trilha) || resource.data.publico == true);
+      allow create, update: if logado() && request.resource.data.uid == request.auth.uid;
+      allow delete: if logado() && (resource.data.uid == request.auth.uid || donoT(resource.data.trilha));
+    }
   }
 }

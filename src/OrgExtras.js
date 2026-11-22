@@ -20,7 +20,7 @@ export function escolherHora(atual, set) {
   DateTimePickerAndroid.open({ value: d, mode: 'time', is24Hour: true, display: 'spinner', onChange: (ev, h) => { if (ev.type === 'set' && h) set(`${p2(h.getHours())}:${p2(h.getMinutes())}:${p2(s0 != null ? s0 % 60 : 0)}`); } });
 }
 export const fmtHMS = (s) => `${p2(Math.floor(s / 3600) % 24)}:${p2(Math.floor((s % 3600) / 60))}:${p2(s % 60)}`;
-const parseDT = (t) => { const d = new Date(String(t || '').trim().replace(' ', 'T')); return isNaN(d) ? null : d.getTime(); };
+export const parseDT = (t) => { const d = new Date(String(t || '').trim().replace(' ', 'T')); return isNaN(d) ? null : d.getTime(); };
 
 // Situação da janela de liberação da planilha. Sem período definido = sempre liberada.
 export function planilhaLiberada(lib, now = Date.now()) {
@@ -174,7 +174,7 @@ export function OrgInscricoes({ st, prova, inscritos, categorias }) {
 
 // ---------- Liberações ----------
 function dtTxt(d) { return `${d.getFullYear()}-${p2(d.getMonth() + 1)}-${p2(d.getDate())} ${p2(d.getHours())}:${p2(d.getMinutes())}`; }
-function escolherDT(atual, set) {
+export function escolherDT(atual, set) {
   const base = parseDT(atual) ? new Date(parseDT(atual)) : new Date();
   DateTimePickerAndroid.open({ value: base, mode: 'date', onChange: (ev, dia) => {
     if (ev.type !== 'set' || !dia) return;
@@ -184,7 +184,7 @@ function escolherDT(atual, set) {
     } });
   } });
 }
-const fmtBR = (v) => { const d = parseDT(v); return d ? `${p2(new Date(d).getDate())}/${p2(new Date(d).getMonth() + 1)}/${new Date(d).getFullYear()}  ${p2(new Date(d).getHours())}:${p2(new Date(d).getMinutes())}` : ''; };
+export const fmtBR = (v) => { const d = parseDT(v); return d ? `${p2(new Date(d).getDate())}/${p2(new Date(d).getMonth() + 1)}/${new Date(d).getFullYear()}  ${p2(new Date(d).getHours())}:${p2(new Date(d).getMinutes())}` : ''; };
 
 export function OrgLiberacao({ st, prova, lib }) {
   const [ini, setIni] = useState(lib.ini || '');

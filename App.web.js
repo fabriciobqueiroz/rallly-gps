@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Alert, ScrollView, Text, TouchableOpacity, View } from 'react-native';
 import Login from './src/Login';
 import Organizador from './src/Organizador';
+import { TrilhasOrg } from './src/Trilhas';
 import { st } from './src/estilos';
 import { ouvirAuth, ouvirProva, sairConta } from './src/firebase';
 import { loadJson, saveJson } from './src/persist';
@@ -27,6 +28,7 @@ export default function App() {
   const [prova, setProva] = useState(() => loadJson('piloto', {}).prova || '');
   const [provaMap, setProvaMap] = useState(VAZIO);
   const [, setOrg] = useState(null);
+  const [mod, setMod] = useState('rally');
   const [abrirReq] = useState(null);
   useEffect(() => ouvirAuth((u) => setUser(u || null)), []);
   useEffect(() => {
@@ -50,7 +52,11 @@ export default function App() {
         <Text style={[st.sub, { flex: 1 }]}>{user.email}</Text>
         <TouchableOpacity onPress={() => { sairConta().catch(() => {}); }}><Text style={{ color: '#ff5252', fontWeight: '800' }}>Sair</Text></TouchableOpacity>
       </View>
-      <Organizador st={st} onProva={escolher} prova={prova} provaMap={provaMap} last={null} onOrg={setOrg} abrirReq={abrirReq} onTab={() => {}} />
+      <View style={[st.row, { marginBottom: 8 }]}>
+        <TouchableOpacity style={[st.chip, { paddingHorizontal: 16, paddingVertical: 8 }, mod === 'rally' && { backgroundColor: '#ff7a2e' }]} onPress={() => setMod('rally')}><Text style={[st.btn2Tx, mod === 'rally' && { color: '#0c1014' }]}>Rally</Text></TouchableOpacity>
+        <TouchableOpacity style={[st.chip, { paddingHorizontal: 16, paddingVertical: 8 }, mod === 'trilhas' && { backgroundColor: '#ff7a2e' }]} onPress={() => setMod('trilhas')}><Text style={[st.btn2Tx, mod === 'trilhas' && { color: '#0c1014' }]}>Trilhas</Text></TouchableOpacity>
+      </View>
+      {mod === 'trilhas' ? <TrilhasOrg st={st} /> : <Organizador st={st} onProva={escolher} prova={prova} provaMap={provaMap} last={null} onOrg={setOrg} abrirReq={abrirReq} onTab={() => {}} />}
     </ScrollView>
   );
 }
