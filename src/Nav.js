@@ -49,7 +49,7 @@ function montarRb(tul, iA, rb) {
   for (let k = 1; k <= rb.prox; k++) if (tul[iA + k]) out.push({ e: tul[iA + k], pct: rb.pProx[k - 1] ?? 40, key: 'p' + k });
   return out;
 }
-export function NavTela({ cfg, stage, rs, last, globalDist, odoM, tul, rot, trs, fim, classe, grupos, aviso, cont, onAdj, onPc, onZerar, onClose, onIniciarAgora, onEncerrar, factor, aferRef, onAfer, podeDesfazer, onDesfazer, onW }) {
+export function NavTela({ cfg, stage, rs, last, globalDist, odoM, tul, rot, trs, fim, classe, grupos, aviso, cont, onAdj, onPc, onZerar, onClose, onIniciarAgora, onEncerrar, factor, aferRef, onAfer, podeDesfazer, onDesfazer, onW, onEstouAqui }) {
   useKeepAwake();
   const { width } = useWindowDimensions();
   const [t, setT] = useState(Date.now());
@@ -74,6 +74,8 @@ export function NavTela({ cfg, stage, rs, last, globalDist, odoM, tul, rot, trs,
   const tnav = fim && fz.current ? fz.current.tnav : (Number.isFinite(tnav0) ? tnav0 : null);
   const fx = tnav != null ? faixaDe(Number(tnav.toFixed(cfg.tnavDec)), cfg) : { bg: '#000', fg: '#fff' };
   // próxima referência (tulipa) e fim do trecho
+  const [br, setBr] = useState(null); // índice da referência em consulta (null = segue o GPS)
+  useEffect(() => { if (br == null) return; const id = setTimeout(() => setBr(null), 40000); return () => clearTimeout(id); }, [br]);
   const iAt = tul.length ? Math.max(0, tul.findIndex((e) => e.d >= globalDist - 15)) : -1;
   const iAtual = iAt < 0 ? -1 : (tul.findIndex((e) => e.d >= globalDist - 15) < 0 ? tul.length - 1 : iAt);
   const prox = iAtual >= 0 ? tul.find((e, i) => i >= iAtual && e.d - globalDist > 0) : null;
@@ -93,11 +95,14 @@ export function NavTela({ cfg, stage, rs, last, globalDist, odoM, tul, rot, trs,
   const placa = (tr) => (tr ? (tr.tipo === 'D' ? { tx: `D${tr.min}'`, d: true } : { tx: String(Math.round(tr.kmh)), d: false }) : null);
   const rb = cfg.rb;
   const zO = trsN ? zeroOff(trsN, globalDist) : 0;
-  const linhasRb = montarRb(tul, iAtual, rb).map((l) => (trsN && l.e.d != null ? { ...l, e: { ...l.e, d: l.e.d - zeroOff(trsN, l.e.d) } } : l));
+  const iShow = br != null && tul.length ? Math.max(0, Math.min(tul.length - 1, br)) : iAtual;
+  const linhasRb = montarRb(tul, iShow, rb).map((l) => (trsN && l.e.d != null ? { ...l, e: { ...l.e, d: l.e.d - zeroOff(trsN, l.e.d) } } : l));
   const d = {
     cfg, spd, tnav, fx, odoM: odoM - zO, factor, aferRef, onAfer: () => confirma('Aferir hodômetro', `Você está na referência ${aferRef ? aferRef.n : ''} (km ${aferRef ? aferRef.kmShow.toFixed(3) : ''}). Ajuste o hodômetro até bater com o km da tulipa e confirme. O app recalcula o W%.`, onAfer), regRef, regRef2, regTrc, pa: placa(trAtual), pp: placa(trProx), clock: last ? last.t : t, acc: last ? last.acc : null,
     trN: trsN ? (stage.idx >= 0 && trIdx >= 0 ? `${trIdx + 1}/${trsN.length}` : null) : stage.idx >= 0 ? `${stage.idx + 1}/${rot.trechos.length}` : null, fim: !!fim, refN: iAtual >= 0 ? `${iAtual + 1}/${tul.length}` : null,
-    kmAcum: globalDist - zO, bat: bat, elapsed: fim && fz.current ? fz.current.elapsed : rs && Number.isFinite(rs.elapsed) ? rs.elapsed : null, rbLinhas: iAtual >= 0 ? linhasRb : null, classe, grupos, edit: false, onAdj, onPc,
+    kmAcum: globalDist - zO, trs: trsN, rbBr: br != null,
+    onRbTap: () => setBr(iAtual >= 0 ? iAtual : 0), onRbPrev: () => setBr((b) => Math.max(0, (b ?? 0) - 1)), onRbNext: () => setBr((b) => Math.min(tul.length - 1, (b ?? 0) + 1)), onRbSair: () => setBr(null),
+    onRbAqui: () => { const e = tul[iShow]; if (e && onEstouAqui) onEstouAqui(e.d); setBr(null); }, bat: bat, elapsed: fim && fz.current ? fz.current.elapsed : rs && Number.isFinite(rs.elapsed) ? rs.elapsed : null, rbLinhas: iShow >= 0 ? linhasRb : null, classe, grupos, edit: false, onAdj, onPc,
   };
   // Espelho para o celular do piloto (mesma conta): publica os valores a cada 2 s.
   const espRef = useRef(null);

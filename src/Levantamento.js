@@ -355,13 +355,14 @@ export default function Levantamento({ st, prova, last, onAplicar, onProva, levN
     const tul = [], wps = [], ntMap = new Map(), refs = [], pontosKm = [], pcl = [];
     const tulipaDe = (m, p) => (temDesenho(m) ? entradaDe(m, p) : { t: 'T', d: m.km, p, ty: 'turn', mo: '', b: [180], i: 0, o: -1, ex: 0, nm: m.nm || m.nota || '', man: true });
     ordenadas.forEach((m) => {
+      const n0 = tul.length;
       if (m.k === 'R') { refs.push({ n: refs.length + 1, lat: m.lat, lon: m.lon, hdg: m.hdg, km: Math.round(m.km) / 1000, afer: true }); return; }
       if (m.afer) refs.push({ n: refs.length + 1, lat: m.lat, lon: m.lon, hdg: m.hdg, km: Math.round(m.km) / 1000, afer: true });
       const d = m.km, p = Math.max(0, d - prev);
       if (m.k === 'L') { refN++; tul.push({ t: 'L', d: 0, p: 0, man: true, rn: refN }); if (temDesenho(m)) tul.push({ ...entradaDe(m, 0), rn: refN, ptr: 0 }); }
       else if (m.k === 'T') { refN++; tul.push({ ...tulipaDe(m, p), rn: refN }); }
       else if (m.k === 'S') { refN++; trI++; trsOut.push({ ...trsL[trI], d0: d }); tul.push({ ...tulipaDe(m, p), rn: refN, ptr: trI }); }
-      else if (m.k === 'P') { pcN++; pcNum++; tul.push({ t: 'P', n: pcN, pn: pcNum, d, p, man: true }); }
+      else if (m.k === 'P') { pcN++; pcNum++; tul.push({ t: 'P', n: pcN, pn: pcNum, d, p, man: true, ...(m.nm ? { nm: m.nm } : {}) }); }
       else if (m.k === 'N') { pcN++; tul.push({ ...(temDesenho(m) ? entradaDe(m, p) : {}), t: 'P', n: pcN, d, p, man: true, neu: true }); }
       else if (m.k === 'C') { refN++; if (temDesenho(m)) tul.push({ ...entradaDe(m, p), rn: refN }); tul.push({ t: 'C', n: pcN + 1, d, p: temDesenho(m) ? 0 : p, man: true, rn: refN }); }
       if (m.k === 'L' || m.k === 'P' || m.k === 'N' || m.k === 'C') {
@@ -369,6 +370,7 @@ export default function Levantamento({ st, prova, last, onAplicar, onProva, levN
         pcl.push(...(m.k === 'P' || m.k === 'N' ? linhaPc(m) : [0, 0, 0, 0]));
         if (m.k === 'N') ntMap.set(wps.length - 2, Math.max(1, m.nt || 120));
       }
+      if (m.afer && tul.length > n0) { const nov = tul.slice(n0); const alvo = nov.filter((x) => x.t === 'T').pop() || nov[nov.length - 1]; alvo.afer = true; }
       if (comTulipa(m)) prev = d;
     });
     const legs = pontosKm.slice(1).map((k, i) => Math.round((k - pontosKm[i]) * 1000) / 1000);
@@ -598,6 +600,7 @@ export default function Levantamento({ st, prova, last, onAplicar, onProva, levN
                           <TextInput style={[st.input, { minWidth: 70 }]} value={String(t.t === 'V' ? (t.v ?? '') : (t.min ?? ''))} onChangeText={(v) => setTr(ti, t.t === 'V' ? { v } : { min: v })} keyboardType="decimal-pad" placeholder="0" placeholderTextColor="#666" />
                           <Text style={st.k}>{t.t === 'V' ? 'km/h' : 'min'}</Text>
                         </View>); })()}
+                      {m.k === 'P' && <TextInput style={st.field} value={m.nm || ''} onChangeText={(v) => upd(m.id, { nm: v })} placeholder="Observação para o competidor (aparece no roadbook)" placeholderTextColor="#666" />}
                       {m.k === 'P' && (
                         <View>
                           <Text style={st.tipTx}>Linha do PC: {m.lw || 30} m, perpendicular ao rastro (vermelha no mapa). O competidor conta se o rastro cruzar a linha.</Text>

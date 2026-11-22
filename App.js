@@ -331,9 +331,16 @@ export default function App() {
     return b && b.d <= 80 ? b : null;
   })();
   useEffect(() => {
-    if (stage.active && !aferBase && points.length) setAferBase({ cum: cum[points.length - 1], km: 0 });
+    if (stage.active && !aferBase && points.length) { setAferBase({ cum: cum[points.length - 1], km: 0 }); setOdoBase(odoAtual()); }
     if (!stage.active && aferBase) setAferBase(null);
   }, [stage.active]);
+  // "Estou aqui": o competidor confirma a referência do roadbook; posição e hodômetro passam a valer o km dela.
+  const estouAqui = (d) => {
+    if (!points.length || !Number.isFinite(d)) return;
+    const cumNow = cum[points.length - 1];
+    setStage((x) => ({ ...x, adjust: x.adjust + (d - globalDist) }));
+    setOdoAdj(d + odoBase - cumNow * factor);
+  };
   const desfazerAfer = () => {
     if (!aferUndo) return;
     setFactor(aferUndo.factor); setOdoBase(aferUndo.odoBase); setOdoAdj(aferUndo.odoAdj);
@@ -401,12 +408,24 @@ export default function App() {
   );
   const minhasAbas = papel === 'organizador' ? ['provas', 'organizar', 'ranking'] : ['provas', 'tulipas', 'ranking'];
   const setLargManual = (v) => { setLargManualRaw(v); const k = piloto.prova.trim().toUpperCase().replace(/[^A-Z0-9]+/g, ''); saveJson('largm', { ...loadJson('largm', {}), [k]: v }); };
+  // Ao iniciar, pontos antigos (datalogger não enviado de outra prova/teste) não podem se misturar com a prova nova.
+  const prepararInicio = (cont) => {
+    const n = getState().points.length;
+    const k = piloto.prova.trim().toUpperCase().replace(/[^A-Z0-9]+/g, '') + '_' + piloto.numero.trim().toUpperCase().replace(/[^A-Z0-9]+/g, '');
+    const zerar = () => { clear(); begin(); setOdoBase(0); setOdoAdj(0); setAferBase(null); setAferUndo(null); cont(); };
+    if (stage.active || n < 10) return cont();
+    if (loadJson('dlstat', {})[k]) return zerar();
+    Alert.alert('Datalogger antigo', `Há ${n} pontos gravados antes desta prova e ainda não enviados. Para não misturar com a prova, eles precisam sair. Quer guardar uma cópia (CSV) antes?`, [
+      { text: 'Cancelar', style: 'cancel' },
+      { text: 'Descartar e iniciar', style: 'destructive', onPress: zerar },
+      { text: 'Guardar cópia e iniciar', onPress: async () => { try { await exportCsv(); } catch {} zerar(); } },
+    ]);
+  };
   const onPlanilha = () => {
     if (!libOk) return Alert.alert('Planilha não liberada', 'Aguarde a liberação do organizador. Você pode usar "Apenas datalogger".');
-    if (!running) start();
-    setNavOpen(true);
+    prepararInicio(() => { if (!running) start(); setNavOpen(true); });
   };
-  const onSoDl = () => { if (!running) start(); setSoDl(true); };
+  const onSoDl = () => prepararInicio(() => { if (!running) start(); setSoDl(true); });
   const finalizarDl = async () => { await stop(); await onDatalogger(); setSoDl(false); };
   return (
     <KeyboardAvoidingView style={{ flex: 1 }} behavior="padding">
@@ -497,7 +516,7 @@ export default function App() {
         <NavTela cfg={loadNav()} stage={stage} rs={rs} last={last} globalDist={rs || stage.idx >= 0 ? globalDist : 0}
           odoM={odoAtual() - odoBase} tul={tulVis} rot={rot} trs={provaMap.trs} fim={fimProva} cont={remLarg} classe={piloto.classe} grupos={grupos}
           aviso={fimProva ? 'FIM DA PROVA' : remLarg != null && remLarg > 0 ? `Largada em ${fmtDur(remLarg)}` : neutroRest != null ? `NEUTRO · PARE · ${fmtDur(neutroRest)}` : stage.idx >= 0 && rs && remain != null && remain <= 0 ? 'CHEGOU — toque em PC' : null}
-          onAdj={adjAll} onIniciarAgora={onStage} onEncerrar={encerrarProva} onZerar={() => setOdoBase(odoAtual())} factor={factor} aferRef={aferRef} onAfer={onAfer} podeDesfazer={!!aferUndo} onDesfazer={desfazerAfer} onW={ajustarW} onClose={() => setNavOpen(false)} />
+          onAdj={adjAll} onIniciarAgora={onStage} onEncerrar={encerrarProva} onZerar={() => setOdoBase(odoAtual())} factor={factor} aferRef={aferRef} onAfer={onAfer} podeDesfazer={!!aferUndo} onDesfazer={desfazerAfer} onW={ajustarW} onEstouAqui={estouAqui} onClose={() => setNavOpen(false)} />
       )}
       <NavConfig st={st} visible={cfgOpen} onClose={() => setCfgOpen(false)} />
       {pilotoOpen && <PilotoTela cfg={loadNav()} tul={tulVis} classe={piloto.classe} grupos={grupos} onPersonalizar={() => setCfgPiloto(true)} onClose={() => setPilotoOpen(false)} />}
