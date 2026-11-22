@@ -415,8 +415,8 @@ export default function Levantamento({ st, prova, last, onAplicar, onProva, levN
   const nTul = (i) => ordenadas.slice(0, i + 1).filter(comTulipa).length;
   const nPc = (i) => ordenadas.slice(0, i + 1).filter((x) => x.k === 'P').length;
   const nTr = (i) => ordenadas.slice(0, i + 1).filter((x) => x.k === 'S').length;
-  const rotulo = (m, i) => (m.k === 'T' ? 'Referência ' + nTul(i) : m.k === 'S' ? 'Trecho ' + (nTr(i) + 1) + ' · referência ' + nTul(i) : m.k === 'P' ? 'PC ' + nPc(i) : m.k === 'N' ? 'Neutro' : m.k === 'L' ? 'Largada · referência ' + nTul(i) : m.k === 'C' ? 'Chegada · referência ' + nTul(i) : KIND[m.k]);
-  const pinosBase = ordenadas.map((m, i) => ({ lat: m.lat, lon: m.lon, txt: m.k === 'T' ? 'R' + nTul(i) : m.k === 'S' ? 'R' + nTul(i) + ' · T' + (nTr(i) + 1) : m.k === 'P' ? 'PC' + nPc(i) : m.k === 'N' ? 'N' : KIND[m.k], cls: m.k === 'L' ? 'l' : m.k === 'C' ? 'c' : m.k === 'S' ? 's' : '' }));
+  const rotulo = (m, i) => (m.k === 'T' ? 'Referência ' + nTul(i) : m.k === 'S' ? 'Trecho ' + (nTr(i) + 1) + ' · referência ' + nTul(i) : m.k === 'P' ? 'PC ' + nPc(i) : m.k === 'N' ? 'Neutro' : m.k === 'L' ? 'Largada · trecho 1 · referência ' + nTul(i) : m.k === 'C' ? 'Chegada · referência ' + nTul(i) : KIND[m.k]);
+  const pinosBase = ordenadas.map((m, i) => ({ lat: m.lat, lon: m.lon, txt: m.k === 'T' ? 'R' + nTul(i) : m.k === 'S' ? 'R' + nTul(i) + ' · T' + (nTr(i) + 1) : m.k === 'P' ? 'PC' + nPc(i) : m.k === 'N' ? 'N' : m.k === 'L' ? 'Largada · T1' : KIND[m.k], cls: m.k === 'L' ? 'l' : m.k === 'C' ? 'c' : m.k === 'S' ? 's' : '' }));
   const pinos = cand ? [...pinosBase, { lat: cand.lat, lon: cand.lon, txt: 'NOVO', cls: 'c' }] : pinosBase;
   const linhas = ordenadas.filter((m) => m.k === 'P' || m.k === 'N').map(linhaPc).concat(cand ? [linhaPc({ lat: cand.lat, lon: cand.lon, hdg: cand.hdg })] : []);
   const Sep = () => <View style={{ height: 2, backgroundColor: '#444', marginTop: 6 }} />;
@@ -568,6 +568,14 @@ export default function Levantamento({ st, prova, last, onAplicar, onProva, levN
                         <ChipT st={st} cor="#ffe600" on={!!m.afer} tx={m.afer ? '✓ Aferição neste ponto' : 'Aferição neste ponto'} onPress={() => upd(m.id, { afer: !m.afer })} />
                         {m.k === 'S' && (() => { const tz = trAtual(lev)[nTr(i)]; const on = !!(tz && tz.zr); return <ChipT st={st} cor="#ffe600" on={on} tx={on ? '✓ Zera o hodômetro' : 'Zerar hodômetro'} onPress={() => setTr(nTr(i), { zr: !on })} />; })()}
                       </View>
+                      {(m.k === 'S' || m.k === 'L') && (() => { const ti = m.k === 'L' ? 0 : nTr(i); const t = trAtual(lev)[ti]; if (!t) return null; return (
+                        <View style={[st.row, { marginBottom: 6, alignItems: 'center', flexWrap: 'wrap' }]}>
+                          <Text style={st.k}>Trecho {ti + 1}:</Text>
+                          <TouchableOpacity style={[st.btn2, t.t === 'V' && { backgroundColor: '#ff7a2e' }]} onPress={() => setTr(ti, { t: 'V' })}><Text style={[st.btn2Tx, t.t === 'V' && { color: '#0c1014' }]}>Média</Text></TouchableOpacity>
+                          <TouchableOpacity style={[st.btn2, t.t === 'D' && { backgroundColor: '#ff7a2e' }]} onPress={() => setTr(ti, { t: 'D' })}><Text style={[st.btn2Tx, t.t === 'D' && { color: '#0c1014' }]}>Deslocamento</Text></TouchableOpacity>
+                          <TextInput style={[st.input, { minWidth: 70 }]} value={String(t.t === 'V' ? (t.v ?? '') : (t.min ?? ''))} onChangeText={(v) => setTr(ti, t.t === 'V' ? { v } : { min: v })} keyboardType="decimal-pad" placeholder="0" placeholderTextColor="#666" />
+                          <Text style={st.k}>{t.t === 'V' ? 'km/h' : 'min'}</Text>
+                        </View>); })()}
                       {m.k === 'P' && (
                         <View>
                           <Text style={st.tipTx}>Linha do PC: {m.lw || 30} m, perpendicular ao rastro (vermelha no mapa). O competidor conta se o rastro cruzar a linha.</Text>
