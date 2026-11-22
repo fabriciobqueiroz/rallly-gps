@@ -35,6 +35,7 @@ export const NAV_PADRAO = {
 };
 export const loadNav = () => {
   const c = loadJson('navcfg', {});
+  if (c && c.tnavDec > 2) c.tnavDec = 2;
   return { ...NAV_PADRAO, ...c, tiles: { ...NAV_PADRAO.tiles, ...(c.tiles || {}) }, ref: { ...NAV_PADRAO.ref, ...(c.ref || {}) }, trc: { ...NAV_PADRAO.trc, ...(c.trc || {}) }, odo: { ...NAV_PADRAO.odo, ...(c.odo || {}) }, rb: { ...NAV_PADRAO.rb, ...(c.rb || {}) }, barra: { ...NAV_PADRAO.barra, ...(c.barra || {}) } };
 };
 export const saveNav = (c) => saveJson('navcfg', c);
@@ -80,8 +81,8 @@ export function NavTela({ cfg, stage, rs, last, globalDist, odoM, tul, rot, trs,
   useEffect(() => { if (br == null) return; const id = setTimeout(() => setBr(null), 40000); return () => clearTimeout(id); }, [br]);
   const iAt = tul.length ? Math.max(0, tul.findIndex((e) => e.d >= globalDist - 15)) : -1;
   const iAtual = iAt < 0 ? -1 : (tul.findIndex((e) => e.d >= globalDist - 15) < 0 ? tul.length - 1 : iAt);
-  const prox = iAtual >= 0 ? tul.find((e, i) => i >= iAtual && e.d - globalDist > 0) : null;
-  const regRef = prox ? prox.d - globalDist : null;
+  const prox = iAtual >= 0 ? tul.find((e, i) => i >= iAtual && e.d - globalDist > -0.5) : null;
+  const regRef = prox ? Math.max(0, prox.d - globalDist) : null;
   const prox2 = prox ? tul.find((e) => e.d > prox.d + 0.5) : null;
   const regRef2 = prox2 ? prox2.d - globalDist : null;
   const trAtual = trsN ? (trIdx >= 0 ? resolve(trsN[trIdx]) : null) : stage.idx >= 0 ? rot.trechos[stage.idx] : null;
@@ -221,6 +222,8 @@ export function PilotoTela({ cfg, tul, classe, grupos, onPersonalizar, onClose }
 }
 
 // ---------- Personalização (antes da prova) ----------
+function Opc({ st, on, tx, onPress }) { return <TouchableOpacity style={[st.chip, { paddingHorizontal: 12, paddingVertical: 8 }, on && { backgroundColor: '#ff7a2e' }]} onPress={onPress}><Text style={[st.btn2Tx, on && { color: '#0c1014' }]}>{tx}</Text></TouchableOpacity>; }
+function Num({ st, v, on, w = 56 }) { return <TextInput style={[st.input, { minWidth: w }]} defaultValue={String(v)} keyboardType="numbers-and-punctuation" onEndEditing={(e) => on(num(e.nativeEvent.text))} />; }
 function Lin({ st, tx, children }) { return <View style={st.line}><Text style={st.k}>{tx}</Text>{children}</View>; }
 export function NavConfig({ st, visible, onClose, piloto }) {
   const [c, setC] = useState(loadNav);
@@ -249,8 +252,7 @@ export function NavConfig({ st, visible, onClose, piloto }) {
     setNomeNovo(''); setEdit(novo);
   };
   const apagarL = (x) => Alert.alert('Apagar layout', `Apagar "${x.nome}"?`, [{ text: 'Cancelar', style: 'cancel' }, { text: 'Apagar', style: 'destructive', onPress: () => gravaL({ ...L, [sk]: L[sk] === x.id ? 'padrao' : L[sk], list: L.list.filter((y) => y.id !== x.id) }) }]);
-  const Opc = ({ on, tx, onPress }) => <TouchableOpacity style={[st.chip, { paddingHorizontal: 12, paddingVertical: 8 }, on && { backgroundColor: '#ff7a2e' }]} onPress={onPress}><Text style={[st.btn2Tx, on && { color: '#0c1014' }]}>{tx}</Text></TouchableOpacity>;
-  const Num = ({ v, on, w = 56 }) => <TextInput style={[st.input, { minWidth: w }]} defaultValue={String(v)} keyboardType="numbers-and-punctuation" onEndEditing={(e) => on(num(e.nativeEvent.text))} />;
+  const up = (fn) => { const n = JSON.parse(JSON.stringify(c)); fn(n); saveNav(n); setC(n); };
   return (
     <Tela visible={visible} onRequestClose={onClose}>
       <View style={{ flex: 1, backgroundColor: '#0c1014', paddingTop: 8 }}>
@@ -277,14 +279,14 @@ export function NavConfig({ st, visible, onClose, piloto }) {
             <Text style={st.tip}>T.NAV</Text>
             <Text style={st.tipTx}>Mais (+) = adiantado, menos (−) = atrasado, em segundos.</Text>
             <View style={[st.row, { marginTop: 6 }]}>
-              {[0, 1, 2].map((d) => <Opc key={d} on={c.tnavDec === d} tx={`${d} casa${d === 1 ? '' : 's'}`} onPress={() => up((o) => { o.tnavDec = d; return o; })} />)}
+              {[0, 1, 2].map((d) => <Opc st={st} key={d} on={c.tnavDec === d} tx={`${d} casa${d === 1 ? '' : 's'}`} onPress={() => up((o) => { o.tnavDec = d; return o; })} />)}
             </View>
             <Text style={st.tip}>Cores por faixa de segundos (fora das faixas: fundo preto, letra branca)</Text>
             {c.faixas.map((f, i) => (
               <View key={i} style={[st.line, { alignItems: 'center' }]}>
-                <Num v={f.a} on={(v) => up((o) => { o.faixas[i].a = v; return o; })} />
+                <Num st={st} v={f.a} on={(v) => up((o) => { o.faixas[i].a = v; return o; })} />
                 <Text style={st.k}>até</Text>
-                <Num v={f.b} on={(v) => up((o) => { o.faixas[i].b = v; return o; })} />
+                <Num st={st} v={f.b} on={(v) => up((o) => { o.faixas[i].b = v; return o; })} />
                 <TouchableOpacity onPress={() => up((o) => { o.faixas[i].bg = CORES[(CORES.indexOf(o.faixas[i].bg) + 1) % CORES.length]; return o; })} style={{ width: 44, height: 34, borderRadius: 6, backgroundColor: f.bg, borderWidth: 1, borderColor: '#888' }} />
                 <TouchableOpacity onPress={() => up((o) => { o.faixas.splice(i, 1); return o; })}><Text style={{ color: '#ff5252', fontWeight: '700' }}>remover</Text></TouchableOpacity>
               </View>
@@ -299,11 +301,11 @@ export function NavConfig({ st, visible, onClose, piloto }) {
             <View key={k} style={st.card}>
               <Text style={st.tip}>{nome}</Text>
               <View style={[st.row, { marginTop: 6 }]}>
-                <Opc on={c[k].un === 'm'} tx="metros" onPress={() => up((o) => { o[k].un = 'm'; return o; })} />
-                <Opc on={c[k].un === 'km'} tx="km" onPress={() => up((o) => { o[k].un = 'km'; o[k].dec = 3; return o; })} />
+                <Opc st={st} on={c[k].un === 'm'} tx="metros" onPress={() => up((o) => { o[k].un = 'm'; return o; })} />
+                <Opc st={st} on={c[k].un === 'km'} tx="km" onPress={() => up((o) => { o[k].un = 'km'; o[k].dec = 3; return o; })} />
               </View>
               <View style={st.row}>
-                {[0, 1, 2, 3].map((d) => <Opc key={d} on={c[k].dec === d} tx={`${d} casas`} onPress={() => up((o) => { o[k].dec = d; return o; })} />)}
+                {[0, 1, 2, 3].map((d) => <Opc st={st} key={d} on={c[k].dec === d} tx={`${d} casas`} onPress={() => up((o) => { o[k].dec = d; return o; })} />)}
               </View>
             </View>
           ))}
@@ -313,19 +315,19 @@ export function NavConfig({ st, visible, onClose, piloto }) {
             <Lin st={st} tx="Ativar a barra"><Switch value={!!c.barra.on} onValueChange={(v) => up((o) => { o.barra.on = v; return o; })} /></Lin>
             <Text style={st.tipTx}>Começa a preencher quando faltar (metros):</Text>
             <View style={[st.row, { marginTop: 6 }]}>
-              {[50, 100, 150, 200].map((m) => <Opc key={m} on={c.barra.ini === m} tx={`${m} m`} onPress={() => up((o) => { o.barra.ini = m; return o; })} />)}
+              {[50, 100, 150, 200].map((m) => <Opc st={st} key={m} on={c.barra.ini === m} tx={`${m} m`} onPress={() => up((o) => { o.barra.ini = m; return o; })} />)}
             </View>
-            <Lin st={st} tx="Outro valor (m)"><Num v={c.barra.ini} on={(v) => up((o) => { o.barra.ini = Math.max(10, Math.min(1000, Math.round(v))); return o; })} /></Lin>
+            <Lin st={st} tx="Outro valor (m)"><Num st={st} v={c.barra.ini} on={(v) => up((o) => { o.barra.ini = Math.max(10, Math.min(1000, Math.round(v))); return o; })} /></Lin>
             <Lin st={st} tx="Cor da barra"><TouchableOpacity onPress={() => up((o) => { o.barra.cor = CORES[(CORES.indexOf(o.barra.cor) + 1) % CORES.length]; return o; })} style={{ width: 44, height: 34, borderRadius: 6, backgroundColor: c.barra.cor, borderWidth: 1, borderColor: '#888' }} /></Lin>
           </View>
           <View style={st.card}>
             <Text style={st.tip}>Roadbook na tela</Text>
-            <Lin st={st} tx="Tulipas anteriores (0 a 4)"><Num v={c.rb.ant} on={(v) => up((o) => { o.rb.ant = Math.max(0, Math.min(4, Math.round(v))); return o; })} /></Lin>
-            <Lin st={st} tx="Tulipas seguintes (0 a 8)"><Num v={c.rb.prox} on={(v) => up((o) => { o.rb.prox = Math.max(0, Math.min(8, Math.round(v))); return o; })} /></Lin>
+            <Lin st={st} tx="Tulipas anteriores (0 a 4)"><Num st={st} v={c.rb.ant} on={(v) => up((o) => { o.rb.ant = Math.max(0, Math.min(4, Math.round(v))); return o; })} /></Lin>
+            <Lin st={st} tx="Tulipas seguintes (0 a 8)"><Num st={st} v={c.rb.prox} on={(v) => up((o) => { o.rb.prox = Math.max(0, Math.min(8, Math.round(v))); return o; })} /></Lin>
             <Text style={st.tipTx}>A janela do roadbook é dividida entre as tulipas nessa proporção (30 a 150):</Text>
-            <Lin st={st} tx="Anterior"><Num v={c.rb.pAnt} on={(v) => up((o) => { o.rb.pAnt = Math.max(30, Math.min(150, v)); return o; })} /></Lin>
-            <Lin st={st} tx="Atual (a principal)"><Num v={c.rb.pAtual} on={(v) => up((o) => { o.rb.pAtual = Math.max(30, Math.min(150, v)); return o; })} /></Lin>
-            {Array.from({ length: Math.min(8, c.rb.prox) }, (_, i) => i).map((i) => <Lin key={i} st={st} tx={`Seguinte ${i + 1}`}><Num v={c.rb.pProx[i] ?? 40} on={(v) => up((o) => { o.rb.pProx[i] = Math.max(30, Math.min(150, v)); return o; })} /></Lin>)}
+            <Lin st={st} tx="Anterior"><Num st={st} v={c.rb.pAnt} on={(v) => up((o) => { o.rb.pAnt = Math.max(30, Math.min(150, v)); return o; })} /></Lin>
+            <Lin st={st} tx="Atual (a principal)"><Num st={st} v={c.rb.pAtual} on={(v) => up((o) => { o.rb.pAtual = Math.max(30, Math.min(150, v)); return o; })} /></Lin>
+            {Array.from({ length: Math.min(8, c.rb.prox) }, (_, i) => i).map((i) => <Lin key={i} st={st} tx={`Seguinte ${i + 1}`}><Num st={st} v={c.rb.pProx[i] ?? 40} on={(v) => up((o) => { o.rb.pProx[i] = Math.max(30, Math.min(150, v)); return o; })} /></Lin>)}
           </View>
           <TouchableOpacity style={[st.btn, { marginTop: 4 }]} onPress={onClose}><Text style={st.btnTx}>Pronto</Text></TouchableOpacity>
         </ScrollView>

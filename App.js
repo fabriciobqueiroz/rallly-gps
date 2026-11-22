@@ -340,7 +340,7 @@ export default function App() {
   const estouAqui = (d) => {
     if (!points.length || !Number.isFinite(d)) return;
     const cumNow = cum[points.length - 1];
-    if (rs) setStage((x) => ({ ...x, adjust: x.adjust + (d - globalDist) })); else setPosOff((o) => o + (d - globalDist));
+    if (rs) setStage((x) => ({ ...x, adjust: x.adjust + (d - globalDist) }));
     setOdoAdj(d + odoBase - cumNow * factor);
   };
   const desfazerAfer = () => {
@@ -513,7 +513,7 @@ export default function App() {
       ) : null}
       {soDl && <DlTela st={st} last={last} pointsN={points.length} startedAt={startedAt} onFinalizar={finalizarDl} />}
       {navOpen && (
-        <Erro onClose={() => setNavOpen(false)}><NavTela cfg={loadNav()} stage={stage} rs={rs} last={last} globalDist={rs || stage.idx >= 0 ? globalDist : 0}
+        <Erro onClose={() => setNavOpen(false)}><NavTela cfg={loadNav()} stage={stage} rs={rs} last={last} globalDist={rs || stage.idx >= 0 ? globalDist : Math.max(0, odoAtual() - odoBase)}
           odoM={odoAtual() - odoBase} tul={tulVis} rot={rot} trs={provaMap.trs} fim={fimProva} cont={remLarg} classe={piloto.classe} grupos={grupos}
           aviso={fimProva ? 'FIM DA PROVA' : remLarg != null && remLarg > 0 ? `Largada em ${fmtDur(remLarg)}` : neutroRest != null ? `NEUTRO · PARE · ${fmtDur(neutroRest)}` : stage.idx >= 0 && rs && remain != null && remain <= 0 ? 'CHEGOU — toque em PC' : null}
           onAdj={adjAll} onIniciarAgora={onStage} onEncerrar={encerrarProva} onZerar={() => setOdoBase(odoAtual())} factor={factor} aferRef={aferRef} onAfer={onAfer} podeDesfazer={!!aferUndo} onDesfazer={desfazerAfer} onW={ajustarW} onEstouAqui={estouAqui} onClose={() => setNavOpen(false)} /></Erro>

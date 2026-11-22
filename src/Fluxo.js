@@ -36,17 +36,18 @@ function Eventos({ st, user, onEvento, onAdmin }) {
   const [donos, setDonos] = useState(c0.donos);
   const [provas, setProvas] = useState(c0.provas);
   const [erro, setErro] = useState('');
+  const [sumidas, setSumidas] = useState({}); // provas que não existem mais na nuvem (canceladas/apagadas)
   useEffect(() => ouvirMinhasInscricoes(user.email, (l) => { setInsc(l); setErro(''); }, () => setErro('Sem conexão: mostrando o que está salvo no celular.')), [user.email]);
   useEffect(() => ouvirMinhasProvas(setDonos, () => {}), [user.uid]);
   useEffect(() => {
-    insc.forEach((i) => { if (!provas[i.prova]) lerProva(i.prova).then((d) => d && setProvas((p) => ({ ...p, [i.prova]: d }))).catch(() => {}); });
+    insc.forEach((i) => { lerProva(i.prova).then((d) => { if (d) { setSumidas((m) => (m[i.prova] ? { ...m, [i.prova]: false } : m)); if (!provas[i.prova]) setProvas((p) => ({ ...p, [i.prova]: d })); } else setSumidas((m) => ({ ...m, [i.prova]: true })); }).catch(() => {}); });
   }, [insc]);
   useEffect(() => { saveJson('evcache', { insc, donos, provas }); }, [insc, donos, provas]);
 
   const hoje = new Date(); hoje.setHours(0, 0, 0, 0);
   const dias = (ts) => (ts == null ? null : Math.round((ts - hoje.getTime()) / 86400000));
   const adm = donos.map((x) => ({ kind: 'adm', code: x.code, nome: x.nome || 'Prova ' + x.code, cidade: x.cidade, data: x.data, ts: x.dataTs ?? parseDataBR(x.data) }));
-  const comp = insc.map((i) => { const p = provas[i.prova] || {}; return { kind: 'comp', code: i.prova, nome: i.provaNome || p.nome || 'Prova ' + i.prova, cidade: p.cidade, data: p.data, ts: p.dataTs ?? parseDataBR(p.data), insc: i }; });
+  const comp = insc.filter((i) => !sumidas[i.prova]).map((i) => { const p = provas[i.prova] || {}; return { kind: 'comp', code: i.prova, nome: i.provaNome || p.nome || 'Prova ' + i.prova, cidade: p.cidade, data: p.data, ts: p.dataTs ?? parseDataBR(p.data), insc: i }; });
   const ord = (a) => [...a].sort((x, y) => (y.ts ?? -1) - (x.ts ?? -1));
   const todos = [...adm, ...comp];
   const sHoje = todos.filter((x) => dias(x.ts) === 0);
