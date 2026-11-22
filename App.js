@@ -36,6 +36,7 @@ export default function App() {
   const [factor, setFactorRaw] = useState(() => { const f = Number(loadJson('wfactor', 1)); return f > 0.5 && f < 1.5 ? f : 1; });
   const setFactor = (f) => { setFactorRaw(f); saveJson('wfactor', f); };
   const [aferUndo, setAferUndo] = useState(null);
+  const [posOff, setPosOff] = useState(0); // posição fixada pelo "estou aqui" quando o trecho ainda não começou (m)
   const [kmhTxt, setKmhTxt] = useState('');
   const [rotTxt, setRotTxt] = useState(() => loadRoteiro());
   const [largManual, setLargManualRaw] = useState('');
@@ -320,7 +321,7 @@ export default function App() {
   const encerrarProva = () => {
     const j = loadJson(kJan(), {});
     saveJson(kJan(), { ...j, fim: Date.now() });
-    setStage(newStage()); setHist([]); setNavOpen(false);
+    setStage(newStage()); setHist([]); setPosOff(0); setNavOpen(false);
     Alert.alert('Prova encerrada', 'Agora envie o datalogger na tela da prova (Sincronizar agora).');
   };
   const adjAll = (m) => { adj(m); setOdoAdj((a) => a + m); };
@@ -338,7 +339,7 @@ export default function App() {
   const estouAqui = (d) => {
     if (!points.length || !Number.isFinite(d)) return;
     const cumNow = cum[points.length - 1];
-    setStage((x) => ({ ...x, adjust: x.adjust + (d - globalDist) }));
+    if (rs) setStage((x) => ({ ...x, adjust: x.adjust + (d - globalDist) })); else setPosOff((o) => o + (d - globalDist));
     setOdoAdj(d + odoBase - cumNow * factor);
   };
   const desfazerAfer = () => {
@@ -382,7 +383,7 @@ export default function App() {
   const ahead = rs && rs.aheadSec != null ? rs.aheadSec : null;
   // Posição no percurso: distância planejada dos trechos já feitos + parcial do trecho atual.
   const feitos = stage.idx > 0 ? rot.trechos.slice(0, stage.idx).reduce((a, t) => a + t.km * 1000, 0) : 0;
-  const globalDist = feitos + (rs ? rs.dist : 0);
+  const globalDist = feitos + (rs ? rs.dist : 0) + posOff;
   const ultE = tulVis.length ? tulVis[tulVis.length - 1] : null;
   const fimProva = !!(ultE && ultE.t === 'C' && (rs || stage.idx >= 0) && globalDist >= ultE.d - 5);
   const remain = rs ? rs.remain : null;
@@ -408,19 +409,17 @@ export default function App() {
   );
   const minhasAbas = papel === 'organizador' ? ['provas', 'organizar', 'ranking'] : ['provas', 'tulipas', 'ranking'];
   const setLargManual = (v) => { setLargManualRaw(v); const k = piloto.prova.trim().toUpperCase().replace(/[^A-Z0-9]+/g, ''); saveJson('largm', { ...loadJson('largm', {}), [k]: v }); };
-  // Ao iniciar, pontos antigos (datalogger não enviado de outra prova/teste) não podem se misturar com a prova nova.
+  // Os pontos de GPS ficam intactos (o levantamento do organizador usa o mesmo rastro). A prova só conta a partir da largada
+  // (janela do datalogger) e o hodômetro é zerado aqui, então nada se mistura e nada é apagado.
   const prepararInicio = (cont) => {
-    const n = getState().points.length;
-    const k = piloto.prova.trim().toUpperCase().replace(/[^A-Z0-9]+/g, '') + '_' + piloto.numero.trim().toUpperCase().replace(/[^A-Z0-9]+/g, '');
-    const zerar = () => { clear(); begin(); setOdoBase(0); setOdoAdj(0); setAferBase(null); setAferUndo(null); cont(); };
-    if (stage.active || n < 10) return cont();
-    if (loadJson('dlstat', {})[k]) return zerar();
-    Alert.alert('Datalogger antigo', `Há ${n} pontos gravados antes desta prova e ainda não enviados. Para não misturar com a prova, eles precisam sair. Quer guardar uma cópia (CSV) antes?`, [
-      { text: 'Cancelar', style: 'cancel' },
-      { text: 'Descartar e iniciar', style: 'destructive', onPress: zerar },
-      { text: 'Guardar cópia e iniciar', onPress: async () => { try { await exportCsv(); } catch {} zerar(); } },
-    ]);
+    if (!stage.active) { setOdoBase(odoAtual()); setOdoAdj(0); setAferBase(null); setAferUndo(null); }
+    cont();
   };
+  const zerarDatalogger = () => Alert.alert('Zerar datalogger', 'Apaga todos os pontos de GPS gravados neste celular (inclusive o rastro de um levantamento, se for o mesmo aparelho do organizador) e zera o hodômetro. O W% é mantido. Se a prova está em andamento, não faça isso. Confirma?', [
+    { text: 'Cancelar', style: 'cancel' },
+    { text: 'Zerar', style: 'destructive', onPress: () => { clear(); if (running) begin(); saveJson(kJan(), {}); setOdoBase(0); setOdoAdj(0); setAferBase(null); setAferUndo(null); setPosOff(0); } },
+  ]);
+  const janN = (() => { const j = loadJson(kJan(), {}); return j.ini == null ? 0 : points.filter((p) => p.t >= j.ini && (j.fim == null || p.t <= j.fim)).length; })();
   const onPlanilha = () => {
     if (!libOk) return Alert.alert('Planilha não liberada', 'Aguarde a liberação do organizador. Você pode usar "Apenas datalogger".');
     prepararInicio(() => { if (!running) start(); setNavOpen(true); });
@@ -461,8 +460,8 @@ export default function App() {
         ))}
       </View>
       {tab === 'provas' ? (
-        <Fluxo st={st} user={user} piloto={piloto} provaMap={provaMap} lib={libOk} minhaLarg={minhaLarg} largManual={largManual} setLargManual={setLargManual} pointsN={points.length} dlStat={loadJson('dlstat', {})} dlTick={dlTick}
-          onEnviarDl={onDatalogger} enviandoDl={enviandoDl} onEscolher={escolher} onPlanilha={onPlanilha} onSoDl={onSoDl} onPiloto={() => setPilotoOpen(true)} onPersonalizar={() => setCfgOpen(true)}
+        <Fluxo st={st} user={user} piloto={piloto} provaMap={provaMap} lib={libOk} minhaLarg={minhaLarg} largManual={largManual} setLargManual={setLargManual} pointsN={janN} dlStat={loadJson('dlstat', {})} dlTick={dlTick}
+          onEnviarDl={onDatalogger} enviandoDl={enviandoDl} onEscolher={escolher} onPlanilha={onPlanilha} onSoDl={onSoDl} onPiloto={() => setPilotoOpen(true)} onZerarDl={zerarDatalogger} onPersonalizar={() => setCfgOpen(true)}
           onAdmin={(x) => { setPapel('organizador'); setP('prova')(x.code); setAbrirReq({ code: x.code, n: Date.now() }); }} />
       ) : tab === 'organizar' ? (
         <Organizador st={st} onTab={setTab} onProva={setP('prova')} prova={piloto.prova} provaMap={provaMap} last={last} onOrg={setOrgInfo} abrirReq={abrirReq} />

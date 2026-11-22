@@ -75,7 +75,7 @@ function Eventos({ st, user, onEvento, onAdmin }) {
 }
 
 // ---------- 2. Evento ----------
-function Evento({ st, user, x, provaMap, lib, dlStat, pointsN, onDl, enviandoDl, onIniciar, onPersonalizar, onVoltar }) {
+function Evento({ st, user, x, provaMap, lib, dlStat, pointsN, onDl, enviandoDl, onIniciar, onPersonalizar, onVoltar, onZerarDl }) {
   const [aba, setAba] = useState('info');
   const [aberto, setAberto] = useState(false);
   const [rows, setRows] = useState([]);
@@ -114,6 +114,7 @@ function Evento({ st, user, x, provaMap, lib, dlStat, pointsN, onDl, enviandoDl,
               <View style={{ marginTop: 8 }}>
                 {s ? <Text style={st.tipTx}>Enviado em {new Date(s.em).toLocaleString('pt-BR')}.</Text> : <Text style={st.tipTx}>Ainda não enviado para a apuração.</Text>}
                 {pointsN >= 10 && <TouchableOpacity style={[st.btn2, { marginTop: 6 }]} onPress={onDl} disabled={enviandoDl}><Text style={st.btn2Tx}>{enviandoDl ? 'Enviando…' : s ? 'Enviar de novo' : 'Sincronizar agora'}</Text></TouchableOpacity>}
+                {onZerarDl && <TouchableOpacity style={[st.btn2, { marginTop: 6 }]} onPress={onZerarDl}><Text style={[st.btn2Tx, { color: '#ff5252' }]}>Zerar datalogger</Text></TouchableOpacity>}
               </View>
             )}
           </TouchableOpacity>
@@ -265,14 +266,14 @@ export function DlTela({ st, last, pointsN, startedAt, onFinalizar }) {
 }
 
 // ---------- Fluxo ----------
-export default function Fluxo({ st, user, piloto, provaMap, lib, minhaLarg, largManual, setLargManual, pointsN, dlStat, onEnviarDl, enviandoDl, onEscolher, onAdmin, onPlanilha, onSoDl, onPersonalizar, onPiloto }) {
+export default function Fluxo({ st, user, piloto, provaMap, lib, minhaLarg, largManual, setLargManual, pointsN, dlStat, onEnviarDl, enviandoDl, onEscolher, onAdmin, onPlanilha, onSoDl, onPersonalizar, onPiloto, onZerarDl }) {
   const [tela, setTela] = useState('eventos');
   const [x, setX] = useState(null);
   const [modo, setModo] = useState('planilha');
   return (
     <View>
       {tela === 'eventos' && <Eventos st={st} user={user} onEvento={(e) => { setX(e); onEscolher(e.insc); setTela('evento'); }} onAdmin={onAdmin} />}
-      {tela === 'evento' && x && <Evento st={st} user={user} x={x} provaMap={provaMap} lib={lib} dlStat={dlStat} pointsN={pointsN} onDl={onEnviarDl} enviandoDl={enviandoDl} onIniciar={() => setTela('modo')} onPersonalizar={onPersonalizar} onVoltar={() => setTela('eventos')} />}
+      {tela === 'evento' && x && <Evento st={st} user={user} x={x} provaMap={provaMap} lib={lib} dlStat={dlStat} pointsN={pointsN} onDl={onEnviarDl} enviandoDl={enviandoDl} onIniciar={() => setTela('modo')} onPersonalizar={onPersonalizar} onVoltar={() => setTela('eventos')} onZerarDl={onZerarDl} />}
       {tela === 'modo' && <Modo st={st} onEscolhe={(m) => { setModo(m); setTela('largada'); }} onVoltar={() => setTela('evento')} />}
       {tela === 'largada' && <Largada st={st} minhaLarg={minhaLarg} largManual={largManual} setLargManual={setLargManual} onContinua={() => setTela('config')} onVoltar={() => setTela('modo')} />}
       {tela === 'config' && <Config st={st} onContinua={() => setTela('equip')} onVoltar={() => setTela('largada')} />}

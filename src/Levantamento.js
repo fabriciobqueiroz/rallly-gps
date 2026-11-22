@@ -172,7 +172,7 @@ export default function Levantamento({ st, prova, last, onAplicar, onProva, levN
     const tr = trailRef.current || [];
     voo.current = true;
     const lim = new Promise((_, rej) => setTimeout(() => rej(new Error('tempo')), 12000));
-    const env = salvarProva(prova, { lev: { em: n.em || 0, marks: n.marks.map((m) => ({ ...m, foto: null })), trechos: n.trechos || [], trail: tr.flatMap((c) => [Math.round(c[0] * 1e5) / 1e5, Math.round(c[1] * 1e5) / 1e5]) } });
+    const env = salvarProva(prova, { lev: { em: n.em || 0, marks: n.marks.map((m) => ({ ...m, foto: null })), trechos: n.trechos || [], ...(tr.length > 1 ? { trail: tr.flatMap((c) => [Math.round(c[0] * 1e5) / 1e5, Math.round(c[1] * 1e5) / 1e5]) } : {}) } });
     Promise.race([env, lim]).then(() => {
       const atual = loadJson(chave, null);
       if (!atual || (atual.em || 0) === (n.em || 0)) { pend.current = false; saveJson('levpend_' + slug0, 0); setSync('ok'); }
@@ -196,6 +196,12 @@ export default function Levantamento({ st, prova, last, onAplicar, onProva, levN
     const t = setTimeout(() => sincronizar(lev, true), 1500);
     return () => clearTimeout(t);
   }, []);
+  // Levantamento local vazio mas existente na nuvem (ex.: dados locais perdidos): recupera da nuvem.
+  useEffect(() => {
+    if (WEB || !levNuvem || !(levNuvem.marks || []).length || lev.marks.length) return;
+    const n = { iniT: null, marks: levNuvem.marks, trechos: levNuvem.trechos || [], em: levNuvem.em || 0 };
+    saveJson(chave, n); setLevRaw(n);
+  }, [levNuvem && levNuvem.em]);
   const setLev = (fn) => setLevRaw((o) => {
     const n0 = typeof fn === 'function' ? fn(o) : fn;
     const n = { ...n0, em: Date.now() };
@@ -234,12 +240,14 @@ export default function Levantamento({ st, prova, last, onAplicar, onProva, levN
     const step = Math.max(1, Math.ceil(seg.length / 700));
     return seg.filter((_, i) => i % step === 0 || i === seg.length - 1).map((p) => [p.lat, p.lon]);
   };
-  const trail = (() => {
+  const trail0 = (() => {
     if (trailC.current.k === trailKey) return trailC.current.v;
     const v = trailCalc();
     trailC.current = { k: trailKey, v };
     return v;
   })();
+  // Sem pontos locais (ex.: GPS reiniciado), usa o rastro salvo na nuvem em vez de perder o percurso.
+  const trail = !WEB && trail0.length < 20 && lev.marks.length > 0 && trailNuvem && trailNuvem.length > trail0.length ? trailNuvem : trail0;
   const trailRef = useRef([]);
   trailRef.current = trail;
 
@@ -263,7 +271,7 @@ export default function Levantamento({ st, prova, last, onAplicar, onProva, levN
     const kmAgora = iniI >= 0 && pts.length ? Math.max(0, cumF[pts.length - 1] - cumF[iniI]) : 0;
     Vibration.vibrate(60);
     if (k === 'L') {
-      const novo = () => { setLev({ iniT: l.t, trechos: [{ t: 'V', v: '', min: '15' }], marks: [{ id: 1, k: 'L', lat: l.lat, lon: l.lon, hdg: l.hdg ?? null, km: 0, nota: '', foto: null }] }); perguntaTrecho(0); };
+      const novo = () => { try { saveJson('levbak_' + slug0, loadJson(chave, null)); } catch {} setLev({ iniT: l.t, trechos: [{ t: 'V', v: '', min: '15' }], marks: [{ id: 1, k: 'L', lat: l.lat, lon: l.lon, hdg: l.hdg ?? null, km: 0, nota: '', foto: null }] }); perguntaTrecho(0); };
       if (!lev.marks.length) return novo();
       Alert.alert('Iniciar levantamento', 'Isso apaga o levantamento anterior desta prova. Continuar?', [
         { text: 'Cancelar' },
@@ -567,7 +575,7 @@ export default function Levantamento({ st, prova, last, onAplicar, onProva, levN
         );
       })()}
       {ordenadas.length > 0 && !WEB && (
-        <TouchableOpacity style={[st.btn2, { marginBottom: 8 }]} onPress={() => Alert.alert('Recomeçar o levantamento?', 'Apaga todas as marcas e o rastro marcado desta prova (no celular e na nuvem). A prova em si continua.', [{ text: 'Cancelar', style: 'cancel' }, { text: 'Apagar e recomeçar', style: 'destructive', onPress: () => { setLev({ iniT: null, marks: [], trechos: [] }); salvarProva(prova, { lev: null }).catch(() => {}); } }])}>
+        <TouchableOpacity style={[st.btn2, { marginBottom: 8 }]} onPress={() => Alert.alert('Recomeçar o levantamento?', 'Apaga todas as marcas e o rastro marcado desta prova (no celular e na nuvem). A prova em si continua.', [{ text: 'Cancelar', style: 'cancel' }, { text: 'Apagar e recomeçar', style: 'destructive', onPress: () => { try { saveJson('levbak_' + slug0, loadJson(chave, null)); } catch {} setLev({ iniT: null, marks: [], trechos: [] }); salvarProva(prova, { lev: null }).catch(() => {}); } }])}>
           <Text style={st.btn2Tx}>Recomeçar levantamento (apaga as marcas)</Text>
         </TouchableOpacity>
       )}
