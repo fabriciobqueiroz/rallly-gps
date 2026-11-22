@@ -119,6 +119,8 @@ export default function Levantamento({ st, prova, last, onAplicar, onProva, levN
   const [tela, setTela] = useState(true);
   const [menuMapa, setMenuMapa] = useState(false);
   const [trAsk, setTrAsk] = useState(null);
+  const [ntAsk, setNtAsk] = useState(null);
+  const [sync, setSync] = useState('ok');
   const { height: winH } = useWindowDimensions();
   const listaRef = useRef(null);
   const nMarksRef = useRef(0);
@@ -159,15 +161,34 @@ export default function Levantamento({ st, prova, last, onAplicar, onProva, levN
   };
   // Rascunho do levantamento (marcas e rastro, sem fotos) vai para a nuvem sozinho, para o computador poder abrir e editar.
   const tSync = useRef(null);
+  const pend = useRef(!WEB && !!loadJson('levpend_' + slug0, 0));
+  const voo = useRef(false);
+  // Envia o rascunho mais recente. Sem internet a escrita pode ficar parada: depois de 12 s desiste desta tentativa
+  // e uma nova é feita a cada 10 s até confirmar, então tudo vai para a nuvem assim que a internet volta.
+  const enviar = () => {
+    if (WEB || voo.current) return;
+    const n = loadJson(chave, null);
+    if (!n || !(n.marks || []).length) { pend.current = false; saveJson('levpend_' + slug0, 0); return; }
+    const tr = trailRef.current || [];
+    voo.current = true;
+    const lim = new Promise((_, rej) => setTimeout(() => rej(new Error('tempo')), 12000));
+    const env = salvarProva(prova, { lev: { em: n.em || 0, marks: n.marks.map((m) => ({ ...m, foto: null })), trechos: n.trechos || [], trail: tr.flatMap((c) => [Math.round(c[0] * 1e5) / 1e5, Math.round(c[1] * 1e5) / 1e5]) } });
+    Promise.race([env, lim]).then(() => {
+      const atual = loadJson(chave, null);
+      if (!atual || (atual.em || 0) === (n.em || 0)) { pend.current = false; saveJson('levpend_' + slug0, 0); setSync('ok'); }
+    }).catch(() => { pend.current = true; setSync('pend'); }).finally(() => { voo.current = false; });
+  };
   const sincronizar = (n, ja) => {
     if (WEB || !(n.marks || []).length) return;
+    pend.current = true; saveJson('levpend_' + slug0, 1); setSync('pend');
     clearTimeout(tSync.current);
-    const enviar = () => {
-      const tr = trailRef.current || [];
-      salvarProva(prova, { lev: { em: n.em || 0, marks: n.marks.map((m) => ({ ...m, foto: null })), trechos: n.trechos || [], trail: tr.flatMap((c) => [Math.round(c[0] * 1e5) / 1e5, Math.round(c[1] * 1e5) / 1e5]) } }).catch(() => {});
-    };
     if (ja) enviar(); else tSync.current = setTimeout(enviar, 2500);
   };
+  useEffect(() => {
+    if (WEB) return;
+    const id = setInterval(() => { if (pend.current) enviar(); }, 10000);
+    return () => clearInterval(id);
+  }, []);
   // Levantamento que já existia no celular (feito antes desta versão): envia uma vez para a nuvem ao abrir a aba.
   useEffect(() => {
     if (WEB || !lev.marks.length) return;
@@ -254,6 +275,7 @@ export default function Levantamento({ st, prova, last, onAplicar, onProva, levN
     const m = { id: Date.now(), k, lat: Math.round(l.lat * 1e6) / 1e6, lon: Math.round(l.lon * 1e6) / 1e6, hdg: l.hdg != null && l.hdg >= 0 ? Math.round(l.hdg) : null, km: Math.round(kmAgora), nota: '', foto: null, ...(k === 'N' ? { nt: 120 } : {}), ...extra };
     setLev((o) => ({ ...o, marks: [...o.marks, m], trechos: k === 'S' ? [...trAtual(o), { ...trAtual(o)[trAtual(o).length - 1] }] : o.trechos }));
     if (k === 'S') perguntaTrecho(nTrechos(lev));
+    if (k === 'N') Alert.alert('Neutro', 'Definir o tempo de parada deste neutro agora?', [{ text: 'Depois', style: 'cancel' }, { text: 'Agora', onPress: () => setNtAsk(m.id) }]);
   };
   const upd = (id, patch) => setLev((o) => ({ ...o, marks: o.marks.map((m) => (m.id === id ? { ...m, ...patch } : m)) }));
   const del = (id) => setLev((o) => {
@@ -421,7 +443,7 @@ export default function Levantamento({ st, prova, last, onAplicar, onProva, levN
   const linhas = ordenadas.filter((m) => m.k === 'P' || m.k === 'N').map(linhaPc).concat(cand ? [linhaPc({ lat: cand.lat, lon: cand.lon, hdg: cand.hdg })] : []);
   const Sep = () => <View style={{ height: 2, backgroundColor: '#444', marginTop: 6 }} />;
   const trAskV = trAsk != null ? trAtual(lev)[trAsk] : null;
-  const statusTxt = (iniIdx >= 0 ? `${km2(kmAqui)} km percorridos · ${ordenadas.filter((m) => m.k === 'T').length} referência(s) · trecho ${nTrechos(lev)} em andamento · ${ordenadas.filter((m) => m.k === 'N').length} neutro(s)` : 'Levantamento ainda não iniciado: ligue o GPS, espere ficar verde e toque LARGADA.') + (last?.acc != null ? ` · GPS ${last.acc.toFixed(0)} m` : '');
+  const statusTxt = (iniIdx >= 0 ? `${km2(kmAqui)} km percorridos · ${ordenadas.filter((m) => m.k === 'T').length} referência(s) · trecho ${nTrechos(lev)} em andamento · ${ordenadas.filter((m) => m.k === 'N').length} neutro(s)` : 'Levantamento ainda não iniciado: ligue o GPS, espere ficar verde e toque LARGADA.') + (last?.acc != null ? ` · GPS ${last.acc.toFixed(0)} m` : '') + (!WEB && sync === 'pend' ? ' · ☁ aguardando internet' : '');
 
   return (
     <View>
@@ -626,6 +648,19 @@ export default function Levantamento({ st, prova, last, onAplicar, onProva, levN
           </ScrollView>
           </View>
           </View>
+          {(() => { const mm = ntAsk != null ? lev.marks.find((x) => x.id === ntAsk) : null; if (!mm) return null; const nt = mm.nt || 120; return (
+            <View style={{ position: 'absolute', left: 0, right: 0, top: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'center', padding: 20 }}>
+              <View style={st.card}>
+                <Text style={st.tip}>Neutro · tempo parado</Text>
+                <View style={[st.row, { alignItems: 'center', marginVertical: 8 }]}>
+                  <TextInput style={[st.input, { minWidth: 70 }]} autoFocus defaultValue={String(Math.floor(nt / 60))} keyboardType="number-pad" onChangeText={(v) => { const m2 = parseInt(v, 10) || 0; upd(mm.id, { nt: Math.max(1, m2 * 60 + (nt % 60)) }); }} />
+                  <Text style={st.k}>min</Text>
+                  <TextInput style={[st.input, { minWidth: 70 }]} defaultValue={String(nt % 60)} keyboardType="number-pad" onChangeText={(v) => { const sg = Math.min(59, parseInt(v, 10) || 0); upd(mm.id, { nt: Math.max(1, Math.floor(nt / 60) * 60 + sg) }); }} />
+                  <Text style={st.k}>seg</Text>
+                </View>
+                <TouchableOpacity style={[st.btn, { marginTop: 8, marginBottom: 0 }]} onPress={() => setNtAsk(null)}><Text style={st.btnTx}>OK</Text></TouchableOpacity>
+              </View>
+            </View>); })()}
           {trAskV && (
             <View style={{ position: 'absolute', left: 0, right: 0, top: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'center', padding: 20 }}>
               <View style={st.card}>
