@@ -165,11 +165,10 @@ export default function Organizador({ st, prova, provaMap, last, onOrg, onProva,
   // Percurso vindo do levantamento dirigindo: usa o rastro e as tulipas marcadas, sem recalcular pelo OSRM.
   const aplicarLevantamento = ({ wps: w, rota: r, nIdx, refs: rf, pcl: pc, trs: tn, lev: lv }) => {
     setManual(true); setLevPub(lv || null);
-    const aferAnt = new Set((refs || []).filter((x) => x.afer).map((x) => x.n));
     const zrAnt = trs.map((x) => !!x.zr);
-    setWps(w); setRota(r); setRefs((rf || []).map((x) => (aferAnt.has(x.n) ? { ...x, afer: true } : x))); setPcl(pc || []);
+    setWps(w); setRota(r); setRefs(rf || []); setPcl(pc || []);
     setLegs(r.legs.map((_, i) => novoLeg(num(dif, 3), ng, (nIdx.get ? nIdx.get(i) : nIdx.has(i) ? 60 : 0) || 0)));
-    setTrs((tn || []).map((t, i) => (t.t === 'D' ? { t: 'D', v: vs(30, dif, ng), min: String(t.min || 15), d0: t.d0, zr: !!zrAnt[i] } : { t: 'V', v: vs(t.v, dif, ng).map((x, k) => (k === 0 ? String(t.v).replace(',', '.') : x)), min: '15', d0: t.d0, zr: !!zrAnt[i] })));
+    setTrs((tn || []).map((t, i) => (t.t === 'D' ? { t: 'D', v: vs(30, dif, ng), min: String(t.min || 15), d0: t.d0, zr: t.zr != null ? !!t.zr : !!zrAnt[i] } : { t: 'V', v: vs(t.v, dif, ng).map((x, k) => (k === 0 ? String(t.v).replace(',', '.') : x)), min: '15', d0: t.d0, zr: t.zr != null ? !!t.zr : !!zrAnt[i] })));
     setSec('planilha');
   };
   const updT = (i, patch) => setTrs((o) => o.map((l, j) => (j === i ? { ...l, ...patch } : l)));
@@ -335,10 +334,10 @@ export default function Organizador({ st, prova, provaMap, last, onOrg, onProva,
             </View>
           );
         })}
-        {refs.length > 0 && <Text style={[st.tip, { marginTop: 8 }]}>Aferição: marque as referências onde o competidor pode aferir o hodômetro</Text>}
+        {refs.length > 0 && <Text style={[st.tip, { marginTop: 8 }]}>Pontos de aferição (marcados no levantamento; aqui você pode ligar/desligar)</Text>}
         {refs.map((r, i) => (
           <View key={'rf' + i} style={st.line}>
-            <Text style={st.k}>Ref {r.n} · km {Number(r.km || 0).toFixed(3)}</Text>
+            <Text style={st.k}>Ponto {r.n} · km {Number(r.km || 0).toFixed(3)}</Text>
             <TouchableOpacity style={chip(!!r.afer)} onPress={() => setRefs((o) => o.map((x, j) => (j === i ? { ...x, afer: !x.afer } : x)))}><Text style={[st.btn2Tx, r.afer && { color: '#0c1014' }]}>{r.afer ? '✓ AFER' : 'AFER'}</Text></TouchableOpacity>
           </View>
         ))}

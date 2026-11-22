@@ -121,6 +121,7 @@ export default function Levantamento({ st, prova, last, onAplicar, onProva, levN
   const [trAsk, setTrAsk] = useState(null);
   const { height: winH } = useWindowDimensions();
   const listaRef = useRef(null);
+  const nMarksRef = useRef(0);
   const ultimoToque = useRef(0);
   const [seguir, setSeguir] = useState(true);
   const [ctr, setCtr] = useState(0);
@@ -332,7 +333,8 @@ export default function Levantamento({ st, prova, last, onAplicar, onProva, levN
     const tul = [], wps = [], ntMap = new Map(), refs = [], pontosKm = [], pcl = [];
     const tulipaDe = (m, p) => (temDesenho(m) ? entradaDe(m, p) : { t: 'T', d: m.km, p, ty: 'turn', mo: '', b: [180], i: 0, o: -1, ex: 0, nm: m.nm || m.nota || '', man: true });
     ordenadas.forEach((m) => {
-      if (m.k === 'R') { refs.push({ n: refs.length + 1, lat: m.lat, lon: m.lon, hdg: m.hdg, km: Math.round(m.km) / 1000 }); return; }
+      if (m.k === 'R') { refs.push({ n: refs.length + 1, lat: m.lat, lon: m.lon, hdg: m.hdg, km: Math.round(m.km) / 1000, afer: true }); return; }
+      if (m.afer) refs.push({ n: refs.length + 1, lat: m.lat, lon: m.lon, hdg: m.hdg, km: Math.round(m.km) / 1000, afer: true });
       const d = m.km, p = Math.max(0, d - prev);
       if (m.k === 'L') { refN++; tul.push({ t: 'L', d: 0, p: 0, man: true, rn: refN }); if (temDesenho(m)) tul.push({ ...entradaDe(m, 0), rn: refN, ptr: 0 }); }
       else if (m.k === 'T') { refN++; tul.push({ ...tulipaDe(m, p), rn: refN }); }
@@ -436,8 +438,10 @@ export default function Levantamento({ st, prova, last, onAplicar, onProva, levN
             <TouchableOpacity style={st.btn2} onPress={() => setMenuMapa((v) => !v)}><Text style={st.btn2Tx}>⚙ Mapa</Text></TouchableOpacity>
             <TouchableOpacity style={st.btn2} onPress={() => setTela(false)}><Text style={st.btn2Tx}>✕</Text></TouchableOpacity>
           </View>
+          <View style={{ flex: 1, flexDirection: WEB ? 'row' : 'column' }}>
+          <View style={WEB ? { flex: 1.3 } : null}>
           <View style={{ paddingHorizontal: 10 }}>
-            <MapaWeb wps={novoPercurso ? wpsNovo : []} coords={trail} marks={pinos} lines={linhas} sat={!novoPercurso} editable={fechado || novoPercurso} onTap={novoPercurso ? addWp : tocaTrilha} follow={!WEB && seguir && !fechado} rw={rw} dash={dash} rc={rc} ctr={ctr} me={last ? [last.lat, last.lon] : null} height={Math.round(winH * (WEB ? 0.5 : 0.28))} />
+            <MapaWeb wps={novoPercurso ? wpsNovo : []} coords={trail} marks={pinos} lines={linhas} sat={!novoPercurso} editable={fechado || novoPercurso} onTap={novoPercurso ? addWp : tocaTrilha} follow={!WEB && seguir && !fechado} rw={rw} dash={dash} rc={rc} ctr={ctr} me={last ? [last.lat, last.lon] : null} height={Math.round(winH * (WEB ? 0.78 : 0.28))} />
           </View>
           {menuMapa && (
             <View style={[st.row, { paddingHorizontal: 10, marginBottom: 6, flexWrap: 'wrap' }]}>
@@ -447,6 +451,8 @@ export default function Levantamento({ st, prova, last, onAplicar, onProva, levN
               <TouchableOpacity style={st.btn2} onPress={() => setRc((c) => CORES[(CORES.indexOf(c) + 1) % CORES.length])}><Text style={[st.btn2Tx, { color: rc }]}>Cor</Text></TouchableOpacity>
             </View>
           )}
+          </View>
+          <View style={{ flex: 1 }}>
           <View style={{ paddingHorizontal: 10 }}>
             {novoPercurso && (
               <View style={st.card}>
@@ -506,7 +512,7 @@ export default function Levantamento({ st, prova, last, onAplicar, onProva, levN
           </View>
         )}
             </View>
-          <ScrollView ref={listaRef} style={{ flex: 1 }} contentContainerStyle={{ paddingHorizontal: 10, paddingBottom: 16 }} keyboardShouldPersistTaps="handled" onContentSizeChange={() => { if (!fechado) listaRef.current && listaRef.current.scrollToEnd({ animated: true }); }}>
+          <ScrollView ref={listaRef} style={{ flex: 1 }} contentContainerStyle={{ paddingHorizontal: 10, paddingBottom: 16 }} keyboardShouldPersistTaps="handled" onContentSizeChange={() => { const n = lev.marks.length; if (!fechado && !aberta && n > nMarksRef.current) listaRef.current && listaRef.current.scrollToEnd({ animated: true }); nMarksRef.current = n; }}>
             {fechado && !WEB && (
               <TouchableOpacity style={[st.btn2, { marginBottom: 8 }]} onPress={() => del(ult.id)}><Text style={st.btn2Tx}>Reabrir (desfazer chegada)</Text></TouchableOpacity>
             )}
@@ -553,11 +559,15 @@ export default function Levantamento({ st, prova, last, onAplicar, onProva, levN
                 <View style={{ paddingVertical: 8 }}>
                   <TouchableOpacity onPress={() => setAberta(aberto ? null : m.id)} style={st.line}>
                     <Text style={[st.v, { color: COR[m.k] }]}>{rotulo(m, i)}</Text>
-                    <Text style={st.k}>  {km2(m.km)} km{m.k === 'N' ? ` · parado ${Math.floor(nt / 60)}:${String(nt % 60).padStart(2, '0')}` : ''}{m.foto ? ' · foto' : ''}</Text>
+                    <Text style={st.k}>  {km2(m.km)} km{m.k === 'N' ? ` · parado ${Math.floor(nt / 60)}:${String(nt % 60).padStart(2, '0')}` : ''}{m.afer ? ' · AFER' : ''}{m.k === 'S' && trAtual(lev)[nTr(i)] && trAtual(lev)[nTr(i)].zr ? ' · zera hod.' : ''}{m.foto ? ' · foto' : ''}</Text>
                     <Text style={st.v}>{aberto ? '▲' : '▼'}</Text>
                   </TouchableOpacity>
                   {aberto && (
                     <View style={{ borderTopWidth: 1, borderTopColor: '#262b32', marginTop: 6, paddingTop: 6 }}>
+                      <View style={[st.row, { marginBottom: 6, flexWrap: 'wrap' }]}>
+                        <ChipT st={st} cor="#ffe600" on={!!m.afer} tx={m.afer ? '✓ Aferição neste ponto' : 'Aferição neste ponto'} onPress={() => upd(m.id, { afer: !m.afer })} />
+                        {m.k === 'S' && (() => { const tz = trAtual(lev)[nTr(i)]; const on = !!(tz && tz.zr); return <ChipT st={st} cor="#ffe600" on={on} tx={on ? '✓ Zera o hodômetro' : 'Zerar hodômetro'} onPress={() => setTr(nTr(i), { zr: !on })} />; })()}
+                      </View>
                       {m.k === 'P' && (
                         <View>
                           <Text style={st.tipTx}>Linha do PC: {m.lw || 30} m, perpendicular ao rastro (vermelha no mapa). O competidor conta se o rastro cruzar a linha.</Text>
@@ -606,6 +616,8 @@ export default function Levantamento({ st, prova, last, onAplicar, onProva, levN
         </View>
       )}
           </ScrollView>
+          </View>
+          </View>
           {trAskV && (
             <View style={{ position: 'absolute', left: 0, right: 0, top: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'center', padding: 20 }}>
               <View style={st.card}>
