@@ -350,7 +350,7 @@ function Detalhe({ st, t, insc, gps, onVoltar }) {
   );
 }
 
-export function TrilhasComp({ st, gps }) {
+export function TrilhasComp({ st, gps, modo }) {
   const [lista, setLista] = useState(null);
   const [minhas, setMinhas] = useState({});
   const [id, setId] = useState(null);
@@ -358,12 +358,12 @@ export function TrilhasComp({ st, gps }) {
   useEffect(() => ouvirMinhasInscTrilhas((l) => setMinhas(Object.fromEntries(l.map((x) => [x.trilha, x]))), () => {}), []);
   const t = id && (lista || []).find((x) => x.id === id);
   if (t) return <Detalhe st={st} t={t} insc={minhas[t.id]} gps={gps} onVoltar={() => setId(null)} />;
-  const ordenada = [...(lista || [])].sort((a, b) => (a.quandoTs || 9e15) - (b.quandoTs || 9e15));
+  const ordenada = [...(lista || [])].filter((x) => (modo === 'minhas' ? !!minhas[x.id] : modo === 'abertas' ? !minhas[x.id] : true)).sort((a, b) => (a.quandoTs || 9e15) - (b.quandoTs || 9e15));
   return (
     <View>
-      <Text style={st.tip}>Trilhas abertas</Text>
+      {modo === 'minhas' && ordenada.length === 0 ? null : <Text style={[st.tip, { marginTop: 10 }]}>{modo === 'minhas' ? 'Minhas trilhas' : 'Trilhas'}</Text>}
       {lista == null && <Text style={st.tipTx}>Carregando…</Text>}
-      {lista && lista.length === 0 && <View style={st.card}><Text style={st.tipTx}>Nenhuma trilha aberta no momento.</Text></View>}
+      {lista && ordenada.length === 0 && modo !== 'minhas' && <View style={st.card}><Text style={st.tipTx}>Nenhuma trilha aberta no momento.</Text></View>}
       {ordenada.map((x) => (
         <TouchableOpacity key={x.id} style={st.card} onPress={() => setId(x.id)}>
           <View style={st.line}><Text style={{ color: '#fff', fontSize: 18, fontWeight: '700', flex: 1 }}>{x.nome}</Text>{minhas[x.id] ? <Etiqueta st={st} k={minhas[x.id].status} /> : <Text style={{ color: '#ff7a2e', fontWeight: '800' }}>Vagas abertas</Text>}</View>

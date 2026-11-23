@@ -9,9 +9,17 @@ import { apagarJson, loadJson, saveJson } from './persist';
 import { parseDataBR } from './Fluxo';
 
 export const slugProva = (p) => String(p).trim().toUpperCase().replace(/[^A-Z0-9]+/g, '');
+// Apaga tudo o que o celular guardou sobre um código de prova (o código pode ser sorteado de novo mais tarde).
+export function limparProvaLocal(code) {
+  const c = slugProva(code);
+  ['lev_', 'levpend_', 'levbak_', 'levw_', 'base_', 'prova_'].forEach((k) => apagarJson(k + c));
+  const limpa = (nome, ok) => { const o = loadJson(nome, {}); let mudou = false; Object.keys(o).forEach((k) => { if (!ok(k)) { delete o[k]; mudou = true; } }); if (mudou) saveJson(nome, o); };
+  limpa('dlstat', (k) => !k.startsWith(c + '_'));
+  limpa('largm', (k) => k !== c);
+}
 const km3 = (m) => ((m || 0) / 1000).toFixed(3).replace('.', ',');
 
-export default function ListaProvas({ st, org, onAbrir, onSairOrg }) {
+export default function ListaProvas({ st, org, onAbrir, onSairOrg, onApagou }) {
   const [idx, setIdx] = useState(() => loadJson('lev_index', []));
   const [novo, setNovo] = useState('');
   const [cidade, setCidade] = useState('');
@@ -44,6 +52,7 @@ export default function ListaProvas({ st, org, onAbrir, onSairOrg }) {
     setBusy(true);
     try {
       const code = await criarProva(nome, cidade.trim(), dataTx.trim(), ts);
+      limparProvaLocal(code);
       saveJson('lev_' + slugProva(code), { iniT: null, marks: [], nome });
       salva([{ code, nome, marcas: 0, km: 0, ts: Date.now() }, ...idx]);
       setNovo(''); setCidade(''); setDataObj(null); setForm(false);
@@ -60,8 +69,8 @@ export default function ListaProvas({ st, org, onAbrir, onSairOrg }) {
     const it = apagando;
     try { await apagarProvaNuvem(it.code); } catch (e) { return Alert.alert('Não apagou', String(e?.message || e)); }
     (loadJson('lev_' + slugProva(it.code), { marks: [] }).marks || []).forEach((m) => { try { if (m.foto && String(m.foto).includes('foto_')) new File(m.foto).delete(); } catch {} });
-    apagarJson('lev_' + slugProva(it.code));
-    apagarJson('base_' + slugProva(it.code));
+    limparProvaLocal(it.code);
+    onApagou && onApagou(it.code);
     salva(idx.filter((x) => x.code !== it.code));
     if (org && org.prova === it.code) onSairOrg();
     setApagando(null);

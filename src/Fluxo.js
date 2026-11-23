@@ -60,6 +60,23 @@ function PedirVaga({ st, user, v, onFim }) {
     </View>
   );
 }
+export function EventosAbertos({ st, user, extra }) {
+  const c0 = loadJson('evcache', { insc: [], donos: [], provas: {} });
+  const [insc, setInsc] = useState(c0.insc);
+  const [donos, setDonos] = useState(c0.donos);
+  useEffect(() => ouvirMinhasInscricoes(user.email, setInsc, () => {}), [user.email]);
+  useEffect(() => ouvirMinhasProvas(setDonos, () => {}), [user.uid]);
+  const hoje = new Date(); hoje.setHours(0, 0, 0, 0);
+  const dias = (ts) => (ts == null ? null : Math.round((ts - hoje.getTime()) / 86400000));
+  return (
+    <View>
+      <Topo st={st} titulo="Eventos abertos" />
+      <Text style={st.tipTx}>Eventos lançados pelos organizadores com inscrições abertas. Peça a sua vaga; depois de aprovado o evento passa para "Meus eventos".</Text>
+      <Disponiveis st={st} user={user} excluir={[...insc.map((i) => i.prova), ...donos.map((d) => d.code)]} dias={dias} semTitulo />
+      {extra}
+    </View>
+  );
+}
 function Disponiveis({ st, user, excluir, dias }) {
   const [vit, setVit] = useState([]);
   const [pedidos, setPedidos] = useState({});
@@ -70,10 +87,10 @@ function Disponiveis({ st, user, excluir, dias }) {
     .map((v) => ({ ...v, ts: v.dataTs ?? parseDataBR(v.data) }))
     .filter((v) => v.ts == null || dias(v.ts) >= 0 || pedidos[v.prova])
     .sort((a, b) => (a.ts ?? 9e15) - (b.ts ?? 9e15));
-  if (!lista.length) return null;
+  if (!lista.length) return <View style={[st.card, { marginTop: 10 }]}><Text style={st.tipTx}>Nenhuma prova com inscrições abertas no momento.</Text></View>;
   return (
     <View style={{ marginTop: 10 }}>
-      <Text style={[st.tip, { marginBottom: 6 }]}>Eventos disponíveis</Text>
+      <Text style={[st.tip, { marginBottom: 6 }]}>Provas</Text>
       {lista.map((v) => {
         const p = pedidos[v.prova];
         const stt = p && p.status;
@@ -147,8 +164,7 @@ function Eventos({ st, user, onEvento, onAdmin }) {
       {erro ? <Text style={[st.tipTx, { color: '#ffb300' }]}>{erro}</Text> : null}
       <Sec t="Hoje" a={sHoje} tag hero /><Sec t="Amanhã" a={sAman} tag />
       <Sec t="Admin" a={resto(adm)} /><Sec t="Eventos inscritos" a={resto(comp)} />
-      <Disponiveis st={st} user={user} excluir={[...insc.map((i) => i.prova), ...donos.map((d) => d.code)]} dias={dias} />
-      {todos.length === 0 && <View style={st.card}><Text style={st.tipTx}>Nenhum evento inscrito ainda. Veja os eventos disponíveis abaixo e peça inscrição, ou peça ao organizador para inscrever o e-mail {user.email}. Se é organizador, crie a prova na aba Organizar.</Text></View>}
+      {todos.length === 0 && <View style={st.card}><Text style={st.tipTx}>Nenhum evento inscrito ainda. Veja o menu "Eventos abertos" e peça inscrição, ou peça ao organizador para inscrever o e-mail {user.email}. Se é organizador, crie a prova na aba Organizar.</Text></View>}
     </View>
   );
 }

@@ -25,12 +25,17 @@ export function cumulative(points) {
 // Resolve um trecho publicado pelo organizador para a classe do competidor.
 // V = média por classe (Graduado e Moto usam a mesma; Amador tem a sua), D = deslocamento (tempo limite, sem pontos).
 // nt = segundos de neutro no fim do trecho (parada obrigatória no PC).
-export const GRUPOS_PADRAO = [{ nome: 'A', cats: ['TURISMO LIGHT', 'TURISMO', 'GRADUADO', 'MASTER'] }];
-// categorias = [{nome, g}] (g = índice do grupo de média). Sem categorias, usa o padrão: as 4 categorias no grupo A.
+export const CATS_BASE = ['TURISMO LIGHT', 'TURISMO', 'GRADUADO', 'MASTER'];
+// categorias = [{nome, dv}]: dv = diferença de média (km/h, + ou −) em relação à categoria base (GRADUADO).
+// Cada categoria é o seu próprio "grupo": a média de cada trecho é a do Graduado somada ao dv da categoria.
 export function gruposDe(cats) {
-  if (!cats || !cats.length) return GRUPOS_PADRAO;
-  const n = Math.max(...cats.map((c) => c.g || 0)) + 1;
-  return Array.from({ length: n }, (_, i) => ({ nome: String.fromCharCode(65 + i), cats: cats.filter((c) => (c.g || 0) === i).map((c) => c.nome) }));
+  const l = cats && cats.length ? cats : CATS_BASE.map((nome) => ({ nome, dv: 0 }));
+  return l.map((c) => ({ nome: c.nome, cats: [c.nome], dv: Number(c.dv) || 0 }));
+}
+export const GRUPOS_PADRAO = gruposDe([]);
+export function baseIdx(grupos) {
+  const i = (grupos || []).findIndex((g) => g.nome === 'GRADUADO');
+  return i < 0 ? 0 : i;
 }
 export function grupoIdx(classe, grupos) {
   const g = grupos && grupos.length ? grupos : GRUPOS_PADRAO;

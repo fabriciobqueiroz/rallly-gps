@@ -9,7 +9,7 @@ import { cumulative, oficialDeTrilha, pcsDoLogger, rank } from './rally';
 import { calcDl } from './TrackLog';
 import { getState } from './store';
 
-export const CATS_PADRAO = [{ nome: 'TURISMO LIGHT', g: 0 }, { nome: 'TURISMO', g: 0 }, { nome: 'GRADUADO', g: 0 }, { nome: 'MASTER', g: 0 }];
+export const CATS_PADRAO = [{ nome: 'TURISMO LIGHT', dv: 0 }, { nome: 'TURISMO', dv: 0 }, { nome: 'GRADUADO', dv: 0 }, { nome: 'MASTER', dv: 0 }];
 const LETRAS = 'ABCDEF';
 const p2 = (x) => String(x).padStart(2, '0');
 export const parseHMS = (t) => { const m = /^(\d{1,2}):(\d{2})(?::(\d{2}))?$/.exec(String(t || '').trim()); return m ? +m[1] * 3600 + +m[2] * 60 + (+m[3] || 0) : null; };
@@ -36,36 +36,45 @@ const Chip = ({ st, on, onPress, children, small }) => (
 );
 const Wrap = ({ children }) => <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 6 }}>{children}</View>;
 
-// ---------- Categorias e grupos de média ----------
+// ---------- Categorias e diferença de média ----------
+const fmtDv = (n) => (n > 0 ? '+' + String(n).replace('.', ',') : String(n).replace('.', ','));
+function CatRow({ st, c, base, onDv, onRemove }) {
+  const [tx, setTx] = useState(c.dv ? fmtDv(c.dv) : '');
+  const commit = () => { const n = parseFloat(String(tx).replace(',', '.').replace('+', '')); const v = isNaN(n) ? 0 : Math.round(n * 10) / 10; setTx(v ? fmtDv(v) : ''); if (v !== (c.dv || 0)) onDv(v); };
+  return (
+    <View style={{ borderTopWidth: 1, borderTopColor: '#262b32', paddingVertical: 8 }}>
+      <View style={st.line}>
+        <View style={{ flex: 1 }}>
+          <Text style={st.v}>{c.nome}</Text>
+          <Text style={st.tipTx}>{base ? 'Categoria base: a média da planilha é a dela' : 'Média = Graduado ' + (c.dv ? fmtDv(c.dv) : '+0') + ' km/h'}</Text>
+        </View>
+        {base ? <Text style={{ color: '#4caf50', fontWeight: '800' }}>BASE</Text> : (
+          <TextInput style={[st.input, { width: 90 }]} value={tx} onChangeText={setTx} onBlur={commit} onEndEditing={commit} onSubmitEditing={commit} placeholder="0" placeholderTextColor="#666" keyboardType="numbers-and-punctuation" />
+        )}
+        <TouchableOpacity onPress={onRemove} style={{ paddingLeft: 12 }}><Text style={{ color: '#ff5252', fontWeight: '700' }}>remover</Text></TouchableOpacity>
+      </View>
+    </View>
+  );
+}
 export function OrgCategorias({ st, prova, categorias }) {
   const [novo, setNovo] = useState('');
   const [loc, setLoc] = useState(null);
   useEffect(() => { setLoc(null); }, [categorias]);
   const cats = loc || (categorias.length ? categorias : CATS_PADRAO);
-  const ng = Math.max(...cats.map((c) => c.g || 0)) + 1;
-  const salvar = (next) => { setLoc(next); salvarProva(prova, { categorias: next }).catch((e) => { setLoc(null); Alert.alert('Não salvou', String(e?.message || e)); }); };
+  const bi = Math.max(0, cats.findIndex((c) => c.nome === 'GRADUADO'));
+  const salvar = (next) => { setLoc(next); salvarProva(prova, { categorias: next.map((c) => ({ nome: c.nome, dv: Number(c.dv) || 0 })) }).catch((e) => { setLoc(null); Alert.alert('Não salvou', String(e?.message || e)); }); };
   const add = () => {
     const nome = novo.trim().toUpperCase();
     if (!nome) return;
     if (cats.some((c) => c.nome === nome)) return Alert.alert('Já existe', nome);
-    salvar([...cats, { nome, g: 0 }]); setNovo('');
+    salvar([...cats, { nome, dv: 0 }]); setNovo('');
   };
   return (
     <View style={st.card}>
-      <Text style={st.tip}>Categorias e grupos de média</Text>
-      <Text style={st.tipTx}>Toque em A, B… para escolher o grupo de cada categoria. Categorias do mesmo grupo usam a mesma média em cada trecho; se quiser médias diferentes (ex.: Amador mais lento), ponha a categoria em outro grupo. Os competidores escolhem a categoria na inscrição.</Text>
-      {cats.map((c) => (
-        <View key={c.nome} style={{ borderTopWidth: 1, borderTopColor: '#262b32', paddingVertical: 8 }}>
-          <View style={st.line}>
-            <Text style={st.v}>{c.nome} · Grupo {LETRAS[c.g || 0]}</Text>
-            <TouchableOpacity onPress={() => salvar(cats.filter((x) => x.nome !== c.nome))}><Text style={{ color: '#ff5252', fontWeight: '700' }}>remover</Text></TouchableOpacity>
-          </View>
-          <Wrap>
-            {Array.from({ length: Math.min(ng + 1, 6) }, (_, g) => (
-              <Chip key={g} st={st} small on={(c.g || 0) === g} onPress={() => salvar(cats.map((x) => (x.nome === c.nome ? { ...x, g } : x)))}>Grupo {LETRAS[g]}</Chip>
-            ))}
-          </Wrap>
-        </View>
+      <Text style={st.tip}>Categorias e diferença de média</Text>
+      <Text style={st.tipTx}>Na aba Planilha você define só a média do Graduado em cada trecho. Aqui você diz quantos km/h cada outra categoria roda a mais (+) ou a menos (−) em relação ao Graduado. Ex.: Turismo −3 ou Master +2. Os competidores escolhem a categoria na inscrição.</Text>
+      {cats.map((c, i) => (
+        <CatRow key={c.nome + '_' + (c.dv || 0)} st={st} c={c} base={i === bi} onDv={(v) => salvar(cats.map((x) => (x.nome === c.nome ? { ...x, dv: v } : x)))} onRemove={() => salvar(cats.filter((x) => x.nome !== c.nome))} />
       ))}
       <View style={[st.row, { marginTop: 10, marginBottom: 0 }]}>
         <TextInput style={[st.field, { flex: 1, marginTop: 0 }]} value={novo} onChangeText={setNovo} placeholder="Nova categoria" placeholderTextColor="#666" autoCapitalize="characters" />
@@ -74,7 +83,7 @@ export function OrgCategorias({ st, prova, categorias }) {
       {categorias.length === 0 && (
         <TouchableOpacity style={[st.btn2, { marginTop: 10 }]} onPress={() => salvar(CATS_PADRAO)}><Text style={st.btn2Tx}>Usar estas categorias na prova</Text></TouchableOpacity>
       )}
-      <Text style={st.tipTx}>{ng} grupo(s) de média. As médias de cada trecho são preenchidas na aba Planilha.</Text>
+      {!cats.some((c) => c.nome === 'GRADUADO') && <Text style={[st.tipTx, { color: '#ffb300' }]}>Não há categoria GRADUADO: a primeira da lista é a base.</Text>}
     </View>
   );
 }
@@ -242,7 +251,9 @@ export function escolherDT(atual, set) {
 }
 export const fmtBR = (v) => { const d = parseDT(v); return d ? `${p2(new Date(d).getDate())}/${p2(new Date(d).getMonth() + 1)}/${new Date(d).getFullYear()}  ${p2(new Date(d).getHours())}:${p2(new Date(d).getMinutes())}` : ''; };
 
-export function OrgLiberacao({ st, prova, lib }) {
+export function OrgLiberacao({ st, prova, lib, categorias }) {
+  const cats = (categorias && categorias.length ? categorias : CATS_PADRAO).map((c) => c.nome);
+  const escDe = (c) => ((lib.escalas && lib.escalas[c]) || lib.escala) === 'd' ? 'd' : 's';
   const [ini, setIni] = useState(lib.ini || '');
   const [fim, setFim] = useState(lib.fim || '');
   useEffect(() => { setIni(lib.ini || ''); setFim(lib.fim || ''); }, [lib.ini, lib.fim]);
@@ -276,11 +287,17 @@ export function OrgLiberacao({ st, prova, lib }) {
         <Switch value={lib.track === true} onValueChange={(v) => salvar({ track: v })} />
       </View>
       <Text style={[st.tip, { marginTop: 10 }]}>Pontuação dos PCs</Text>
-      <Text style={st.tipTx}>Atrasado ou adiantado pontua igual. Não passar no PC, ou passar fora de ±10 min do ideal, vale a pontuação máxima ({lib.escala === 'd' ? '6.000' : '600'} pontos).</Text>
-      <View style={st.row}>
-        <TouchableOpacity style={[st.btn2, lib.escala !== 'd' && { backgroundColor: '#ff7a2e' }]} onPress={() => salvar({ escala: 's' })}><Text style={[st.btn2Tx, lib.escala !== 'd' && { color: '#0c1014' }]}>1 ponto por segundo</Text></TouchableOpacity>
-        <TouchableOpacity style={[st.btn2, lib.escala === 'd' && { backgroundColor: '#ff7a2e' }]} onPress={() => salvar({ escala: 'd' })}><Text style={[st.btn2Tx, lib.escala === 'd' && { color: '#0c1014' }]}>1 ponto por décimo (CBA)</Text></TouchableOpacity>
-      </View>
+      <Text style={st.tipTx}>Atrasado ou adiantado pontua igual. Não passar no PC, ou passar fora de ±10 min do ideal, vale a pontuação máxima (600 pontos no segundo, 6.000 no décimo). Escolha o sistema de cada categoria.</Text>
+      {cats.map((c) => (
+        <View key={c} style={{ borderTopWidth: 1, borderTopColor: '#262b32', paddingVertical: 8 }}>
+          <Text style={st.v}>{c}</Text>
+          <View style={st.row}>
+            {[['s', '1 ponto por segundo'], ['d', '1 ponto por décimo (CBA)']].map(([k, t]) => (
+              <TouchableOpacity key={k} style={[st.btn2, escDe(c) === k && { backgroundColor: '#ff7a2e' }]} onPress={() => salvar({ escalas: { [c]: k } })}><Text style={[st.btn2Tx, escDe(c) === k && { color: '#0c1014' }]}>{t}</Text></TouchableOpacity>
+            ))}
+          </View>
+        </View>
+      ))}
       <Text style={st.tipTx}>Nos testes tudo começa liberado. O organizador sempre vê tudo.</Text>
     </View>
   );

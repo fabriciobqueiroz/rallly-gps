@@ -14,7 +14,7 @@ import Organizador from './src/Organizador';
 import { enviarResultado, ouvirRanking, salvarProva, ouvirProva, ouvirInscricao, ouvirMinhaLargada, enviarDatalogger, ouvirAuth, sairConta, lerPerfil, enviarAoVivo, limparAoVivo } from './src/firebase';
 import Login from './src/Login';
 import { st } from './src/estilos';
-import Fluxo, { DlTela, InfoProva } from './src/Fluxo';
+import Fluxo, { DlTela, EventosAbertos, InfoProva } from './src/Fluxo';
 import { planilhaLiberada, parseHMS, CATS_PADRAO } from './src/OrgExtras';
 import PerfilTela from './src/Perfil';
 import { NavTela, NavConfig, PilotoTela, loadNav } from './src/Nav';
@@ -48,6 +48,8 @@ export default function App() {
   const [soDl, setSoDl] = useState(false);
   const [pilotoOpen, setPilotoOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [provaVer, setProvaVer] = useState(0); // muda quando uma prova é aberta/criada/apagada: recarrega do zero, mesmo com o mesmo código
+  const forcaZero = useRef(false);
   const [infoOpen, setInfoOpen] = useState(false);
   const [perfilOpen, setPerfilOpen] = useState(false);
   const [cfgPiloto, setCfgPiloto] = useState(false);
@@ -257,6 +259,8 @@ export default function App() {
     setEnviando(false);
   };
   useEffect(() => {
+    setProvaMap({ wps: [], coords: [], legs: [], kmh: [], tul: [], trechos: [], trs: [], categorias: [], lib: {}, refs: [], pcl: [], lev: null });
+    if (forcaZero.current) { forcaZero.current = false; setRotTxt(''); saveRoteiro(''); setLargadaTxt(''); }
     if (!piloto.prova.trim()) return;
     const slugP = piloto.prova.trim().toUpperCase().replace(/[^A-Z0-9]+/g, '');
     setLargManualRaw(loadJson('largm', {})[slugP] || '');
@@ -276,7 +280,7 @@ export default function App() {
     };
     if (cache) aplica(cache, false);
     return ouvirProva(piloto.prova, (d) => aplica(d, true), () => {});
-  }, [piloto.prova]);
+  }, [piloto.prova, provaVer]);
   // Arma a largada quando o horário ainda está no futuro.
   useEffect(() => {
     armed.current = tStart != null && tStart > Date.now();
@@ -452,7 +456,7 @@ export default function App() {
       trechos: provaMap.trs.length || tr.length, classe: piloto.classe, numero: piloto.numero, totalSec: Math.round(totalSec), km, largSec: parseHMS(minhaLarg || largManual),
     };
   })();
-  const minhasAbas = papel === 'organizador' ? ['provas', 'organizar', 'ranking', 'trilhas'] : ['provas', 'tulipas', 'ranking', 'trilhas'];
+  const minhasAbas = papel === 'organizador' ? ['provas', 'organizar', 'ranking', 'trilhas', 'abertos'] : ['provas', 'tulipas', 'ranking', 'abertos'];
   const setLargManual = (v) => { setLargManualRaw(v); const k = piloto.prova.trim().toUpperCase().replace(/[^A-Z0-9]+/g, ''); saveJson('largm', { ...loadJson('largm', {}), [k]: v }); };
   // Os pontos de GPS ficam intactos (o levantamento do organizador usa o mesmo rastro). A prova só conta a partir da largada
   // (janela do datalogger) e o hodômetro é zerado aqui, então nada se mistura e nada é apagado.
@@ -501,7 +505,7 @@ export default function App() {
         <TouchableOpacity style={st.tab} onPress={() => setTab(papel === 'organizador' ? 'organizar' : 'provas')}><Text style={st.tabTx}>‹ Início</Text></TouchableOpacity>
         {minhasAbas.filter((t) => t !== 'provas' && t !== 'organizar').map((t) => (
           <TouchableOpacity key={t} style={[st.tab, tab === t && st.tabOn]} onPress={() => setTab(t)}>
-            <Text style={[st.tabTx, tab === t && { color: '#0c1014' }]}>{{ provas: 'Provas', gravar: 'Gravar', ranking: 'Ranking', tulipas: 'Iniciar', organizar: 'Organizar', trilhas: 'Trilhas' }[t]}</Text>
+            <Text style={[st.tabTx, tab === t && { color: '#0c1014' }]}>{{ provas: 'Provas', gravar: 'Gravar', ranking: 'Ranking', tulipas: 'Iniciar', organizar: 'Organizar', trilhas: 'Org. trilha', abertos: 'Abertos' }[t]}</Text>
           </TouchableOpacity>
         ))}
       </View>
@@ -515,8 +519,9 @@ export default function App() {
         <TouchableOpacity activeOpacity={1} style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.45)' }} onPress={() => setMenuOpen(false)}>
           <View style={{ position: 'absolute', top: 54, right: 12, width: 230, backgroundColor: '#1b212a', borderWidth: 1, borderColor: '#262b32', borderRadius: 12, paddingVertical: 6 }}>
             {[
-              ...(papel === 'organizador' ? [['Organizar prova', () => setTab('organizar')]] : []),
+              ...(papel === 'organizador' ? [['Organizar prova', () => setTab('organizar')], ['Organizar trilha', () => setTab('trilhas')]] : []),
               ['Meus eventos', () => setTab('provas')],
+              ['Eventos abertos', () => setTab('abertos')],
               ['Ranking', () => setTab('ranking')],
               ['Perfil', () => setPerfilOpen(true)],
               ...(papeis.organizador && papeis.competidor ? [[papel === 'organizador' ? 'Modo competidor' : 'Modo organizador', () => setPapel(papel === 'organizador' ? 'competidor' : 'organizador')]] : []),
@@ -532,10 +537,10 @@ export default function App() {
       {tab === 'provas' ? (
         <Fluxo st={st} user={user} piloto={piloto} provaMap={provaMap} lib={libOk} minhaLarg={minhaLarg} largManual={largManual} setLargManual={setLargManual} pointsN={janN} dlStat={loadJson('dlstat', {})} dlTick={dlTick}
           onEnviarDl={onDatalogger} enviandoDl={enviandoDl} onEscolher={escolher} onPlanilha={onPlanilha} onSoDl={onSoDl} onPiloto={() => setPilotoOpen(true)} onZerarDl={zerarDatalogger} onPersonalizar={() => setCfgOpen(true)}
-          extra={papel === 'organizador' ? <TrilhasOrg st={st} /> : <TrilhasComp st={st} gps={{ nome: piloto.nome || user.email, uid: user.uid, running, start, getPoints: () => getState().points }} />}
+          extra={<TrilhasComp st={st} modo="minhas" gps={{ nome: piloto.nome || user.email, uid: user.uid, running, start, getPoints: () => getState().points }} />}
           onAdmin={(x) => { setPapel('organizador'); setP('prova')(x.code); setAbrirReq({ code: x.code, n: Date.now() }); }} />
       ) : tab === 'organizar' ? (
-        <Organizador st={st} onTab={setTab} onProva={setP('prova')} prova={piloto.prova} provaMap={provaMap} last={last} onOrg={setOrgInfo} abrirReq={abrirReq} />
+        <Organizador st={st} onTab={setTab} onProva={(c, force) => { if (force) { forcaZero.current = true; setProvaVer((v) => v + 1); } setP('prova')(c); }} prova={piloto.prova} provaMap={provaMap} last={last} onOrg={setOrgInfo} abrirReq={abrirReq} />
       ) : tab === 'tulipas' ? (
         <View style={st.card}>
           <Text style={st.tip}>Prova {piloto.prova.trim() || '—'}</Text>
@@ -556,10 +561,10 @@ export default function App() {
             </TouchableOpacity>
           )}
         </View>
+      ) : tab === 'abertos' ? (
+        <EventosAbertos st={st} user={user} extra={<TrilhasComp st={st} modo="abertas" gps={{ nome: piloto.nome || user.email, uid: user.uid, running, start, getPoints: () => getState().points }} />} />
       ) : tab === 'trilhas' ? (
-        papel === 'organizador'
-          ? <TrilhasOrg st={st} />
-          : <TrilhasComp st={st} gps={{ nome: piloto.nome || user.email, uid: user.uid, running, start, getPoints: () => getState().points }} />
+        <TrilhasOrg st={st} />
       ) : tab === 'ranking' ? (
         <View>
           <View style={st.card}>

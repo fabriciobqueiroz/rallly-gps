@@ -13,10 +13,11 @@ const sg = (s) => `${s >= 0 ? '+' : '−'}${Math.abs(s).toFixed(1).replace('.', 
 // Resultado do competidor a partir do datalogger: PCs, previsto x real, diferença e pontos (1 ponto por segundo).
 // Regulamento CBA (Art. 21): passagem só vale a ±10 min do ideal; fora disso ou sem passar = pontuação máxima (6.000).
 export const JANELA = 600;
-export const escalaDe = (lib) => (lib && lib.escala === 'd' ? 10 : 1); // pontos por segundo: 1 (padrão) ou 10 (1 por décimo, CBA)
+// pontos por segundo: 1 (padrão) ou 10 (1 por décimo, CBA). Vale por categoria (lib.escalas); sem escolha, usa lib.escala.
+export const escalaDe = (lib, classe) => { const e = lib && ((lib.escalas && classe != null && lib.escalas[classe]) || lib.escala); return e === 'd' ? 10 : 1; };
 export function calcDl(dl, provaMap, grupos) {
   const larg = dl.tIni || dl.t0;
-  const esc = escalaDe(provaMap.lib), max = JANELA * esc;
+  const esc = escalaDe(provaMap.lib, dl.classe), max = JANELA * esc;
   let pcs = [];
   try { pcs = oficialDeTrilha(pcsDoLogger(dl), provaMap.wps || [], provaMap.trechos || [], dl.classe, grupos || GRUPOS_PADRAO, larg, provaMap.pcl || [], provaMap.coords || []); } catch {}
   const legs = provaMap.legs || [], trs = provaMap.trs || [];
