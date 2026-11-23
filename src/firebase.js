@@ -69,6 +69,7 @@ export const sairConta = () => signOut(auth);
 export const recuperarSenha = (email) => sendPasswordResetEmail(auth, email.trim());
 // Perfil: um e-mail pode ter cadastro de competidor e de organizador (papéis separados).
 export const lerPerfil = async (uid) => { const d = await getDoc(doc(db, 'usuarios', uid)); return d.exists() ? d.data() : { papeis: {} }; };
+export const salvarDadosPerfil = (uid, dados) => setDoc(doc(db, 'usuarios', uid), { perfil: dados }, { merge: true });
 export async function addPapel(uid, email, papel) {
   const p = await lerPerfil(uid);
   await setDoc(doc(db, 'usuarios', uid), { email: email.trim().toLowerCase(), papeis: { ...(p.papeis || {}), [papel]: true } }, { merge: true });
@@ -256,3 +257,35 @@ export async function limparAoVivo(kind, id) {
 export function ouvirAoVivo(kind, id, onData, onError) {
   return onSnapshot(query(collection(db, 'aoVivo'), where('kind', '==', kind), where('id', '==', id)), (snap) => onData(snap.docs.map((d) => d.data())), onError);
 }
+
+// ---------- Eventos disponíveis (vitrine) e pedidos de inscrição ----------
+// A vitrine guarda só o que é público (nome, cidade, data, categorias): a planilha continua restrita aos inscritos.
+export async function abrirVitrine(prova, abertas) {
+  const code = slug(prova);
+  if (!abertas) return deleteDoc(doc(db, 'vitrine', code)).catch(() => {});
+  const d = await lerProva(code);
+  if (!d) throw new Error('Prova não encontrada na nuvem. Publique a planilha antes.');
+  await setDoc(doc(db, 'vitrine', code), {
+    prova: code, donoUid: d.donoUid || '', nome: d.nome || '', cidade: d.cidade || '', data: d.data || '', dataTs: d.dataTs ?? null,
+    categorias: (d.categorias || []).map((c) => c.nome), em: Date.now(),
+  });
+}
+export const ouvirVitrine = (onData, onError) => onSnapshot(collection(db, 'vitrine'), (snap) => onData(snap.docs.map((d) => d.data())), onError);
+export const ouvirVitrineProva = (prova, onData, onError) => onSnapshot(doc(db, 'vitrine', slug(prova)), (d) => onData(d.exists()), onError);
+export async function pedirVagaProva(prova, { provaNome, piloto, navegador, equipe, classe, numero }) {
+  const u = auth.currentUser;
+  if (!u) throw new Error('Entre na sua conta primeiro.');
+  await setDoc(doc(db, 'pedidos', `${slug(prova)}_${u.uid}`), {
+    prova: slug(prova), provaNome: provaNome || '', uid: u.uid, email: (u.email || '').toLowerCase(), piloto: piloto || '', navegador: navegador || '',
+    equipe: equipe || '', classe: classe || '', numero: String(numero || ''), status: 'pedido', em: Date.now(),
+  });
+}
+export function ouvirMeusPedidos(onData, onError) {
+  const u = auth.currentUser;
+  if (!u) return () => {};
+  return onSnapshot(query(collection(db, 'pedidos'), where('uid', '==', u.uid)), (snap) => onData(snap.docs.map((d) => d.data())), onError);
+}
+export const ouvirPedidosProva = (prova, onData, onError) =>
+  onSnapshot(query(collection(db, 'pedidos'), where('prova', '==', slug(prova))), (snap) => onData(snap.docs.map((d) => d.data()).sort((a, b) => (a.em || 0) - (b.em || 0))), onError);
+export const cancelarPedido = (prova, uid) => deleteDoc(doc(db, 'pedidos', `${slug(prova)}_${uid}`));
+export const decidirPedido = (prova, uid, patch) => setDoc(doc(db, 'pedidos', `${slug(prova)}_${uid}`), { ...patch, em: Date.now() }, { merge: true });

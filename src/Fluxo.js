@@ -6,7 +6,7 @@ import * as Location from 'expo-location';
 import * as Battery from 'expo-battery';
 import { useKeepAwake } from 'expo-keep-awake';
 import { loadJson, saveJson } from './persist';
-import { removerInscricao, lerProva, ouvirMinhasInscricoes, ouvirMinhasProvas, ouvirRanking } from './firebase';
+import { cancelarPedido, lerPerfil, pedirVagaProva, removerInscricao, lerProva, ouvirMeusPedidos, ouvirMinhasInscricoes, ouvirMinhasProvas, ouvirRanking, ouvirVitrine } from './firebase';
 import { parseHMS, planilhaLiberada } from './OrgExtras';
 import { fmtDur, gruposDe, rank } from './rally';
 
@@ -25,6 +25,73 @@ function Topo({ st, titulo, onVoltar }) {
     <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 10 }}>
       {onVoltar ? <TouchableOpacity onPress={onVoltar} style={{ paddingRight: 14, paddingVertical: 6 }}><Text style={{ color: '#4fc3f7', fontSize: 24, fontWeight: '800' }}>←</Text></TouchableOpacity> : null}
       <Text style={[st.tip, { flex: 1, marginBottom: 0 }]}>{titulo}</Text>
+    </View>
+  );
+}
+
+// ---------- Eventos disponíveis: pedir vaga ----------
+function PedirVaga({ st, user, v, onFim }) {
+  const cats = v.categorias || [];
+  const [f, setF] = useState({ piloto: '', navegador: '', equipe: '', classe: cats[0] || '', numero: '' });
+  const [env, setEnv] = useState(false);
+  useEffect(() => { lerPerfil(user.uid).then((d) => { const p = d.perfil || {}; setF((x) => ({ ...x, piloto: x.piloto || p.nome || '', equipe: x.equipe || p.equipe || '' })); }).catch(() => {}); }, [user.uid]);
+  const enviar = async () => {
+    if (!f.piloto.trim()) return Alert.alert('Falta preencher', 'Informe o nome do piloto.');
+    setEnv(true);
+    try { await pedirVagaProva(v.prova, { provaNome: v.nome, ...f, piloto: f.piloto.trim() }); onFim(); }
+    catch (e) { Alert.alert('Não enviou', String(e?.message || e)); setEnv(false); }
+  };
+  return (
+    <View style={{ marginTop: 8 }}>
+      <TextInput style={st.field} value={f.piloto} onChangeText={(t) => setF({ ...f, piloto: t })} placeholder="Piloto" placeholderTextColor="#666" />
+      <TextInput style={st.field} value={f.navegador} onChangeText={(t) => setF({ ...f, navegador: t })} placeholder="Navegador (opcional)" placeholderTextColor="#666" />
+      <TextInput style={st.field} value={f.equipe} onChangeText={(t) => setF({ ...f, equipe: t })} placeholder="Equipe (opcional)" placeholderTextColor="#666" />
+      <TextInput style={st.field} value={f.numero} onChangeText={(t) => setF({ ...f, numero: t })} placeholder="Número desejado (opcional)" placeholderTextColor="#666" keyboardType="number-pad" />
+      {cats.length > 0 && (
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 8 }}>
+          {cats.map((c) => <TouchableOpacity key={c} style={[st.chip, f.classe === c && { backgroundColor: '#ff7a2e' }]} onPress={() => setF({ ...f, classe: c })}><Text style={[st.btn2Tx, f.classe === c && { color: '#0c1014' }]}>{c}</Text></TouchableOpacity>)}
+        </View>
+      )}
+      <View style={st.row}>
+        <TouchableOpacity style={[st.btn, { flex: 1, marginBottom: 0 }]} onPress={enviar} disabled={env}><Text style={st.btnTx}>{env ? 'Enviando…' : 'Enviar pedido'}</Text></TouchableOpacity>
+        <TouchableOpacity style={[st.btn2, { flex: 1 }]} onPress={onFim}><Text style={st.btn2Tx}>Cancelar</Text></TouchableOpacity>
+      </View>
+      <Text style={st.tipTx}>O organizador aprova o pedido, define o número e a largada. Você é avisado aqui.</Text>
+    </View>
+  );
+}
+function Disponiveis({ st, user, excluir, dias }) {
+  const [vit, setVit] = useState([]);
+  const [pedidos, setPedidos] = useState({});
+  const [aberta, setAberta] = useState(null);
+  useEffect(() => ouvirVitrine(setVit, () => {}), []);
+  useEffect(() => ouvirMeusPedidos((l) => setPedidos(Object.fromEntries(l.map((p) => [p.prova, p]))), () => {}), []);
+  const lista = vit.filter((v) => !excluir.includes(v.prova) && v.donoUid !== user.uid)
+    .map((v) => ({ ...v, ts: v.dataTs ?? parseDataBR(v.data) }))
+    .filter((v) => v.ts == null || dias(v.ts) >= 0 || pedidos[v.prova])
+    .sort((a, b) => (a.ts ?? 9e15) - (b.ts ?? 9e15));
+  if (!lista.length) return null;
+  return (
+    <View style={{ marginTop: 10 }}>
+      <Text style={[st.tip, { marginBottom: 6 }]}>Eventos disponíveis</Text>
+      {lista.map((v) => {
+        const p = pedidos[v.prova];
+        const stt = p && p.status;
+        return (
+          <View key={v.prova} style={[st.card, { marginBottom: 8, borderLeftWidth: 5, borderLeftColor: '#9aa3ad' }]}>
+            <Text style={{ color: '#fff', fontSize: 18, fontWeight: '800' }}>{v.nome || 'Prova ' + v.prova}</Text>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 4 }}><Text style={st.tipTx}>{v.cidade || '—'}</Text><Text style={st.tipTx}>{v.data || ''}</Text></View>
+            {stt === 'pedido' && <Text style={{ color: '#ffb300', fontWeight: '700', marginTop: 4 }}>Pedido enviado · aguardando o organizador</Text>}
+            {stt === 'recusado' && <Text style={{ color: '#ff5252', fontWeight: '700', marginTop: 4 }}>Pedido recusado pelo organizador</Text>}
+            {stt === 'aprovado' && <Text style={{ color: '#4caf50', fontWeight: '700', marginTop: 4 }}>Aprovado ✓ · já aparece em Eventos inscritos</Text>}
+            {(stt === 'pedido' || stt === 'recusado') && (
+              <TouchableOpacity onPress={() => cancelarPedido(v.prova, user.uid).catch(() => {})}><Text style={{ color: '#ff5252', fontWeight: '700', marginTop: 6 }}>{stt === 'pedido' ? 'Cancelar pedido' : 'Limpar'}</Text></TouchableOpacity>
+            )}
+            {!p && aberta !== v.prova && <TouchableOpacity style={[st.btn, { marginTop: 8, marginBottom: 0 }]} onPress={() => setAberta(v.prova)}><Text style={st.btnTx}>Pedir inscrição</Text></TouchableOpacity>}
+            {!p && aberta === v.prova && <PedirVaga st={st} user={user} v={v} onFim={() => setAberta(null)} />}
+          </View>
+        );
+      })}
     </View>
   );
 }
@@ -80,7 +147,8 @@ function Eventos({ st, user, onEvento, onAdmin }) {
       {erro ? <Text style={[st.tipTx, { color: '#ffb300' }]}>{erro}</Text> : null}
       <Sec t="Hoje" a={sHoje} tag hero /><Sec t="Amanhã" a={sAman} tag />
       <Sec t="Admin" a={resto(adm)} /><Sec t="Eventos inscritos" a={resto(comp)} />
-      {todos.length === 0 && <View style={st.card}><Text style={st.tipTx}>Nenhum evento ainda. Se você é competidor, peça ao organizador para inscrever o e-mail {user.email}. Se é organizador, crie a prova na aba Organizar.</Text></View>}
+      <Disponiveis st={st} user={user} excluir={[...insc.map((i) => i.prova), ...donos.map((d) => d.code)]} dias={dias} />
+      {todos.length === 0 && <View style={st.card}><Text style={st.tipTx}>Nenhum evento inscrito ainda. Veja os eventos disponíveis abaixo e peça inscrição, ou peça ao organizador para inscrever o e-mail {user.email}. Se é organizador, crie a prova na aba Organizar.</Text></View>}
     </View>
   );
 }
@@ -322,13 +390,14 @@ export function DlTela({ st, last, pointsN, startedAt, onFinalizar, info }) {
 }
 
 // ---------- Fluxo ----------
-export default function Fluxo({ st, user, piloto, provaMap, lib, minhaLarg, largManual, setLargManual, pointsN, dlStat, onEnviarDl, enviandoDl, onEscolher, onAdmin, onPlanilha, onSoDl, onPersonalizar, onPiloto, onZerarDl }) {
+export default function Fluxo({ st, user, piloto, provaMap, lib, minhaLarg, largManual, setLargManual, pointsN, dlStat, onEnviarDl, enviandoDl, onEscolher, onAdmin, onPlanilha, onSoDl, onPersonalizar, onPiloto, extra, onZerarDl }) {
   const [tela, setTela] = useState('eventos');
   const [x, setX] = useState(null);
   const [modo, setModo] = useState('planilha');
   return (
     <View>
       {tela === 'eventos' && <Eventos st={st} user={user} onEvento={(e) => { setX(e); onEscolher(e.insc); setTela('evento'); }} onAdmin={onAdmin} />}
+      {tela === 'eventos' && extra}
       {tela === 'evento' && x && <Evento st={st} user={user} x={x} provaMap={provaMap} lib={lib} dlStat={dlStat} pointsN={pointsN} onDl={onEnviarDl} enviandoDl={enviandoDl} onIniciar={() => setTela('modo')} onPersonalizar={onPersonalizar} onVoltar={() => setTela('eventos')} onZerarDl={onZerarDl} />}
       {tela === 'modo' && <Modo st={st} onEscolhe={(m) => { setModo(m); setTela('largada'); }} onVoltar={() => setTela('evento')} />}
       {tela === 'largada' && <Largada st={st} minhaLarg={minhaLarg} largManual={largManual} setLargManual={setLargManual} onContinua={() => setTela('config')} onVoltar={() => setTela('modo')} />}

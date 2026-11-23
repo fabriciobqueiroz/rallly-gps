@@ -50,6 +50,20 @@ service cloud.firestore {
       allow delete: if dono(resource.data.prova);
     }
 
+    // ---------- Eventos disponíveis ----------
+    // Vitrine pública (só nome/cidade/data/categorias): o organizador abre e fecha; qualquer conta logada lê.
+    match /vitrine/{id} {
+      allow read: if logado();
+      allow create, update, delete: if dono(request.resource != null ? request.resource.data.prova : resource.data.prova);
+    }
+    // Pedido de inscrição: o competidor cria (status pedido) e cancela; o organizador aprova ou recusa.
+    match /pedidos/{id} {
+      allow read: if logado() && (resource.data.uid == request.auth.uid || dono(resource.data.prova));
+      allow create: if logado() && request.resource.data.uid == request.auth.uid && request.resource.data.status == 'pedido';
+      allow update: if logado() && dono(resource.data.prova);
+      allow delete: if logado() && (resource.data.uid == request.auth.uid || dono(resource.data.prova));
+    }
+
     // ---------- Trilhas ----------
     function donoT(t) {
       return logado() && exists(/databases/$(database)/documents/trilhas/$(t))

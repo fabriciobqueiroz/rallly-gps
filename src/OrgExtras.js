@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 import { loadJson, saveJson } from './persist';
 import { DateTimePickerAndroid } from './pickers';
 import { Alert, Switch, Text, TextInput, TouchableOpacity, View } from 'react-native';
-import { atualizarInscricao, enviarResultado, inscrever, ouvirDataloggers, ouvirRanking, removerInscricao, salvarProva } from './firebase';
+import { abrirVitrine, atualizarInscricao, decidirPedido, enviarResultado, inscrever, ouvirDataloggers, ouvirPedidosProva, ouvirRanking, ouvirVitrineProva, removerInscricao, salvarProva } from './firebase';
 import { compartilharResultadosPdf } from './pdf';
 import { cumulative, oficialDeTrilha, pcsDoLogger, rank } from './rally';
 import { calcDl } from './TrackLog';
@@ -79,6 +79,61 @@ export function OrgCategorias({ st, prova, categorias }) {
   );
 }
 
+// ---------- Inscrições abertas e pedidos de vaga ----------
+function PedidoLinha({ st, prova, p, cats, inscritos }) {
+  const livre = String(Math.max(0, ...inscritos.map((i) => Number(i.numero) || 0)) + 1);
+  const [num, setNum] = useState(p.numero || livre);
+  const [cl, setCl] = useState(p.classe || cats[0]);
+  const aprovar = async () => {
+    if (!String(num).trim()) return Alert.alert('Número', 'Informe o número do carro.');
+    if (inscritos.some((i) => String(i.numero) === String(num).trim())) return Alert.alert('Número já usado', 'Escolha outro número.');
+    try {
+      await inscrever({ prova, provaNome: p.provaNome, numero: String(num).trim(), piloto: p.piloto, navegador: p.navegador, equipe: p.equipe, classe: cl, email: p.email });
+      await decidirPedido(prova, p.uid, { status: 'aprovado', numero: String(num).trim(), classe: cl });
+    } catch (e) { Alert.alert('Não aprovou', String(e?.message || e)); }
+  };
+  return (
+    <View style={{ borderBottomWidth: 1, borderBottomColor: '#262b32', paddingVertical: 8 }}>
+      <Text style={st.v}>{p.piloto}{p.navegador ? ` / ${p.navegador}` : ''}</Text>
+      <Text style={st.tipTx}>{p.email}{p.equipe ? ` · ${p.equipe}` : ''}</Text>
+      <Wrap>{cats.map((c) => <Chip key={c} st={st} small on={cl === c} onPress={() => setCl(c)}>{c}</Chip>)}</Wrap>
+      <View style={[st.row, { alignItems: 'center', marginTop: 6 }]}>
+        <TextInput style={[st.field, { width: 90, marginBottom: 0 }]} value={String(num)} onChangeText={setNum} placeholder="Nº" placeholderTextColor="#666" keyboardType="number-pad" />
+        <TouchableOpacity style={[st.btn2, { flex: 1, backgroundColor: '#2e7d32' }]} onPress={aprovar}><Text style={st.btn2Tx}>Aprovar</Text></TouchableOpacity>
+        <TouchableOpacity style={[st.btn2, { flex: 1 }]} onPress={() => decidirPedido(prova, p.uid, { status: 'recusado' }).catch(() => {})}><Text style={[st.btn2Tx, { color: '#ff5252' }]}>Recusar</Text></TouchableOpacity>
+      </View>
+    </View>
+  );
+}
+function OrgPedidos({ st, prova, cats, inscritos }) {
+  const [aberta, setAberta] = useState(false);
+  const [pedidos, setPedidos] = useState([]);
+  const [busy, setBusy] = useState(false);
+  useEffect(() => ouvirVitrineProva(prova, setAberta, () => {}), [prova]);
+  useEffect(() => ouvirPedidosProva(prova, setPedidos, () => {}), [prova]);
+  useEffect(() => { if (aberta) abrirVitrine(prova, true).catch(() => {}); }, [aberta, cats.join('|')]); // mantém nome/data/categorias da vitrine em dia
+  const alterna = async (v) => {
+    setBusy(true);
+    try { await abrirVitrine(prova, v); } catch (e) { Alert.alert('Não alterou', String(e?.message || e)); }
+    setBusy(false);
+  };
+  const novos = pedidos.filter((p) => p.status === 'pedido');
+  return (
+    <View style={st.card}>
+      <View style={st.line}>
+        <View style={{ flex: 1, paddingRight: 10 }}>
+          <Text style={st.tip}>Inscrições abertas</Text>
+          <Text style={st.tipTx}>Liga: a prova aparece em "Eventos disponíveis" para os competidores pedirem vaga. A planilha continua restrita aos inscritos.</Text>
+        </View>
+        <Switch value={aberta} disabled={busy} onValueChange={alterna} />
+      </View>
+      {novos.length > 0 && <Text style={[st.tip, { marginTop: 10 }]}>Pedidos de inscrição ({novos.length})</Text>}
+      {novos.map((p) => <PedidoLinha key={p.uid} st={st} prova={prova} p={p} cats={cats} inscritos={inscritos} />)}
+      {novos.length === 0 && aberta && <Text style={[st.tipTx, { marginTop: 8 }]}>Nenhum pedido pendente.</Text>}
+    </View>
+  );
+}
+
 // ---------- Inscrições, largada e sorteio ----------
 export function OrgInscricoes({ st, prova, inscritos, categorias }) {
   const cats = (categorias.length ? categorias : CATS_PADRAO).map((c) => c.nome);
@@ -121,6 +176,7 @@ export function OrgInscricoes({ st, prova, inscritos, categorias }) {
 
   return (
     <View>
+      <OrgPedidos st={st} prova={prova} cats={cats} inscritos={inscritos} />
       <View style={st.card}>
         <Text style={st.tip}>Largada e sorteio</Text>
         <View style={st.row}>

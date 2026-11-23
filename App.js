@@ -16,6 +16,7 @@ import Login from './src/Login';
 import { st } from './src/estilos';
 import Fluxo, { DlTela, InfoProva } from './src/Fluxo';
 import { planilhaLiberada, parseHMS, CATS_PADRAO } from './src/OrgExtras';
+import PerfilTela from './src/Perfil';
 import { NavTela, NavConfig, PilotoTela, loadNav } from './src/Nav';
 import { compartilharPdf } from './src/pdf';
 import Erro from './src/Erro';
@@ -48,6 +49,7 @@ export default function App() {
   const [pilotoOpen, setPilotoOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [infoOpen, setInfoOpen] = useState(false);
+  const [perfilOpen, setPerfilOpen] = useState(false);
   const [cfgPiloto, setCfgPiloto] = useState(false);
   const [abrirReq, setAbrirReq] = useState(null);
   const [tab, setTab] = useState(() => (loadJson('papel', 'competidor') === 'organizador' ? 'organizar' : 'provas'));
@@ -463,6 +465,7 @@ export default function App() {
     { text: 'Zerar', style: 'destructive', onPress: () => { clear(); if (running) begin(); saveJson(kJan(), {}); setOdoBase(0); setOdoAdj(0); setAferBase(null); setAferUndo(null); setPosOff(0); } },
   ]);
   const janN = (() => { const j = loadJson(kJan(), {}); return j.ini == null ? 0 : points.filter((p) => p.t >= j.ini && (j.fim == null || p.t <= j.fim)).length; })();
+  const pendEnv = (() => { const k = piloto.prova.trim().toUpperCase().replace(/[^A-Z0-9]+/g, '') + '_' + String(piloto.numero).trim(); return loadJson('dlstat', {})[k] ? 0 : janN; })();
   const onPlanilha = () => {
     if (!libOk) return Alert.alert('Planilha não liberada', 'Aguarde a liberação do organizador. Você pode usar "Apenas datalogger".');
     prepararInicio(() => { if (!running) start(); setNavOpen(true); });
@@ -477,7 +480,7 @@ export default function App() {
         <TouchableOpacity onPress={() => setTab(papel === 'organizador' ? 'organizar' : 'provas')}><Text style={{ color: '#ff7a2e', fontSize: 26, fontWeight: '900' }}>Rally GPS</Text></TouchableOpacity>
         <TouchableOpacity onPress={() => setMenuOpen(true)} hitSlop={{ top: 10, bottom: 10, left: 14, right: 10 }} accessibilityLabel="Menu"><Text style={{ color: '#f5f5f5', fontSize: 30, fontWeight: '900', paddingHorizontal: 6 }}>⋮</Text></TouchableOpacity>
       </View>
-      <Text style={[st.sub, { marginBottom: 8 }]}>Olá, {(piloto.nome || user.email.split('@')[0]).split(' ')[0]} · {papel === 'organizador' ? 'Organizador' : 'Competidor'} · {running ? '● Gravando' : points.length ? `○ Parado · ${points.length} pontos` : '○ Parado'}{Platform.OS === 'android' ? '' : ' (somente Android)'}</Text>
+      <Text style={[st.sub, { marginBottom: 8 }]}>Olá, {(piloto.nome || user.email.split('@')[0]).split(' ')[0]} · {papel === 'organizador' ? 'Organizador' : `Competidor · ${running ? '● Gravando' : pendEnv > 0 ? `○ ${pendEnv} pontos não enviados` : '○ Parado'}`}{Platform.OS === 'android' ? '' : ' (somente Android)'}</Text>
 
       <View style={st.row}>
         <View style={[st.gps, { borderColor: gpsColor, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', flex: 1 }]}>
@@ -514,10 +517,8 @@ export default function App() {
             {[
               ...(papel === 'organizador' ? [['Organizar prova', () => setTab('organizar')]] : []),
               ['Meus eventos', () => setTab('provas')],
-              ['Trilhas', () => setTab('trilhas')],
               ['Ranking', () => setTab('ranking')],
-              ...(papel !== 'organizador' ? [['Roadbook / iniciar', () => setTab('tulipas')]] : []),
-              ['Perfil e equipamento', () => setPilotoOpen(true)],
+              ['Perfil', () => setPerfilOpen(true)],
               ...(papeis.organizador && papeis.competidor ? [[papel === 'organizador' ? 'Modo competidor' : 'Modo organizador', () => setPapel(papel === 'organizador' ? 'competidor' : 'organizador')]] : []),
               ['Sair', () => Alert.alert('Sair da conta?', user.email, [{ text: 'Cancelar', style: 'cancel' }, { text: 'Sair', onPress: () => { sairConta().catch(() => {}); } }]), '#ff5252'],
             ].map(([t, f, cor]) => (
@@ -531,6 +532,7 @@ export default function App() {
       {tab === 'provas' ? (
         <Fluxo st={st} user={user} piloto={piloto} provaMap={provaMap} lib={libOk} minhaLarg={minhaLarg} largManual={largManual} setLargManual={setLargManual} pointsN={janN} dlStat={loadJson('dlstat', {})} dlTick={dlTick}
           onEnviarDl={onDatalogger} enviandoDl={enviandoDl} onEscolher={escolher} onPlanilha={onPlanilha} onSoDl={onSoDl} onPiloto={() => setPilotoOpen(true)} onZerarDl={zerarDatalogger} onPersonalizar={() => setCfgOpen(true)}
+          extra={papel === 'organizador' ? <TrilhasOrg st={st} /> : <TrilhasComp st={st} gps={{ nome: piloto.nome || user.email, uid: user.uid, running, start, getPoints: () => getState().points }} />}
           onAdmin={(x) => { setPapel('organizador'); setP('prova')(x.code); setAbrirReq({ code: x.code, n: Date.now() }); }} />
       ) : tab === 'organizar' ? (
         <Organizador st={st} onTab={setTab} onProva={setP('prova')} prova={piloto.prova} provaMap={provaMap} last={last} onOrg={setOrgInfo} abrirReq={abrirReq} />
@@ -592,6 +594,7 @@ export default function App() {
       )}
       {navOpen && <InfoProva visible={infoOpen} info={infoProva} onOk={() => setInfoOpen(false)} />}
       <NavConfig st={st} visible={cfgOpen} onClose={() => setCfgOpen(false)} />
+      {perfilOpen && <PerfilTela st={st} user={user} papel={papel} onClose={() => setPerfilOpen(false)} onSalvo={(d) => { if (d.nome && !piloto.nome) setPiloto((o) => ({ ...o, nome: d.nome })); }} />}
       {pilotoOpen && <PilotoTela cfg={loadNav()} tul={tulVis} classe={piloto.classe} grupos={grupos} onPersonalizar={() => setCfgPiloto(true)} onClose={() => setPilotoOpen(false)} />}
       <NavConfig st={st} piloto visible={cfgPiloto} onClose={() => setCfgPiloto(false)} />
     </ScrollView>
