@@ -160,9 +160,10 @@ export async function enviarDatalogger({ prova, numero, nome, classe, points, pc
   await setDoc(doc(db, 'dataloggers', `${slug(prova)}_${slug(numero)}`), {
     prova: slug(prova), numero: String(numero), nome: String(nome), classe: classe || 'GRADUADO',
     t0,
-    t: pts.map((p) => Math.round((p.t - t0) / 1000)),
-    la: pts.map((p) => Math.round(p.lat * 1e5)),
-    lo: pts.map((p) => Math.round(p.lon * 1e5)),
+    esc: 2, // esc 2 = tempo em milissegundos e coordenadas com 6 casas (~0,1 m); sem esc = formato antigo (segundos, 5 casas)
+    t: pts.map((p) => Math.round(p.t - t0)),
+    la: pts.map((p) => Math.round(p.lat * 1e6)),
+    lo: pts.map((p) => Math.round(p.lon * 1e6)),
     tIni: tIniArg || (pcs && pcs[0] && pcs[0].t0 ? pcs[0].t0 : t0),
     uid: auth.currentUser?.uid || '',
     enviadoEm: Date.now(),
@@ -289,3 +290,12 @@ export const ouvirPedidosProva = (prova, onData, onError) =>
   onSnapshot(query(collection(db, 'pedidos'), where('prova', '==', slug(prova))), (snap) => onData(snap.docs.map((d) => d.data()).sort((a, b) => (a.em || 0) - (b.em || 0))), onError);
 export const cancelarPedido = (prova, uid) => deleteDoc(doc(db, 'pedidos', `${slug(prova)}_${uid}`));
 export const decidirPedido = (prova, uid, patch) => setDoc(doc(db, 'pedidos', `${slug(prova)}_${uid}`), { ...patch, em: Date.now() }, { merge: true });
+
+// ---------- Master: lista de cadastrados ----------
+// Só estas contas veem a lista (as regras do Firestore conferem o mesmo e-mail).
+export const MASTERS = ['fabriciobqueiroz@gmail.com'];
+// MASTERS = dono (fixo, não se remove); os demais ficam em config/masters {emails: [...]}.
+export const ehMaster = (email, extras = []) => { const e = String(email || '').trim().toLowerCase(); return MASTERS.includes(e) || extras.includes(e); };
+export const ouvirMasters = (onData, onError) => onSnapshot(doc(db, 'config', 'masters'), (d) => onData(d.exists() ? (d.data().emails || []) : []), onError);
+export const salvarMasters = (emails) => setDoc(doc(db, 'config', 'masters'), { emails: [...new Set(emails.map((x) => String(x).trim().toLowerCase()))] });
+export const ouvirUsuarios = (onData, onError) => onSnapshot(collection(db, 'usuarios'), (snap) => onData(snap.docs.map((d) => ({ uid: d.id, ...d.data() }))), onError);

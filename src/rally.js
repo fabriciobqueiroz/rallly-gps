@@ -272,7 +272,8 @@ export function oficialDeTrilha(points, wps, trechos, classe, grupos, t0, pcl = 
 
 export function pcsDoLogger(dl) {
   const t0 = dl.t0 || 0;
-  return dl.t.map((dt, i) => ({ t: t0 + dt * 1000, lat: dl.la[i] / 1e5, lon: dl.lo[i] / 1e5, acc: null }));
+  const kt = dl.esc === 2 ? 1 : 1000, kc = dl.esc === 2 ? 1e6 : 1e5; // formato novo: ms e 6 casas; antigo: s e 5 casas
+  return dl.t.map((dt, i) => ({ t: t0 + dt * kt, lat: dl.la[i] / kc, lon: dl.lo[i] / kc, acc: null }));
 }
 
 // Hodômetro zerado por trecho: devolve o deslocamento (m) do último trecho com zerar (zr) já iniciado em dist (m).

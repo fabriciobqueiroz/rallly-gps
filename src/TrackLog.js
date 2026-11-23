@@ -80,7 +80,7 @@ const hms = (s) => { const t = Math.max(0, Math.round(s)); return `${String(Math
 export function decodeDl(d) {
   const n = Math.min((d.t || []).length, (d.la || []).length, (d.lo || []).length);
   const pts = [];
-  for (let i = 0; i < n; i++) pts.push({ t: d.t[i], lat: d.la[i] / 1e5, lon: d.lo[i] / 1e5 });
+  for (let i = 0; i < n; i++) pts.push({ t: d.t[i] / (d.esc === 2 ? 1000 : 1), lat: d.la[i] / (d.esc === 2 ? 1e6 : 1e5), lon: d.lo[i] / (d.esc === 2 ? 1e6 : 1e5) });
   return pts;
 }
 

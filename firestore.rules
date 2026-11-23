@@ -17,8 +17,19 @@ service cloud.firestore {
       allow read, write: if logado() && request.auth.uid == uid;
     }
 
+    // Master: só a conta abaixo lê a lista de cadastrados (não lê provas, resultados nem escreve em nada dos outros).
+    function master() {
+      return logado() && (request.auth.token.email in ['fabriciobqueiroz@gmail.com']
+        || (exists(/databases/$(database)/documents/config/masters) && request.auth.token.email in get(/databases/$(database)/documents/config/masters).data.emails));
+    }
+    // Lista de masters extras: todos leem (o app precisa saber se mostra o menu); só master altera.
+    match /config/{id} {
+      allow read: if logado();
+      allow write: if master() && id == 'masters';
+    }
     match /usuarios/{uid} {
-      allow read, write: if logado() && request.auth.uid == uid;
+      allow read: if logado() && (request.auth.uid == uid || master());
+      allow write: if logado() && request.auth.uid == uid;
     }
 
     // Prova: só o dono (organizador que criou) escreve; lê o dono e quem foi inscrito.

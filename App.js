@@ -11,7 +11,8 @@ import { loadRoteiro, saveRoteiro, recFile, loadJson, saveJson } from './src/per
 import { Roadbook, tulComp } from './src/Tulipa';
 import * as ScreenOrientation from 'expo-screen-orientation';
 import Organizador from './src/Organizador';
-import { enviarResultado, ouvirRanking, salvarProva, ouvirProva, ouvirInscricao, ouvirMinhaLargada, enviarDatalogger, ouvirAuth, sairConta, lerPerfil, enviarAoVivo, limparAoVivo } from './src/firebase';
+import { enviarResultado, ouvirRanking, salvarProva, ouvirProva, ouvirInscricao, ouvirMinhaLargada, enviarDatalogger, ouvirAuth, sairConta, lerPerfil, enviarAoVivo, limparAoVivo, ehMaster, ouvirMasters } from './src/firebase';
+import UsuariosTela from './src/Usuarios';
 import Login from './src/Login';
 import { st } from './src/estilos';
 import Fluxo, { DlTela, EventosAbertos, InfoProva } from './src/Fluxo';
@@ -50,12 +51,14 @@ export default function App() {
   const [menuOpen, setMenuOpen] = useState(false);
   const [provaVer, setProvaVer] = useState(0); // muda quando uma prova é aberta/criada/apagada: recarrega do zero, mesmo com o mesmo código
   const forcaZero = useRef(false);
+  const [mastersX, setMastersX] = useState([]);
   const [infoOpen, setInfoOpen] = useState(false);
   const [perfilOpen, setPerfilOpen] = useState(false);
   const [cfgPiloto, setCfgPiloto] = useState(false);
   const [abrirReq, setAbrirReq] = useState(null);
   const [tab, setTab] = useState(() => (loadJson('papel', 'competidor') === 'organizador' ? 'organizar' : 'provas'));
   const [user, setUser] = useState(undefined); // undefined = carregando, null = sem login
+  useEffect(() => { if (!user) return; return ouvirMasters(setMastersX, () => {}); }, [user && user.uid]);
   const [papel, setPapelRaw] = useState(() => loadJson('papel', 'competidor'));
   const [papeis, setPapeis] = useState({});
   const setPapel = (p) => { setPapelRaw(p); saveJson('papel', p); setTab(p === 'organizador' ? 'organizar' : 'provas'); };
@@ -522,6 +525,7 @@ export default function App() {
               ...(papel === 'organizador' ? [['Organizar prova', () => setTab('organizar')], ['Organizar trilha', () => setTab('trilhas')]] : []),
               ['Meus eventos', () => setTab('provas')],
               ['Eventos abertos', () => setTab('abertos')],
+              ...(ehMaster(user.email, mastersX) ? [['Usuários (master)', () => setTab('usuarios')]] : []),
               ['Ranking', () => setTab('ranking')],
               ['Perfil', () => setPerfilOpen(true)],
               ...(papeis.organizador && papeis.competidor ? [[papel === 'organizador' ? 'Modo competidor' : 'Modo organizador', () => setPapel(papel === 'organizador' ? 'competidor' : 'organizador')]] : []),
@@ -561,6 +565,8 @@ export default function App() {
             </TouchableOpacity>
           )}
         </View>
+      ) : tab === 'usuarios' && ehMaster(user.email, mastersX) ? (
+        <UsuariosTela st={st} email={user.email} masters={mastersX} />
       ) : tab === 'abertos' ? (
         <EventosAbertos st={st} user={user} extra={<TrilhasComp st={st} modo="abertas" gps={{ nome: piloto.nome || user.email, uid: user.uid, running, start, getPoints: () => getState().points }} />} />
       ) : tab === 'trilhas' ? (

@@ -15,6 +15,16 @@ import { cumulative } from './rally';
 import { getState, passoGps } from './store';
 import { calcularRota } from './osrm';
 
+// O último ponto do GPS já é "velho" quando você toca (o fix chega ~1 s depois e o toque leva mais um instante): a 40 km/h isso são
+// ~10 m atrás. Avança o ponto no rumo, com a velocidade medida, pelo tempo que passou desde o fix (no máximo 2,5 s).
+export function projetaGps(l) {
+  const dt = Math.min(2.5, Math.max(0, (Date.now() - l.t) / 1000));
+  if (l.spd == null || l.spd < 1.5 || l.hdg == null || l.hdg < 0 || dt < 0.1) return { ...l, _d: 0 };
+  const d = l.spd * dt, br = (l.hdg * Math.PI) / 180;
+  const lat = l.lat + (d * Math.cos(br)) / 111320;
+  const lon = l.lon + (d * Math.sin(br)) / (111320 * Math.cos((l.lat * Math.PI) / 180));
+  return { ...l, lat, lon, _d: d };
+}
 const WEB = Platform.OS === 'web'; // no computador: sem GPS; o percurso vem do mapa ou da nuvem e as marcas são editadas à mão
 import { detectarCruzamento, dist, linhaPc, rumo, satUrl } from './osm';
 
@@ -275,7 +285,7 @@ export default function Levantamento({ st, prova, last, onAplicar, onProva, levN
     if (!l) { Alert.alert('Sem GPS', 'Ainda não chegou nenhuma posição. Espere o GPS ficar verde e toque de novo.'); return null; }
     if (Date.now() - l.t > 20000) { Alert.alert('GPS parado', 'A última posição tem mais de 20 s. Confira se o GPS está ligado e com sinal, e toque de novo.'); return null; }
     if (l.acc != null && l.acc > 50) { Alert.alert('Sinal fraco', `Precisão do GPS: ${Math.round(l.acc)} m. Espere melhorar e toque de novo.`); return null; }
-    return l;
+    return projetaGps(l);
   };
   const marcar = (k, extra = {}) => {
     if (Date.now() - ultimoToque.current < 700) return;
@@ -296,7 +306,7 @@ export default function Levantamento({ st, prova, last, onAplicar, onProva, levN
       return;
     }
     if (iniI < 0) return Alert.alert('Marque a largada primeiro');
-    const m = { id: Date.now(), k, lat: Math.round(l.lat * 1e6) / 1e6, lon: Math.round(l.lon * 1e6) / 1e6, hdg: l.hdg != null && l.hdg >= 0 ? Math.round(l.hdg) : null, km: Math.round(kmAgora), nota: '', foto: null, ...(k === 'N' ? { nt: 120 } : {}), ...extra };
+    const m = { id: Date.now(), k, lat: Math.round(l.lat * 1e6) / 1e6, lon: Math.round(l.lon * 1e6) / 1e6, hdg: l.hdg != null && l.hdg >= 0 ? Math.round(l.hdg) : null, km: Math.round(kmAgora + (l._d || 0)), nota: '', foto: null, ...(k === 'N' ? { nt: 120 } : {}), ...extra };
     setLev((o) => ({ ...o, marks: [...o.marks, m], trechos: k === 'S' ? [...trAtual(o), { ...trAtual(o)[trAtual(o).length - 1] }] : o.trechos }));
     if (k === 'S') perguntaTrecho(nTrechos(lev));
     if (k === 'N') Alert.alert('Neutro', 'Definir o tempo de parada deste neutro agora?', [{ text: 'Depois', style: 'cancel' }, { text: 'Agora', onPress: () => setNtAsk(m.id) }]);
