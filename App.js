@@ -432,6 +432,7 @@ export default function App() {
     const id = setInterval(tick, 8000);
     return () => clearInterval(id);
   }, []);
+  useEffect(() => { if (navOpen) setInfoOpen(true); }, [navOpen]);
   if (user === undefined) return <View style={[st.root, { justifyContent: 'center' }]}><Text style={[st.sub, { textAlign: 'center' }]}>Carregando…</Text></View>;
   if (!user) return (
     <ScrollView style={st.root} contentContainerStyle={st.wrap}>
@@ -449,7 +450,6 @@ export default function App() {
       trechos: provaMap.trs.length || tr.length, classe: piloto.classe, numero: piloto.numero, totalSec: Math.round(totalSec), km, largSec: parseHMS(minhaLarg || largManual),
     };
   })();
-  useEffect(() => { if (navOpen) setInfoOpen(true); }, [navOpen]);
   const minhasAbas = papel === 'organizador' ? ['provas', 'organizar', 'ranking', 'trilhas'] : ['provas', 'tulipas', 'ranking', 'trilhas'];
   const setLargManual = (v) => { setLargManualRaw(v); const k = piloto.prova.trim().toUpperCase().replace(/[^A-Z0-9]+/g, ''); saveJson('largm', { ...loadJson('largm', {}), [k]: v }); };
   // Os pontos de GPS ficam intactos (o levantamento do organizador usa o mesmo rastro). A prova só conta a partir da largada
