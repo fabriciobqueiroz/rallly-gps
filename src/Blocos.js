@@ -1,5 +1,6 @@
 // Blocos visuais da tela de prova. Usados na prova (dados reais) e no editor de layout (dados de exemplo).
-import { Text, TouchableOpacity, View } from 'react-native';
+import { useEffect, useRef } from 'react';
+import { Pressable, Text, TouchableOpacity, View } from 'react-native';
 import Svg, { Polygon } from 'react-native-svg';
 import { Tulipa, rotuloNx } from './Tulipa';
 import { DesenhoSvg } from './Desenho';
@@ -90,6 +91,26 @@ function Placa({ tipo, pl, w, h }) {
   );
 }
 
+
+// Botão de correção do odômetro: age no instante em que o dedo encosta (como no roadbook) e repete enquanto segura.
+function BtnAj({ tx, bg, w, h, edit, on }) {
+  const t1 = useRef(null), t2 = useRef(null), onR = useRef(on);
+  onR.current = on;
+  const para = () => { clearTimeout(t1.current); clearInterval(t2.current); t1.current = null; t2.current = null; };
+  useEffect(() => para, []);
+  const ini = () => {
+    if (edit) return;
+    para();
+    onR.current();
+    t1.current = setTimeout(() => { t2.current = setInterval(() => onR.current(), 110); }, 450);
+  };
+  return (
+    <Pressable onPressIn={ini} onPressOut={para} disabled={edit} hitSlop={6} android_disableSound style={({ pressed }) => ({ width: w, height: h, backgroundColor: pressed ? '#cfcfcf' : bg, borderRadius: 8, alignItems: 'center', justifyContent: 'center' })}>
+      <Text style={{ color: '#000', fontSize: Math.max(12, Math.min(h * 0.5, w * 0.4)), fontWeight: '800' }}>{tx}</Text>
+    </Pressable>
+  );
+}
+
 export function Bloco({ tipo, d, w, h }) {
   const cfg = d.cfg;
   // Barra regressiva: a janela enche da esquerda para a direita a partir de 'ini' metros e fica cheia em zero.
@@ -126,7 +147,7 @@ export function Bloco({ tipo, d, w, h }) {
     case 'kmac': return <Cx label="KM ACUMULADO" v={((Number.isFinite(d.kmAcum) ? d.kmAcum : 0) / 1000).toFixed(3)} />;
     case 'cron': return <Cx label="TEMPO DO TRECHO" v={Number.isFinite(d.elapsed) ? fmtDur(d.elapsed) : '—'} />;
     case 'atual': return <Cx label="ATUAL"><Placa tipo="atual" pl={d.pa} w={w} h={h} /></Cx>;
-    case 'prox': return <Cx label="PRÓXIMO"><Placa tipo="prox" pl={d.pp} w={w} h={h} /></Cx>;
+    case 'prox': return <Cx label="PRÓXIMO"><View style={{ alignItems: 'center' }}><Placa tipo="prox" pl={d.pp} w={w} h={d.ntProx ? h * 0.78 : h} />{d.ntProx ? <Text style={{ color: '#fff', backgroundColor: '#b3261e', fontWeight: '900', fontSize: Math.max(12, Math.min(18, h * 0.2)), borderRadius: 6, paddingHorizontal: 8, marginTop: 2 }}>N {d.ntProx >= 60 && d.ntProx % 60 === 0 ? d.ntProx / 60 + 'min' : d.ntProx + 's'}</Text> : null}</View></Cx>;
     case 'bat': return (
       <View style={{ width: w, height: h, borderWidth: 2, borderColor: '#fff', borderRadius: 6, justifyContent: 'center', backgroundColor: '#000' }}>
         {d.bat >= 0 ? <View style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: `${Math.round(d.bat * 100)}%`, backgroundColor: d.bat > 0.3 ? '#1b9e57' : '#e53935' }} /> : null}
@@ -137,10 +158,10 @@ export function Bloco({ tipo, d, w, h }) {
     case 'afer': return d.aferRef
       ? <Btn tx={`AFER ${d.aferRef.n}`} bg="#f5e50f" on={d.onAfer} />
       : <Btn tx="AFER" bg="#555" fg="#aaa" on={() => {}} />;
-    case 'p10': return <Btn tx="+10" bg="#9e9e9e" on={() => d.onAdj(10)} />;
-    case 'm10': return <Btn tx="−10" bg="#9e9e9e" on={() => d.onAdj(-10)} />;
-    case 'p1': return <Btn tx="+1" bg="#9e9e9e" on={() => d.onAdj(1)} />;
-    case 'm1': return <Btn tx="−1" bg="#9e9e9e" on={() => d.onAdj(-1)} />;
+    case 'p10': return <BtnAj tx="+10" bg="#9e9e9e" w={w} h={h} edit={d.edit} on={() => d.onAdj(10)} />;
+    case 'm10': return <BtnAj tx="−10" bg="#9e9e9e" w={w} h={h} edit={d.edit} on={() => d.onAdj(-10)} />;
+    case 'p1': return <BtnAj tx="+1" bg="#9e9e9e" w={w} h={h} edit={d.edit} on={() => d.onAdj(1)} />;
+    case 'm1': return <BtnAj tx="−1" bg="#9e9e9e" w={w} h={h} edit={d.edit} on={() => d.onAdj(-1)} />;
     case 'pc': return null;
     case 'rb': return (
       <TouchableOpacity activeOpacity={1} disabled={d.edit || !d.onRbTap || d.rbBr} onPress={d.onRbTap} style={{ width: w, height: h, overflow: 'hidden', backgroundColor: '#000' }}>

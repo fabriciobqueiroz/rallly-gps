@@ -1,6 +1,6 @@
 // Fluxo do competidor: eventos → evento → modo de uso → largada → configurações → equipamento → prova.
 import { useEffect, useState } from 'react';
-import { Alert, AppState, Linking, Modal, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { Alert, AppState, Linking, Modal, ScrollView, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { MeuTrackLog } from './TrackLog';
 import * as Location from 'expo-location';
 import * as Battery from 'expo-battery';
@@ -62,23 +62,23 @@ function Eventos({ st, user, onEvento, onAdmin }) {
       removerInscricao(x.code, x.insc?.numero, user.email).catch(() => {}); // se a conta permitir, apaga também na nuvem
     } },
   ]);
-  const Cartao = ({ x, tag }) => (
-    <TouchableOpacity style={[st.card, { marginBottom: 8 }]} onPress={() => (x.kind === 'adm' ? onAdmin(x) : onEvento(x))}>
-      <Text style={{ color: '#fff', fontSize: 18, fontWeight: '700' }}>{x.nome}</Text>
+  const Cartao = ({ x, tag, hero }) => (
+    <TouchableOpacity style={[st.card, { marginBottom: 8, borderLeftWidth: 5, borderLeftColor: x.kind === 'adm' ? '#4fc3f7' : '#ff7a2e' }, hero && { backgroundColor: '#ff7a2e', borderLeftColor: '#ffb27a' }]} onPress={() => (x.kind === 'adm' ? onAdmin(x) : onEvento(x))}>
+      <Text style={{ color: hero ? '#0c1014' : '#fff', fontSize: hero ? 22 : 18, fontWeight: '800' }}>{x.nome}</Text>
       <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 4 }}>
-        <Text style={st.tipTx}>{x.cidade || '—'}</Text><Text style={st.tipTx}>{x.data || ''}</Text>
+        <Text style={[st.tipTx, hero && { color: '#0c1014' }]}>{x.cidade || '—'}</Text><Text style={[st.tipTx, hero && { color: '#0c1014' }]}>{x.data || ''}</Text>
       </View>
-      {tag ? <Text style={[st.tipTx, { color: '#4fc3f7' }]}>{x.kind === 'adm' ? 'Organizador' : 'Competidor'}</Text> : null}
-      {x.kind === 'comp' && temCache(x.code) ? <Text style={[st.tipTx, { color: '#4caf50' }]}>Disponível offline ✓</Text> : null}
+      {tag ? <Text style={[st.tipTx, { color: hero ? '#0c1014' : '#4fc3f7', fontWeight: '700' }]}>{x.kind === 'adm' ? 'Organizador' : 'Competidor'}{hero ? ' · toque para abrir' : ''}</Text> : null}
+      {x.kind === 'comp' && temCache(x.code) ? <Text style={[st.tipTx, { color: hero ? '#0c1014' : '#4caf50' }]}>Disponível offline ✓</Text> : null}
       {x.kind === 'comp' ? <TouchableOpacity onPress={() => remover(x)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}><Text style={{ color: '#ff5252', fontWeight: '700', marginTop: 6 }}>Remover da lista</Text></TouchableOpacity> : null}
     </TouchableOpacity>
   );
-  const Sec = ({ t, a, tag }) => (a.length ? <View style={{ marginTop: 6 }}><Text style={[st.tip, { marginBottom: 6 }]}>{t}</Text>{a.map((x) => <Cartao key={x.kind + x.code + (x.insc?.numero || '')} x={x} tag={tag} />)}</View> : null);
+  const Sec = ({ t, a, tag, hero }) => (a.length ? <View style={{ marginTop: 6 }}><Text style={[st.tip, { marginBottom: 6 }]}>{t}</Text>{a.map((x, i) => <Cartao key={x.kind + x.code + (x.insc?.numero || '')} x={x} tag={tag} hero={hero && i === 0} />)}</View> : null);
   return (
     <View>
       <Topo st={st} titulo="Escolha o evento" />
       {erro ? <Text style={[st.tipTx, { color: '#ffb300' }]}>{erro}</Text> : null}
-      <Sec t="Hoje" a={sHoje} tag /><Sec t="Amanhã" a={sAman} tag />
+      <Sec t="Hoje" a={sHoje} tag hero /><Sec t="Amanhã" a={sAman} tag />
       <Sec t="Admin" a={resto(adm)} /><Sec t="Eventos inscritos" a={resto(comp)} />
       {todos.length === 0 && <View style={st.card}><Text style={st.tipTx}>Nenhum evento ainda. Se você é competidor, peça ao organizador para inscrever o e-mail {user.email}. Se é organizador, crie a prova na aba Organizar.</Text></View>}
     </View>
@@ -252,8 +252,31 @@ function Equip({ st, onEscolhe, onVoltar }) {
   );
 }
 
+// ---------- Dados da prova (aparece ao abrir a navegação) ----------
+const fmtPub = (ts) => { if (!ts || ts <= 1) return '—'; const d = new Date(ts); const p = (x) => String(x).padStart(2, '0'); return `${p(d.getDate())}/${p(d.getMonth() + 1)}/${d.getFullYear()} - ${p(d.getHours())}:${p(d.getMinutes())}`; };
+export function InfoProva({ visible, info, onOk }) {
+  if (!info) return null;
+  const L = [['Nome', info.nome || '—'], ['Publicada em', fmtPub(info.pub)], ['Referências', String(info.refs)], ['Trechos', String(info.trechos)], ['Classe', info.classe || '—'], ['Tempo total', hms(info.totalSec)], ['Distância total', info.km.toFixed(3).replace('.', ',') + ' km']];
+  return (
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onOk}>
+      <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'center', padding: 20 }}>
+        <View style={{ backgroundColor: '#1b212a', borderWidth: 1, borderColor: '#262b32', borderRadius: 16, padding: 18 }}>
+          <Text style={{ color: '#f5f5f5', fontSize: 22, fontWeight: '800', marginBottom: 8 }}>Dados da prova</Text>
+          {L.map(([k, v]) => (
+            <View key={k} style={{ paddingVertical: 7, borderBottomWidth: 1, borderBottomColor: '#262b32' }}>
+              <Text style={{ color: '#9aa3ad', fontSize: 13 }}>{k}</Text>
+              <Text style={{ color: '#f5f5f5', fontSize: 18, fontWeight: '700' }}>{v}</Text>
+            </View>
+          ))}
+          <TouchableOpacity onPress={onOk} style={{ alignSelf: 'flex-end', paddingVertical: 12, paddingHorizontal: 18, marginTop: 6 }}><Text style={{ color: '#ff7a2e', fontSize: 18, fontWeight: '900' }}>OK</Text></TouchableOpacity>
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
 // ---------- Modo "apenas datalogger" ----------
-export function DlTela({ st, last, pointsN, startedAt, onFinalizar }) {
+export function DlTela({ st, last, pointsN, startedAt, onFinalizar, info }) {
   useKeepAwake();
   const [t, setT] = useState(Date.now());
   const bat = Battery.useBatteryLevel();
@@ -261,18 +284,39 @@ export function DlTela({ st, last, pointsN, startedAt, onFinalizar }) {
   const acc = last && last.acc != null ? last.acc : null;
   const stale = !last || t - last.t > 5000;
   const cor = stale || acc == null || acc > 15 ? '#ff5252' : acc > 6 ? '#ffb300' : '#4caf50';
+  const d = new Date(t);
+  const agora = hms(d.getHours() * 3600 + d.getMinutes() * 60 + d.getSeconds());
+  const i = info || {};
+  const Card = ({ k, v, wide }) => (
+    <View style={{ backgroundColor: '#1b212a', borderWidth: 1, borderColor: '#262b32', borderRadius: 12, padding: 10, width: wide ? '100%' : '48.5%', marginBottom: 8 }}>
+      <Text style={{ color: '#9aa3ad', fontSize: 12 }}>{k}</Text>
+      <Text style={{ color: '#f5f5f5', fontSize: 18, fontWeight: '700' }}>{v}</Text>
+    </View>
+  );
   return (
     <Modal visible animationType="fade" onRequestClose={() => {}}>
-    <View style={{ flex: 1, backgroundColor: '#000', paddingTop: 50, paddingHorizontal: 16 }}>
-      <Text style={{ color: '#fff', fontSize: 22, fontWeight: '800', textAlign: 'center' }}>Gravando datalogger</Text>
-      <Text style={{ color: cor, fontSize: 26, fontWeight: '800', textAlign: 'center', marginTop: 20 }}>{stale ? 'GPS sem sinal' : `GPS ${acc != null ? acc.toFixed(1) + ' m' : ''}`}</Text>
-      <Text style={{ color: '#fff', fontSize: 56, fontWeight: '800', textAlign: 'center', marginTop: 24 }}>{hms(startedAt ? Math.max(0, (t - startedAt) / 1000) : 0)}</Text>
-      <Text style={{ color: '#aaa', textAlign: 'center', fontSize: 16 }}>{pointsN} pontos · bateria {bat >= 0 ? Math.round(bat * 100) + '%' : '—'}</Text>
-      <Text style={{ color: '#777', textAlign: 'center', marginTop: 16 }}>Pode bloquear a tela. A gravação continua em segundo plano.</Text>
-      <TouchableOpacity style={[st.btn, { backgroundColor: '#c0392b', marginTop: 40 }]} onPress={() => Alert.alert('Finalizar prova', 'Parar a gravação e enviar o datalogger?', [{ text: 'Cancelar', style: 'cancel' }, { text: 'Finalizar', style: 'destructive', onPress: onFinalizar }])}>
+    <ScrollView style={{ flex: 1, backgroundColor: '#0c1014' }} contentContainerStyle={{ paddingTop: 50, paddingHorizontal: 16, paddingBottom: 30 }}>
+      <Text style={{ color: '#ff7a2e', fontSize: 24, fontWeight: '900', textAlign: 'center' }}>Datalogger</Text>
+      <Text style={{ color: '#f5f5f5', fontSize: 20, fontWeight: '700', textAlign: 'center', marginTop: 10 }}>{i.nome || 'Prova'}</Text>
+      <Text style={{ color: '#9aa3ad', textAlign: 'center', fontSize: 14 }}>{i.classe ? i.classe : ''}{i.numero ? ` · nº ${i.numero}` : ''}</Text>
+      <Text style={{ color: '#9aa3ad', textAlign: 'center', fontSize: 13, marginTop: 18 }}>Relógio oficial</Text>
+      <Text style={{ color: '#f5f5f5', fontSize: 54, fontWeight: '800', textAlign: 'center' }}>{agora}</Text>
+      <View style={{ borderWidth: 1, borderColor: cor, borderRadius: 12, padding: 10, marginVertical: 12 }}>
+        <Text style={{ color: cor, fontSize: 22, fontWeight: '800', textAlign: 'center' }}>{stale ? 'Sem sinal GPS' : 'GPS ok'}</Text>
+        <Text style={{ color: '#9aa3ad', textAlign: 'center' }}>Precisão: {!stale && acc != null ? acc.toFixed(1) + ' m' : '—'}</Text>
+      </View>
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between' }}>
+        <Card k="Hora de largada" v={i.largSec != null ? hms(i.largSec) : '—'} />
+        <Card k="Final previsto" v={i.largSec != null && i.totalSec ? hms((i.largSec + i.totalSec) % 86400) : '—'} />
+        <Card k="Gravando há" v={hms(startedAt ? Math.max(0, (t - startedAt) / 1000) : 0)} />
+        <Card k="Pontos · bateria" v={`${pointsN} · ${bat >= 0 ? Math.round(bat * 100) + '%' : '—'}`} />
+        <Card k="Planilha publicada em" v={fmtPub(i.pub)} wide />
+      </View>
+      <Text style={{ color: '#777', textAlign: 'center', marginVertical: 8 }}>Pode bloquear a tela. A gravação continua em segundo plano.</Text>
+      <TouchableOpacity style={[st.btn, { backgroundColor: '#c0392b', marginTop: 16 }]} onPress={() => Alert.alert('Finalizar prova', 'Parar a gravação e enviar o datalogger?', [{ text: 'Cancelar', style: 'cancel' }, { text: 'Finalizar', style: 'destructive', onPress: onFinalizar }])}>
         <Text style={[st.btnTx, { color: '#fff' }]}>FINALIZAR</Text>
       </TouchableOpacity>
-    </View>
+    </ScrollView>
     </Modal>
   );
 }

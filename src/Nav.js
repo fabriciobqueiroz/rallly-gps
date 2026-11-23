@@ -57,6 +57,7 @@ export function NavTela({ cfg, stage, rs, last, globalDist, odoM, tul, rot, trs,
   const { width } = useWindowDimensions();
   const [t, setT] = useState(Date.now());
   const [menu, setMenu] = useState(false);
+  const [kp, setKp] = useState(null); // teclado numérico: { tipo: 'ref' | 'trc', v: '' }
   const bat = Battery.useBatteryLevel();
   useEffect(() => { const id = setInterval(() => setT(Date.now()), 200); return () => clearInterval(id); }, []);
   const sc = 1;
@@ -94,7 +95,7 @@ export function NavTela({ cfg, stage, rs, last, globalDist, odoM, tul, rot, trs,
   const resolve = (t) => (t ? (t.t === 'D' ? { tipo: 'D', min: t.min, kmh: 0 } : { tipo: 'V', kmh: (t.v && (t.v[gi] ?? t.v[0])) || 0 }) : null);
   const trAtual = trsN ? resolve(trsN[Math.max(0, trIdx)]) : stage.idx >= 0 ? rot.trechos[stage.idx] : null;
   const trProx = trsN ? resolve(trsN[Math.max(0, trIdx) + 1]) : stage.idx >= 0 ? rot.trechos[stage.idx + 1] : null;
-  const regTrc0 = trsN ? (stage.idx >= 0 ? Math.max(0, (trIdx + 1 < trsN.length ? trsN[trIdx + 1].d0 : dFim) - globalDist) : null) : (rs && rs.remain != null ? rs.remain : null);
+  const regTrc0 = trsN ? Math.max(0, (trIdx + 1 < trsN.length ? trsN[trIdx + 1].d0 : dFim) - globalDist) : (rs && rs.remain != null ? rs.remain : null);
   const regTrc = Number.isFinite(regTrc0) ? regTrc0 : null;
   const placa = (tr) => (tr ? (tr.tipo === 'D' ? { tx: `D${tr.min}'`, d: true } : { tx: String(Math.round(tr.kmh)), d: false }) : null);
   const rb = cfg.rb;
@@ -102,7 +103,7 @@ export function NavTela({ cfg, stage, rs, last, globalDist, odoM, tul, rot, trs,
   const iShow = br != null && tul.length ? Math.max(0, Math.min(tul.length - 1, br)) : iAtual;
   const linhasRb = montarRb(tul, iShow, rb).map((l) => (trsN && l.e.d != null ? { ...l, e: { ...l.e, d: l.e.d - zeroOff(trsN, l.e.d) } } : l));
   const d = {
-    cfg, spd, tnav, fx, odoM: odoM - zO, factor, aferRef, onAfer: () => confirma('Aferir hodômetro', `Você está na referência ${aferRef ? aferRef.n : ''} (km ${aferRef ? aferRef.kmShow.toFixed(3) : ''}). Ajuste o hodômetro até bater com o km da tulipa e confirme. O app recalcula o W%.`, onAfer), regRef, regRef2, regTrc, pa: placa(trAtual), pp: placa(trProx), clock: last ? last.t : t, acc: last ? last.acc : null,
+    cfg, spd, tnav, fx, odoM: odoM - zO, factor, aferRef, onAfer: () => confirma('Aferir hodômetro', `Você está na referência ${aferRef ? aferRef.n : ''} (km ${aferRef ? aferRef.kmShow.toFixed(3) : ''}). Ajuste o hodômetro até bater com o km da tulipa e confirme. O app recalcula o W%.`, onAfer), regRef, regRef2, regTrc, pa: placa(trAtual), pp: placa(trProx), ntProx: (tul.find((e) => e.t === 'P' && e.nt > 0 && e.d >= globalDist - 15) || {}).nt || null, clock: last ? last.t : t, acc: last ? last.acc : null,
     trN: trsN ? (stage.idx >= 0 && trIdx >= 0 ? `${trIdx + 1}/${trsN.length}` : null) : stage.idx >= 0 ? `${stage.idx + 1}/${rot.trechos.length}` : null, fim: !!fim, refN: iAtual >= 0 ? `${iAtual + 1}/${tul.length}` : null,
     kmAcum: globalDist - zO, trs: trsN, rbBr: br != null,
     onRbTap: () => setBr(iAtual >= 0 ? iAtual : 0), onRbPrev: () => setBr((b) => Math.max(0, (b ?? 0) - 1)), onRbNext: () => setBr((b) => Math.min(tul.length - 1, (b ?? 0) + 1)), onRbSair: () => setBr(null),
@@ -116,6 +117,15 @@ export function NavTela({ cfg, stage, rs, last, globalDist, odoM, tul, rot, trs,
     bat: d.bat ?? -1, elapsed: d.elapsed ?? null, iAtual, aviso: aviso || '', fim: !!fim,
   };
   useEffect(() => { const id = setInterval(() => { publicarEspelho(espRef.current).catch(() => {}); }, 2000); return () => clearInterval(id); }, []);
+  const irPara = () => {
+    const n = parseInt(kp.v, 10);
+    if (!Number.isFinite(n)) return;
+    let idx = -1;
+    if (kp.tipo === 'ref') idx = tul.findIndex((e, i) => (e.rn != null ? e.rn === n : i + 1 === n));
+    else if (trsN && trsN[n - 1]) idx = tul.findIndex((e) => e.d >= trsN[n - 1].d0 - 0.5);
+    if (idx < 0) { Alert.alert(kp.tipo === 'ref' ? 'Referência não encontrada' : 'Trecho não encontrado', `Não existe ${kp.tipo === 'ref' ? 'a referência' : 'o trecho'} ${n} nesta prova.`); return; }
+    setKp(null); setBr(idx);
+  };
   const confirma = (tit, msg, fn) => { setMenu(false); Alert.alert(tit, msg, [{ text: 'Cancelar', style: 'cancel' }, { text: 'Confirmar', onPress: fn }]); };
 
   return (
@@ -145,21 +155,51 @@ export function NavTela({ cfg, stage, rs, last, globalDist, odoM, tul, rot, trs,
             <Text style={{ color: '#fff', fontWeight: '900', fontSize: 20 }}>ENCERRAR PROVA</Text>
           </TouchableOpacity>
         ) : null}
-        {menu && (
-          <View style={{ position: 'absolute', top: 26 + TOPO, right: 10, zIndex: 9, backgroundColor: '#fff', borderRadius: 8, padding: 6, elevation: 8 }}>
-            {aferRef ? <TouchableOpacity style={{ padding: 12 }} onPress={() => confirma('Aferir hodômetro', `Referência ${aferRef.n} · km ${aferRef.kmShow.toFixed(3)}. Confirma aferir agora? O app recalcula o W%.`, onAfer)}><Text style={{ fontSize: 16, color: '#000', fontWeight: '800' }}>AFERIR agora (W% {(factor * 1000).toFixed(2)})</Text></TouchableOpacity> : null}
-            <View style={{ flexDirection: 'row', alignItems: 'center', padding: 8 }}>
-              <TouchableOpacity style={{ padding: 10 }} onPress={() => onW && onW(-1)}><Text style={{ fontSize: 18, color: '#000' }}>−1</Text></TouchableOpacity>
-              <TouchableOpacity style={{ padding: 10 }} onPress={() => onW && onW(-0.1)}><Text style={{ fontSize: 18, color: '#000' }}>−0,1</Text></TouchableOpacity>
-              <Text style={{ fontSize: 16, color: '#000', fontWeight: '800', paddingHorizontal: 6 }}>W% {(factor * 1000).toFixed(2)}</Text>
-              <TouchableOpacity style={{ padding: 10 }} onPress={() => onW && onW(0.1)}><Text style={{ fontSize: 18, color: '#000' }}>+0,1</Text></TouchableOpacity>
-              <TouchableOpacity style={{ padding: 10 }} onPress={() => onW && onW(1)}><Text style={{ fontSize: 18, color: '#000' }}>+1</Text></TouchableOpacity>
+        {kp && (
+          <View style={{ position: 'absolute', left: 0, right: 0, top: 0, bottom: 0, zIndex: 10, backgroundColor: '#0c1014', padding: 14, justifyContent: 'center' }}>
+            <View style={{ backgroundColor: '#000', borderRadius: 16, borderWidth: 1, borderColor: '#262b32', paddingVertical: 14, alignItems: 'center', marginBottom: 12 }}>
+              <Text style={{ color: '#ff7a2e', fontWeight: '900', fontSize: 16, letterSpacing: 1 }}>{kp.tipo === 'ref' ? 'IR PARA REFERÊNCIA' : 'IR PARA TRECHO'}</Text>
+              <Text style={{ color: '#fff', fontSize: 64, fontWeight: '900', minHeight: 80 }}>{kp.v || ' '}</Text>
             </View>
-            {podeDesfazer ? <TouchableOpacity style={{ padding: 12 }} onPress={() => confirma('Desfazer aferição', 'Voltar ao W% e ao hodômetro de antes da última aferição?', onDesfazer)}><Text style={{ fontSize: 16, color: '#c0392b', fontWeight: '800' }}>Desfazer última aferição</Text></TouchableOpacity> : null}
-            <TouchableOpacity style={{ padding: 12 }} onPress={() => confirma('Zerar odômetro', 'Zerar o odômetro (GPS) agora? Não altera o T.NAV nem a posição no roadbook.', onZerar)}><Text style={{ fontSize: 16, color: '#000' }}>Zerar odômetro</Text></TouchableOpacity>
-            {onIniciarAgora ? <TouchableOpacity style={{ padding: 12 }} onPress={() => confirma('Iniciar agora', 'Iniciar o trecho 1 agora, sem esperar a hora da largada?', onIniciarAgora)}><Text style={{ fontSize: 16, color: '#000' }}>Iniciar trecho agora</Text></TouchableOpacity> : null}
-            <TouchableOpacity style={{ padding: 12 }} onPress={() => confirma('Sair da tela de prova', 'Voltar ao menu? O trecho e o GPS continuam.', onClose)}><Text style={{ fontSize: 16, color: '#000' }}>Sair da tela de prova</Text></TouchableOpacity>
-            <TouchableOpacity style={{ padding: 12 }} onPress={() => setMenu(false)}><Text style={{ fontSize: 16, color: '#666' }}>Fechar menu</Text></TouchableOpacity>
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between' }}>
+              {['1', '2', '3', '4', '5', '6', '7', '8', '9', 'ESC', '0', '⌫'].map((k) => (
+                <TouchableOpacity key={k} onPress={() => setKp((o) => (k === 'ESC' ? null : k === '⌫' ? { ...o, v: o.v.slice(0, -1) } : { ...o, v: (o.v + k).slice(0, 3) }))}
+                  style={{ width: '31.5%', height: 74, marginBottom: 10, borderRadius: 14, alignItems: 'center', justifyContent: 'center', backgroundColor: k === 'ESC' ? '#ef5350' : k === '⌫' ? '#fff200' : '#f5f5f5' }}>
+                  <Text style={{ color: '#000', fontSize: k.length > 1 ? 24 : 34, fontWeight: '900' }}>{k}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+            <TouchableOpacity onPress={irPara} style={{ height: 70, borderRadius: 14, backgroundColor: '#00d672', alignItems: 'center', justifyContent: 'center' }}><Text style={{ color: '#000', fontSize: 30, fontWeight: '900' }}>OK</Text></TouchableOpacity>
+          </View>
+        )}
+        {menu && (
+          <View style={{ position: 'absolute', left: 0, right: 0, top: 0, bottom: 0, zIndex: 9 }}>
+            <TouchableOpacity activeOpacity={1} style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)' }} onPress={() => setMenu(false)} />
+            <View style={{ backgroundColor: '#151a21', borderTopWidth: 2, borderTopColor: '#ff7a2e', borderTopLeftRadius: 16, borderTopRightRadius: 16, padding: 12 }}>
+              <Text style={{ color: '#ff7a2e', textAlign: 'center', fontWeight: '900', fontSize: 14, letterSpacing: 1, marginBottom: 8 }}>MENU</Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: '#1b212a', borderRadius: 12, borderWidth: 1, borderColor: '#262b32', marginBottom: 8 }}>
+                {[['−1', -1], ['−0,1', -0.1]].map(([t, v]) => <TouchableOpacity key={t} style={{ padding: 12 }} onPress={() => onW && onW(v)}><Text style={{ fontSize: 18, color: '#fff', fontWeight: '800' }}>{t}</Text></TouchableOpacity>)}
+                <Text style={{ fontSize: 16, color: '#ff7a2e', fontWeight: '900', paddingHorizontal: 8 }}>W% {(factor * 1000).toFixed(2)}</Text>
+                {[['+0,1', 0.1], ['+1', 1]].map(([t, v]) => <TouchableOpacity key={t} style={{ padding: 12 }} onPress={() => onW && onW(v)}><Text style={{ fontSize: 18, color: '#fff', fontWeight: '800' }}>{t}</Text></TouchableOpacity>)}
+              </View>
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between' }}>
+                {[
+                  ['⌖', aferRef ? 'AFERIR' : 'AFER (sem ref.)', () => (aferRef ? confirma('Aferir hodômetro', `Referência ${aferRef.n} · km ${aferRef.kmShow.toFixed(3)}. Confirma aferir agora? O app recalcula o W%.`, onAfer) : (setMenu(false), Alert.alert('Aferição', 'Chegue perto de uma referência marcada como AFER (até 80 m) para aferir.'))), !aferRef],
+                  ...(podeDesfazer ? [['↶', 'Desfazer aferição', () => confirma('Desfazer aferição', 'Voltar ao W% e ao hodômetro de antes da última aferição?', onDesfazer)]] : []),
+                  ['⟳', 'Zerar odômetro', () => confirma('Zerar odômetro', 'Zerar o odômetro (GPS) agora? Não altera o T.NAV nem a posição no roadbook.', onZerar)],
+                  ...(onIniciarAgora ? [['▶', 'Iniciar trecho agora', () => confirma('Iniciar agora', 'Iniciar o trecho 1 agora, sem esperar a hora da largada?', onIniciarAgora)]] : []),
+                  ['#', 'Ir p/ referência', () => { setMenu(false); setKp({ tipo: 'ref', v: '' }); }],
+                  ['⇥', 'Ir p/ trecho', () => { setMenu(false); setKp({ tipo: 'trc', v: '' }); }],
+                  ['⎋', 'Sair da tela', () => confirma('Sair da tela de prova', 'Voltar ao menu? O trecho e o GPS continuam.', onClose)],
+                  ['✕', 'Fechar', () => setMenu(false)],
+                ].map(([ic, t, f, off]) => (
+                  <TouchableOpacity key={t} onPress={f} style={{ width: '31.5%', backgroundColor: '#1b212a', borderWidth: 1, borderColor: '#262b32', borderRadius: 12, paddingVertical: 12, marginBottom: 8, alignItems: 'center', opacity: off ? 0.55 : 1 }}>
+                    <Text style={{ color: '#ff7a2e', fontSize: 24, fontWeight: '900' }}>{ic}</Text>
+                    <Text style={{ color: '#fff', fontSize: 12, fontWeight: '700', textAlign: 'center', marginTop: 2 }}>{t}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
           </View>
         )}
       </View>

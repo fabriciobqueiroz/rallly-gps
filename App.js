@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import {
-  Alert, KeyboardAvoidingView, Linking, Platform, ScrollView, Share, StyleSheet, Text, TextInput, TouchableOpacity, Vibration, View,
+  Alert, KeyboardAvoidingView, Linking, Modal, Platform, ScrollView, Share, StyleSheet, Text, TextInput, TouchableOpacity, Vibration, View,
 } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import * as Location from 'expo-location';
@@ -14,7 +14,7 @@ import Organizador from './src/Organizador';
 import { enviarResultado, ouvirRanking, salvarProva, ouvirProva, ouvirInscricao, ouvirMinhaLargada, enviarDatalogger, ouvirAuth, sairConta, lerPerfil, enviarAoVivo, limparAoVivo } from './src/firebase';
 import Login from './src/Login';
 import { st } from './src/estilos';
-import Fluxo, { DlTela } from './src/Fluxo';
+import Fluxo, { DlTela, InfoProva } from './src/Fluxo';
 import { planilhaLiberada, parseHMS, CATS_PADRAO } from './src/OrgExtras';
 import { NavTela, NavConfig, PilotoTela, loadNav } from './src/Nav';
 import { compartilharPdf } from './src/pdf';
@@ -46,6 +46,8 @@ export default function App() {
   const [dlTick, setDlTick] = useState(0);
   const [soDl, setSoDl] = useState(false);
   const [pilotoOpen, setPilotoOpen] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [infoOpen, setInfoOpen] = useState(false);
   const [cfgPiloto, setCfgPiloto] = useState(false);
   const [abrirReq, setAbrirReq] = useState(null);
   const [tab, setTab] = useState(() => (loadJson('papel', 'competidor') === 'organizador' ? 'organizar' : 'provas'));
@@ -266,7 +268,7 @@ export default function App() {
       if (typeof d.largada === 'string') setLargadaTxt(d.largada);
       {
         const pair = (a) => { const o = []; for (let i = 0; i + 1 < a.length; i += 2) o.push([a[i], a[i + 1]]); return o; };
-        setProvaMap({ wps: pair(d.wps || []), coords: pair(d.rota || []), legs: d.legs || [], kmh: d.kmh || [], tul: d.tul || [], trechos: d.trechos || [], trs: d.trs || [], categorias: d.categorias || [], lib: d.lib || {}, refs: d.refs || [], pcl: d.pcl || [], lev: d.lev || null, pub: d.publicadoEm || 1 });
+        setProvaMap({ wps: pair(d.wps || []), coords: pair(d.rota || []), legs: d.legs || [], kmh: d.kmh || [], tul: d.tul || [], trechos: d.trechos || [], trs: d.trs || [], categorias: d.categorias || [], lib: d.lib || {}, refs: d.refs || [], pcl: d.pcl || [], lev: d.lev || null, nome: d.nome || '', pub: d.publicadoEm || 1 });
       }
       if (d.intervalo != null) setIntervalo(String(d.intervalo));
     };
@@ -438,6 +440,16 @@ export default function App() {
       <Login st={st} onEntrou={(p) => setPapel(p)} />
     </ScrollView>
   );
+  const infoProva = (() => {
+    const tr = rot.trechos || [];
+    const totalSec = tr.reduce((a, t) => a + (t.tipo === 'D' ? (Number(t.min) || 0) * 60 : t.kmh > 0 ? (t.km / t.kmh) * 3600 : 0) + (t.nt || 0), 0);
+    const km = tr.reduce((a, t) => a + (Number(t.km) || 0), 0);
+    return {
+      nome: provaMap.nome || (piloto.prova ? 'Prova ' + piloto.prova.trim().toUpperCase() : ''), pub: provaMap.pub, refs: tulComp(provaMap.tul).filter((e) => e.t === 'T' || e.nt > 0).length,
+      trechos: provaMap.trs.length || tr.length, classe: piloto.classe, numero: piloto.numero, totalSec: Math.round(totalSec), km, largSec: parseHMS(minhaLarg || largManual),
+    };
+  })();
+  useEffect(() => { if (navOpen) setInfoOpen(true); }, [navOpen]);
   const minhasAbas = papel === 'organizador' ? ['provas', 'organizar', 'ranking', 'trilhas'] : ['provas', 'tulipas', 'ranking', 'trilhas'];
   const setLargManual = (v) => { setLargManualRaw(v); const k = piloto.prova.trim().toUpperCase().replace(/[^A-Z0-9]+/g, ''); saveJson('largm', { ...loadJson('largm', {}), [k]: v }); };
   // Os pontos de GPS ficam intactos (o levantamento do organizador usa o mesmo rastro). A prova só conta a partir da largada
@@ -461,13 +473,11 @@ export default function App() {
     <KeyboardAvoidingView style={{ flex: 1 }} behavior="padding">
     <ScrollView style={st.root} contentContainerStyle={st.wrap} keyboardShouldPersistTaps="handled">
       <StatusBar style="light" />
-      <Text style={st.h1}>Rally GPS</Text>
-      <View style={[st.row, { alignItems: 'center' }]}>
-        <Text style={[st.sub, { flex: 1 }]}>{user.email} · {papel === 'organizador' ? 'Organizador' : 'Competidor'}</Text>
-        {papeis.organizador && papeis.competidor && <TouchableOpacity onPress={() => setPapel(papel === 'organizador' ? 'competidor' : 'organizador')}><Text style={{ color: '#ff7a2e', fontWeight: '800', marginRight: 14 }}>{papel === 'organizador' ? 'Ser competidor' : 'Ser organizador'}</Text></TouchableOpacity>}
-        <TouchableOpacity onPress={() => Alert.alert('Sair da conta?', user.email, [{ text: 'Cancelar', style: 'cancel' }, { text: 'Sair', onPress: () => { sairConta().catch(() => {}); } }])}><Text style={{ color: '#ff5252', fontWeight: '800' }}>Sair</Text></TouchableOpacity>
+      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+        <TouchableOpacity onPress={() => setTab(papel === 'organizador' ? 'organizar' : 'provas')}><Text style={{ color: '#ff7a2e', fontSize: 26, fontWeight: '900' }}>Rally GPS</Text></TouchableOpacity>
+        <TouchableOpacity onPress={() => setMenuOpen(true)} hitSlop={{ top: 10, bottom: 10, left: 14, right: 10 }} accessibilityLabel="Menu"><Text style={{ color: '#f5f5f5', fontSize: 30, fontWeight: '900', paddingHorizontal: 6 }}>⋮</Text></TouchableOpacity>
       </View>
-      <Text style={st.sub}>{running ? '● Gravando' : points.length ? `○ Parado · ${points.length} pontos salvos` : '○ Parado'}{Platform.OS === 'android' ? '' : ' (somente Android)'}</Text>
+      <Text style={[st.sub, { marginBottom: 8 }]}>Olá, {(piloto.nome || user.email.split('@')[0]).split(' ')[0]} · {papel === 'organizador' ? 'Organizador' : 'Competidor'} · {running ? '● Gravando' : points.length ? `○ Parado · ${points.length} pontos` : '○ Parado'}{Platform.OS === 'android' ? '' : ' (somente Android)'}</Text>
 
       <View style={st.row}>
         <View style={[st.gps, { borderColor: gpsColor, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', flex: 1 }]}>
@@ -483,13 +493,41 @@ export default function App() {
           {!running && remLarg > 180 && <Text style={st.tipTx}>O GPS liga sozinho 3 min antes.</Text>}
         </View>
       )}
+      {tab !== 'provas' && tab !== 'organizar' && (
       <View style={st.row}>
-        {minhasAbas.map((t) => (
+        <TouchableOpacity style={st.tab} onPress={() => setTab(papel === 'organizador' ? 'organizar' : 'provas')}><Text style={st.tabTx}>‹ Início</Text></TouchableOpacity>
+        {minhasAbas.filter((t) => t !== 'provas' && t !== 'organizar').map((t) => (
           <TouchableOpacity key={t} style={[st.tab, tab === t && st.tabOn]} onPress={() => setTab(t)}>
             <Text style={[st.tabTx, tab === t && { color: '#0c1014' }]}>{{ provas: 'Provas', gravar: 'Gravar', ranking: 'Ranking', tulipas: 'Iniciar', organizar: 'Organizar', trilhas: 'Trilhas' }[t]}</Text>
           </TouchableOpacity>
         ))}
       </View>
+      )}
+      {tab === 'organizar' && (
+      <View style={st.row}>
+        <TouchableOpacity style={st.tab} onPress={() => setTab('provas')}><Text style={st.tabTx}>Meus eventos</Text></TouchableOpacity>
+      </View>
+      )}
+      <Modal visible={menuOpen} transparent animationType="fade" onRequestClose={() => setMenuOpen(false)}>
+        <TouchableOpacity activeOpacity={1} style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.45)' }} onPress={() => setMenuOpen(false)}>
+          <View style={{ position: 'absolute', top: 54, right: 12, width: 230, backgroundColor: '#1b212a', borderWidth: 1, borderColor: '#262b32', borderRadius: 12, paddingVertical: 6 }}>
+            {[
+              ...(papel === 'organizador' ? [['Organizar prova', () => setTab('organizar')]] : []),
+              ['Meus eventos', () => setTab('provas')],
+              ['Trilhas', () => setTab('trilhas')],
+              ['Ranking', () => setTab('ranking')],
+              ...(papel !== 'organizador' ? [['Roadbook / iniciar', () => setTab('tulipas')]] : []),
+              ['Perfil e equipamento', () => setPilotoOpen(true)],
+              ...(papeis.organizador && papeis.competidor ? [[papel === 'organizador' ? 'Modo competidor' : 'Modo organizador', () => setPapel(papel === 'organizador' ? 'competidor' : 'organizador')]] : []),
+              ['Sair', () => Alert.alert('Sair da conta?', user.email, [{ text: 'Cancelar', style: 'cancel' }, { text: 'Sair', onPress: () => { sairConta().catch(() => {}); } }]), '#ff5252'],
+            ].map(([t, f, cor]) => (
+              <TouchableOpacity key={t} onPress={() => { setMenuOpen(false); setTimeout(f, 50); }} style={{ paddingVertical: 12, paddingHorizontal: 16 }}>
+                <Text style={{ color: cor || '#f5f5f5', fontSize: 16, fontWeight: '700' }}>{t}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </TouchableOpacity>
+      </Modal>
       {tab === 'provas' ? (
         <Fluxo st={st} user={user} piloto={piloto} provaMap={provaMap} lib={libOk} minhaLarg={minhaLarg} largManual={largManual} setLargManual={setLargManual} pointsN={janN} dlStat={loadJson('dlstat', {})} dlTick={dlTick}
           onEnviarDl={onDatalogger} enviandoDl={enviandoDl} onEscolher={escolher} onPlanilha={onPlanilha} onSoDl={onSoDl} onPiloto={() => setPilotoOpen(true)} onZerarDl={zerarDatalogger} onPersonalizar={() => setCfgOpen(true)}
@@ -545,13 +583,14 @@ export default function App() {
           </View>
         </View>
       ) : null}
-      {soDl && <DlTela st={st} last={last} pointsN={points.length} startedAt={startedAt} onFinalizar={finalizarDl} />}
+      {soDl && <DlTela st={st} last={last} pointsN={points.length} startedAt={startedAt} onFinalizar={finalizarDl} info={infoProva} />}
       {navOpen && (
         <Erro onClose={() => setNavOpen(false)}><NavTela cfg={loadNav()} stage={stage} rs={rs} last={last} globalDist={rs || stage.idx >= 0 ? globalDist : Math.max(0, odoAtual() - odoBase)}
           odoM={odoAtual() - odoBase} tul={tulVis} rot={rot} trs={provaMap.trs} fim={fimProva} cont={remLarg} classe={piloto.classe} grupos={grupos}
           aviso={fimProva ? 'FIM DA PROVA' : remLarg != null && remLarg > 0 ? `Largada em ${fmtDur(remLarg)}` : neutroRest != null ? `NEUTRO · PARE · ${fmtDur(neutroRest)}` : null}
           onAdj={adjAll} onIniciarAgora={onStage} onEncerrar={encerrarProva} onZerar={() => setOdoBase(odoAtual())} factor={factor} aferRef={aferRef} onAfer={onAfer} podeDesfazer={!!aferUndo} onDesfazer={desfazerAfer} onW={ajustarW} onEstouAqui={estouAqui} onClose={() => setNavOpen(false)} /></Erro>
       )}
+      {navOpen && <InfoProva visible={infoOpen} info={infoProva} onOk={() => setInfoOpen(false)} />}
       <NavConfig st={st} visible={cfgOpen} onClose={() => setCfgOpen(false)} />
       {pilotoOpen && <PilotoTela cfg={loadNav()} tul={tulVis} classe={piloto.classe} grupos={grupos} onPersonalizar={() => setCfgPiloto(true)} onClose={() => setPilotoOpen(false)} />}
       <NavConfig st={st} piloto visible={cfgPiloto} onClose={() => setCfgPiloto(false)} />
