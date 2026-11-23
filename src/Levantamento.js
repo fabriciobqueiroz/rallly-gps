@@ -198,7 +198,7 @@ export default function Levantamento({ st, prova, last, onAplicar, onProva, levN
     const tr = trailRef.current || [];
     voo.current = true;
     const lim = new Promise((_, rej) => setTimeout(() => rej(new Error('tempo')), 12000));
-    const env = salvarProva(prova, { lev: { em: n.em || 0, marks: n.marks.map((m) => ({ ...m, foto: null })), trechos: n.trechos || [], ...(tr.length > 1 ? { trail: tr.flatMap((c) => [Math.round(c[0] * 1e5) / 1e5, Math.round(c[1] * 1e5) / 1e5]) } : {}) } });
+    const env = salvarProva(prova, { lev: { em: n.em || 0, salvoEm: Date.now(), marks: n.marks.map((m) => ({ ...m, foto: null })), trechos: n.trechos || [], ...(tr.length > 1 ? { trail: tr.flatMap((c) => [Math.round(c[0] * 1e5) / 1e5, Math.round(c[1] * 1e5) / 1e5]) } : {}) } });
     Promise.race([env, lim]).then(() => {
       const atual = loadJson(chave, null);
       if (!atual || (atual.em || 0) === (n.em || 0)) { pend.current = false; saveJson('levpend_' + slug0, 0); setSync('ok'); }

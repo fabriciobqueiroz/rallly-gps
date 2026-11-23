@@ -56,6 +56,8 @@ export default function App() {
   const [perfilOpen, setPerfilOpen] = useState(false);
   const [cfgPiloto, setCfgPiloto] = useState(false);
   const [abrirReq, setAbrirReq] = useState(null);
+  const [listaReq, setListaReq] = useState(0); // menu "Organizar prova": volta para a lista de provas
+  const [erroProva, setErroProva] = useState('');
   const [tab, setTab] = useState(() => (loadJson('papel', 'competidor') === 'organizador' ? 'organizar' : 'provas'));
   const [user, setUser] = useState(undefined); // undefined = carregando, null = sem login
   useEffect(() => { if (!user) return; return ouvirMasters(setMastersX, () => {}); }, [user && user.uid]);
@@ -277,12 +279,13 @@ export default function App() {
       if (typeof d.largada === 'string') setLargadaTxt(d.largada);
       {
         const pair = (a) => { const o = []; for (let i = 0; i + 1 < a.length; i += 2) o.push([a[i], a[i + 1]]); return o; };
-        setProvaMap({ wps: pair(d.wps || []), coords: pair(d.rota || []), legs: d.legs || [], kmh: d.kmh || [], tul: d.tul || [], trechos: d.trechos || [], trs: d.trs || [], categorias: d.categorias || [], lib: d.lib || {}, refs: d.refs || [], pcl: d.pcl || [], lev: d.lev || null, nome: d.nome || '', pub: d.publicadoEm || 1 });
+        setProvaMap({ code: slugP, wps: pair(d.wps || []), coords: pair(d.rota || []), legs: d.legs || [], kmh: d.kmh || [], tul: d.tul || [], trechos: d.trechos || [], trs: d.trs || [], categorias: d.categorias || [], lib: d.lib || {}, refs: d.refs || [], pcl: d.pcl || [], lev: d.lev || null, nome: d.nome || '', pub: d.publicadoEm || 1 });
       }
       if (d.intervalo != null) setIntervalo(String(d.intervalo));
     };
     if (cache) aplica(cache, false);
-    return ouvirProva(piloto.prova, (d) => aplica(d, true), () => {});
+    setErroProva('');
+    return ouvirProva(piloto.prova, (d) => { setErroProva(''); aplica(d, true); }, (e) => setErroProva(String(e?.message || e)));
   }, [piloto.prova, provaVer]);
   // Arma a largada quando o horário ainda está no futuro.
   useEffect(() => {
@@ -522,7 +525,7 @@ export default function App() {
         <TouchableOpacity activeOpacity={1} style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.45)' }} onPress={() => setMenuOpen(false)}>
           <View style={{ position: 'absolute', top: 54, right: 12, width: 230, backgroundColor: '#1b212a', borderWidth: 1, borderColor: '#262b32', borderRadius: 12, paddingVertical: 6 }}>
             {[
-              ...(papel === 'organizador' ? [['Organizar prova', () => setTab('organizar')], ['Organizar trilha', () => setTab('trilhas')]] : []),
+              ...(papel === 'organizador' ? [['Organizar prova', () => { setListaReq((n) => n + 1); setTab('organizar'); }], ['Organizar trilha', () => setTab('trilhas')]] : []),
               ['Meus eventos', () => setTab('provas')],
               ['Eventos abertos', () => setTab('abertos')],
               ...(ehMaster(user.email, mastersX) ? [['Usuários (master)', () => setTab('usuarios')]] : []),
@@ -544,7 +547,7 @@ export default function App() {
           extra={<TrilhasComp st={st} modo="minhas" gps={{ nome: piloto.nome || user.email, uid: user.uid, running, start, getPoints: () => getState().points }} />}
           onAdmin={(x) => { setPapel('organizador'); setP('prova')(x.code); setAbrirReq({ code: x.code, n: Date.now() }); }} />
       ) : tab === 'organizar' ? (
-        <Organizador st={st} onTab={setTab} onProva={(c, force) => { if (force) { forcaZero.current = true; setProvaVer((v) => v + 1); } setP('prova')(c); }} prova={piloto.prova} provaMap={provaMap} last={last} onOrg={setOrgInfo} abrirReq={abrirReq} />
+        <Organizador st={st} listaReq={listaReq} erroProva={erroProva} onTab={setTab} onProva={(c, force) => { if (force) { forcaZero.current = true; setProvaVer((v) => v + 1); } setP('prova')(c); }} prova={piloto.prova} provaMap={provaMap} last={last} onOrg={setOrgInfo} abrirReq={abrirReq} />
       ) : tab === 'tulipas' ? (
         <View style={st.card}>
           <Text style={st.tip}>Prova {piloto.prova.trim() || '—'}</Text>

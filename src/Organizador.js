@@ -100,7 +100,10 @@ function OrgRankingLive({ st, prova }) {
   );
 }
 
-export default function Organizador({ st, prova, provaMap, last, onOrg, onProva, onTab, abrirReq }) {
+const PM_VAZIO = { wps: [], coords: [], legs: [], kmh: [], tul: [], trechos: [], trs: [], categorias: [], lib: {}, refs: [], pcl: [], lev: null };
+export default function Organizador({ st, prova, provaMap: pmRaw, last, onOrg, onProva, onTab, abrirReq, listaReq, erroProva }) {
+  // Os dados só valem se são DESTA prova: ao criar/abrir outra, o mapa da anterior ainda existe por um instante e não pode ser carregado.
+  const provaMap = pmRaw && pmRaw.code === String(prova || '').trim().toUpperCase().replace(/[^A-Z0-9]+/g, '') ? pmRaw : PM_VAZIO;
   const [org, setOrg] = useState(() => loadJson('org', null));
   const [wps, setWps] = useState([]);
   const [rota, setRota] = useState({ coords: [], legs: [], tul: [] });
@@ -197,6 +200,7 @@ export default function Organizador({ st, prova, provaMap, last, onOrg, onProva,
       setSec(Platform.OS === 'web' ? 'planilha' : 'levantar'); setAberta(true);
     } catch (e) { Alert.alert('Sem conexão', String(e?.message || e)); }
   };
+  useEffect(() => { if (listaReq) setAberta(false); }, [listaReq]);
   useEffect(() => { if (abrirReq && abrirReq.code && abrirReq.n !== reqFeito) { reqFeito = abrirReq.n; abrirProva(abrirReq.code, false); } }, [abrirReq && abrirReq.n]);
   const sair = () => { saveJson('org', null); setOrg(null); onOrg && onOrg(null); };
 
@@ -397,6 +401,9 @@ export default function Organizador({ st, prova, provaMap, last, onOrg, onProva,
         {rota.tul.length > 0 && <Roadbook st={st} tul={tulT} dist={null} grupos={grupos} org />}
         <TouchableOpacity style={[st.btn, { marginTop: 10, backgroundColor: '#2e7d32' }]} onPress={publicar}><Text style={[st.btnTx, { color: '#fff' }]}>Publicar prova para os celulares</Text></TouchableOpacity>
         {provaMap.pub > 1 && <Text style={st.tipTx}>Versão publicada: {new Date(provaMap.pub).toLocaleString('pt-BR')}. Os celulares só recebem o que foi publicado.</Text>}
+        {provaMap.lev && provaMap.lev.salvoEm > 0 && <Text style={[st.tipTx, provaMap.lev.salvoEm > (provaMap.pub || 0) + 5000 ? { color: '#ffb300' } : null]}>Levantamento salvo na nuvem: {new Date(provaMap.lev.salvoEm).toLocaleString('pt-BR')}{provaMap.lev.salvoEm > (provaMap.pub || 0) + 5000 ? ' — há edições NÃO publicadas: no aparelho em que editou, toque em "Publicar prova para os celulares".' : ' (já publicado)'}</Text>}
+        {erroProva ? <Text style={[st.tipTx, { color: '#ff5252' }]}>Erro ao ler a prova na nuvem: {erroProva}</Text> : null}
+        <TouchableOpacity style={[st.btn2, { marginBottom: 8 }]} onPress={() => { carregado.current = 0; onProva && onProva(prova, true); }}><Text style={st.btn2Tx}>↻ Buscar atualização da nuvem</Text></TouchableOpacity>
         <TouchableOpacity style={[st.btn2, { marginBottom: 8 }]} onPress={pdf}><Text style={st.btn2Tx}>Gerar PDF do roadbook (imprimir)</Text></TouchableOpacity>
         <TouchableOpacity style={st.btn2} onPress={sair}><Text style={st.btn2Tx}>Sair do modo organizador</Text></TouchableOpacity>
       </View>
