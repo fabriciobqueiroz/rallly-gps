@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Alert, ScrollView, Text, TouchableOpacity, View } from 'react-native';
 import Login from './src/Login';
 import Organizador from './src/Organizador';
+import OverlayRoot from './src/Overlay';
 import { TrilhasOrg } from './src/Trilhas';
 import { st } from './src/estilos';
 import { ouvirAuth, ouvirProva, sairConta } from './src/firebase';
@@ -23,7 +24,7 @@ Alert.alert = (titulo, msg, botoes) => {
 const VAZIO = { wps: [], coords: [], legs: [], kmh: [], tul: [], trechos: [], trs: [], categorias: [], lib: {}, refs: [], pcl: [], pub: 0, lev: null };
 const pair = (a) => { const o = []; for (let i = 0; i + 1 < a.length; i += 2) o.push([a[i], a[i + 1]]); return o; };
 
-export default function App() {
+function AppOrg() {
   const [user, setUser] = useState(undefined);
   const [prova, setProva] = useState(() => loadJson('piloto', {}).prova || '');
   const [provaMap, setProvaMap] = useState(VAZIO);
@@ -34,7 +35,7 @@ export default function App() {
   useEffect(() => {
     if (!prova.trim()) { setProvaMap(VAZIO); return undefined; }
     setProvaMap(VAZIO);
-    return ouvirProva(prova, (d) => setProvaMap({ wps: pair(d.wps || []), coords: pair(d.rota || []), legs: d.legs || [], kmh: d.kmh || [], tul: d.tul || [], trechos: d.trechos || [], trs: d.trs || [], categorias: d.categorias || [], lib: d.lib || {}, refs: d.refs || [], pcl: d.pcl || [], pub: d.publicadoEm || 1, lev: d.lev || null }), () => {});
+    return ouvirProva(prova, (d) => setProvaMap({ code: String(prova).trim().toUpperCase().replace(/[^A-Z0-9]+/g, ''), wps: pair(d.wps || []), coords: pair(d.rota || []), legs: d.legs || [], kmh: d.kmh || [], tul: d.tul || [], trechos: d.trechos || [], trs: d.trs || [], categorias: d.categorias || [], lib: d.lib || {}, refs: d.refs || [], pcl: d.pcl || [], pub: d.publicadoEm || 1, lev: d.lev || null }), () => {});
   }, [prova]);
   const escolher = (p) => { setProva(p); saveJson('piloto', { ...loadJson('piloto', {}), prova: p }); };
   const caixa = { width: '100%', maxWidth: 1100, alignSelf: 'center' };
@@ -59,4 +60,12 @@ export default function App() {
       {mod === 'trilhas' ? <TrilhasOrg st={st} /> : <Organizador st={st} onProva={escolher} prova={prova} provaMap={provaMap} last={null} onOrg={setOrg} abrirReq={abrirReq} onTab={() => {}} />}
     </ScrollView>
   );
+}
+
+// ?overlay=CODIGO abre só o overlay da transmissão (fundo transparente, para a Fonte de Navegador do OBS).
+export default function App() {
+  let q = null;
+  try { q = new URLSearchParams(window.location.search); } catch {}
+  if (q && q.get('overlay')) return <OverlayRoot code={q.get('overlay')} delay={Number(q.get('delay')) || 0} car={q.get('car') || ''} />;
+  return <AppOrg />;
 }

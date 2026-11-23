@@ -420,11 +420,20 @@ export default function App() {
 
   // Ao vivo: a cada ~8 s manda só a posição atual (prova em andamento ou trilha gravando). É informativo; o datalogger completo segue gravado no celular.
   const aoVivoRef = useRef({});
-  aoVivoRef.current = { user, piloto, last, kJan };
+  // Telemetria para a transmissão: média do trecho, alvo, trecho atual e diferença (s) de cada PC já passado (null = neutro/deslocamento).
+  const telAoVivo = (() => {
+    try {
+      const s = stage.active ? status(stage, points, cum, factor) : null;
+      const pcs = stage.pcs.map((p) => ((((rot.trechos[(p.trecho || 1) - 1]) || {}).nt > 0) || p.tipo === 'D' || p.diff == null) ? null : Math.round(p.diff * 10) / 10);
+      return { avg: s && s.avgKmh != null ? Math.round(s.avgKmh * 10) / 10 : null, alvo: stage.targetKmh || null, trecho: stage.idx >= 0 ? stage.idx + 1 : null, pcs, pav: stage.pcs.map((p) => (p.avgKmh != null ? Math.round(p.avgKmh * 10) / 10 : null)), pel: stage.pcs.map((p) => (p.elapsed != null ? Math.round(p.elapsed * 10) / 10 : null)) };
+    } catch { return null; }
+  })();
+  aoVivoRef.current = { user, piloto, last, kJan, lib: provaMap.lib || {}, tel: telAoVivo };
+  const aoVivoEnvEm = useRef(0);
   const aoVivoAtivo = useRef(null);
   useEffect(() => {
     const tick = () => {
-      const { user: u, piloto: pl, last: l, kJan: kj } = aoVivoRef.current;
+      const { user: u, piloto: pl, last: l, kJan: kj, lib: lb, tel } = aoVivoRef.current;
       if (!u) return;
       let alvo = null;
       try {
@@ -439,9 +448,12 @@ export default function App() {
       if (aoVivoActivePrev(aoVivoAtivo.current, chave)) { const [k0, ...r0] = aoVivoAtivo.current.split('_'); limparAoVivo(k0, r0.join('_')).catch(() => {}); }
       aoVivoAtivo.current = chave;
       if (!alvo || !l || Date.now() - l.t > 20000) return;
-      enviarAoVivo({ ...alvo, nome: pl.nome || u.email, lat: l.lat, lon: l.lon, t: l.t, spd: l.spd, acc: l.acc }).catch(() => {});
+      // Modo transmissão (liga o organizador): a cada 2 s; fora dele, a cada 8 s.
+      if (Date.now() - aoVivoEnvEm.current < (lb && lb.transmissao && alvo.kind === 'prova' ? 1800 : 7800)) return;
+      aoVivoEnvEm.current = Date.now();
+      enviarAoVivo({ ...alvo, nome: pl.nome || u.email, lat: l.lat, lon: l.lon, t: l.t, spd: l.spd, acc: l.acc, hdg: l.hdg, classe: pl.classe, tel: alvo.kind === 'prova' ? tel : null }).catch(() => {});
     };
-    const id = setInterval(tick, 8000);
+    const id = setInterval(tick, 2000);
     return () => clearInterval(id);
   }, []);
   useEffect(() => { if (navOpen) setInfoOpen(true); }, [navOpen]);
@@ -538,6 +550,7 @@ export default function App() {
                 <Text style={{ color: cor || '#f5f5f5', fontSize: 16, fontWeight: '700' }}>{t}</Text>
               </TouchableOpacity>
             ))}
+            <Text style={{ color: '#6b7480', fontSize: 11, textAlign: 'center', paddingBottom: 8 }}>Rally GPS · passo79</Text>
           </View>
         </TouchableOpacity>
       </Modal>

@@ -242,12 +242,14 @@ export function ouvirTracksPublicosTrilha(trilha, onData, onError) {
 }
 
 // ---------- Ao vivo (posição em tempo real; só informativo, o resultado oficial vem do datalogger) ----------
-export async function enviarAoVivo({ kind, id, nome, numero, lat, lon, t, spd, acc }) {
+export async function enviarAoVivo({ kind, id, nome, numero, lat, lon, t, spd, acc, hdg, classe, tel }) {
   const u = auth.currentUser;
   if (!u) return;
   await setDoc(doc(db, 'aoVivo', `${kind}_${id}_${u.uid}`), {
     kind, id, uid: u.uid, nome: nome || '', numero: numero || '', lat: Math.round(lat * 1e6) / 1e6, lon: Math.round(lon * 1e6) / 1e6,
     t: t || Date.now(), spd: spd != null ? Math.round(spd * 3.6) : null, acc: acc != null ? Math.round(acc) : null, em: Date.now(),
+    classe: classe || '', avg: tel ? tel.avg ?? null : null, alvo: tel ? tel.alvo ?? null : null, trecho: tel ? tel.trecho ?? null : null, pcs: tel && tel.pcs ? tel.pcs : [], pav: tel && tel.pav ? tel.pav : [], pel: tel && tel.pel ? tel.pel : [],
+    hdg: hdg != null && hdg >= 0 ? Math.round(hdg) : null,
   });
 }
 export async function limparAoVivo(kind, id) {
