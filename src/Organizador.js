@@ -1,6 +1,8 @@
 // Aba do organizador: cria a prova no mapa, monta a planilha (tipos de trecho, classes, neutros) e publica.
 import { useEffect, useRef, useState } from 'react';
-import { Alert, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { Alert, Modal, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import Svg, { Path } from 'react-native-svg';
+import { VERSAO } from './versao';
 import MapaWeb from './MapaWeb';
 import { calcularRota } from './osrm';
 import { salvarProva, ouvirInscritos, ouvirRanking } from './firebase';
@@ -109,6 +111,22 @@ function OrgRankingLive({ st, prova }) {
 }
 
 const PM_VAZIO = { wps: [], coords: [], legs: [], kmh: [], tul: [], trechos: [], trs: [], categorias: [], lib: {}, refs: [], pcl: [], lev: null };
+
+const ICONES = {
+  geral: 'M4 21v-7 M4 10V3 M12 21v-9 M12 8V3 M20 21v-5 M20 12V3 M1 14h6 M9 8h6 M17 16h6',
+  cat: 'M3 3h7v7H3z M14 3h7v7h-7z M14 14h7v7h-7z M3 14h7v7H3z',
+  insc: 'M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2 M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8z M23 21v-2a4 4 0 0 0-3-3.87 M16 3.13a4 4 0 0 1 0 7.75',
+  dl: 'M22 12h-4l-3 9L9 3l-3 9H2',
+  res: 'M12 15a7 7 0 1 0 0-14 7 7 0 0 0 0 14z M8.21 13.89L7 23l5-3 5 3-1.21-9.12',
+  pl: 'M1 6v16l7-4 8 4 7-4V2l-7 4-8-4-7 4z M8 2v16 M16 6v16',
+  tr: 'M12 14a2 2 0 1 0 0-4 2 2 0 0 0 0 4z M16.24 7.76a6 6 0 0 1 0 8.49 M7.76 16.24a6 6 0 0 1 0-8.49 M19.07 4.93a10 10 0 0 1 0 14.14 M4.93 19.07a10 10 0 0 1 0-14.14',
+  sair: 'M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4 M16 17l5-5-5-5 M21 12H9',
+  volta: 'M15 18l-6-6 6-6',
+};
+function Icone({ n, cor, tam = 22 }) {
+  return <Svg width={tam} height={tam} viewBox="0 0 24 24" fill="none" stroke={cor} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"><Path d={ICONES[n]} /></Svg>;
+}
+
 export default function Organizador({ st, prova, provaMap: pmRaw, last, onOrg, onProva, onTab, abrirReq, listaReq, erroProva }) {
   // Os dados só valem se são DESTA prova: ao criar/abrir outra, o mapa da anterior ainda existe por um instante e não pode ser carregado.
   const provaMap = pmRaw && pmRaw.code === String(prova || '').trim().toUpperCase().replace(/[^A-Z0-9]+/g, '') ? pmRaw : PM_VAZIO;
@@ -285,21 +303,34 @@ export default function Organizador({ st, prova, provaMap: pmRaw, last, onOrg, o
           <Text style={st.tipTx} numberOfLines={1}>{nomeProva || 'Prova'} · código {org.prova}</Text>
         </View>
       </View>
-      {menuAb && (
-        <View style={[st.card, { paddingVertical: 6 }]}>
-          <TouchableOpacity onPress={() => { setMenuAb(false); setAberta(false); }}><Text style={[st.v, { paddingVertical: 10 }]}>‹ Eventos</Text></TouchableOpacity>
-          <Text style={[st.tip, { marginBottom: 4 }]}>{nomeProva || 'Evento'}</Text>
-          {MENU.map((g) => {
-            const on = g.id === grupoAtual.id;
-            return (
-              <TouchableOpacity key={g.id} style={{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 11, paddingHorizontal: 10, borderRadius: 10, backgroundColor: on ? '#ff7a2e' : 'transparent' }} onPress={() => { setSec(g.secs[0][0]); setMenuAb(false); }}>
-                <Text style={{ fontSize: 18, width: 26, textAlign: 'center' }}>{g.ic}</Text>
-                <Text style={[st.v, { fontSize: 16 }, on && { color: '#0c1014' }]}>{g.nome}</Text>
-              </TouchableOpacity>
-            );
-          })}
+      <Modal visible={menuAb} transparent animationType="fade" onRequestClose={() => setMenuAb(false)}>
+        <View style={{ flex: 1, flexDirection: 'row' }}>
+          <View style={{ width: '78%', maxWidth: 340, backgroundColor: '#151a22', paddingTop: 48, paddingHorizontal: 12, paddingBottom: 20 }}>
+            <Text style={{ color: '#ff7a2e', fontSize: 26, fontWeight: '800' }}>Rally GPS</Text>
+            <Text style={{ color: '#fff', fontSize: 17, fontWeight: '600', marginTop: 14 }} numberOfLines={2}>{nomeProva || 'Evento'}</Text>
+            <TouchableOpacity style={{ flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 14, paddingHorizontal: 8, marginTop: 8 }} onPress={() => { setMenuAb(false); setAberta(false); }}>
+              <Icone n="volta" cor="#b0b8c4" />
+              <Text style={{ color: '#b0b8c4', fontSize: 16 }}>Eventos</Text>
+            </TouchableOpacity>
+            {MENU.map((g) => {
+              const on = g.id === grupoAtual.id;
+              return (
+                <TouchableOpacity key={g.id} style={{ flexDirection: 'row', alignItems: 'center', gap: 14, paddingVertical: 13, paddingHorizontal: 10, borderRadius: 10, marginBottom: 2, backgroundColor: on ? '#ff7a2e' : 'transparent' }} onPress={() => { setSec(g.secs[0][0]); setMenuAb(false); }}>
+                  <Icone n={g.id} cor={on ? '#0c1014' : '#ff7a2e'} />
+                  <Text style={{ color: on ? '#0c1014' : '#d0d6de', fontSize: 17, fontWeight: on ? '700' : '500' }}>{g.nome}</Text>
+                </TouchableOpacity>
+              );
+            })}
+            <View style={{ flex: 1 }} />
+            <TouchableOpacity style={{ flexDirection: 'row', alignItems: 'center', gap: 14, paddingVertical: 12, paddingHorizontal: 10 }} onPress={() => { setMenuAb(false); sair(); }}>
+              <Icone n="sair" cor="#b0b8c4" />
+              <Text style={{ color: '#b0b8c4', fontSize: 16 }}>Sair do modo organizador</Text>
+            </TouchableOpacity>
+            <Text style={{ color: '#6b7480', fontSize: 12, paddingHorizontal: 10 }}>Rally GPS · {VERSAO}</Text>
+          </View>
+          <TouchableOpacity activeOpacity={1} style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.6)' }} onPress={() => setMenuAb(false)} />
         </View>
-      )}
+      </Modal>
       {!menuAb && grupoAtual.secs.length > 1 && (
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 10 }}>
           {grupoAtual.secs.map(([k, n]) => <TouchableOpacity key={k} style={chip(sec === k)} onPress={() => setSec(k)}><Text style={[st.btn2Tx, sec === k && { color: '#0c1014' }]}>{n}</Text></TouchableOpacity>)}
