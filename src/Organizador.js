@@ -147,6 +147,8 @@ export default function Organizador({ st, prova, provaMap: pmRaw, last, onOrg, o
   const [mapaAb, setMapaAb] = useState(null);
   const [levPub, setLevPub] = useState(null);
   const [simOpen, setSimOpen] = useState(false);
+  const [cheia, setCheia] = useState(true);
+  const [edTul, setEdTul] = useState({});
   const nPend = useRef(new Set());
   const grupos = gruposDe(provaMap.categorias);
   const ng = grupos.length;
@@ -163,6 +165,7 @@ export default function Organizador({ st, prova, provaMap: pmRaw, last, onOrg, o
       setWps(provaMap.wps);
       setRota({ coords: provaMap.coords, legs: provaMap.legs, tul: provaMap.tul });
       setRefs(provaMap.refs || []);
+      setEdTul({});
       setPcl(provaMap.pcl || []);
       setManual(provaMap.tul.some((e) => e.man));
       setLegs((provaMap.trechos || []).map((t) => {
@@ -223,7 +226,7 @@ export default function Organizador({ st, prova, provaMap: pmRaw, last, onOrg, o
       onProva && onProva(code, true);
       const o = { prova: code.trim().toUpperCase() };
       saveJson('org', o); setOrg(o); onOrg && onOrg(o);
-      carregado.current = 0; setLevPub(null);
+      carregado.current = 0; setLevPub(null); setEdTul({}); setCheia(true);
       setWps([]); setRota({ coords: [], legs: [], tul: [] }); setLegs([]); setTrs([]); setRefs([]); setPcl([]); setManual(false); setInscritos([]);
       setSec(Platform.OS === 'web' ? 'planilha' : 'levantar'); setAberta(true);
     } catch (e) { Alert.alert('Sem conexão', String(e?.message || e)); }
@@ -234,7 +237,8 @@ export default function Organizador({ st, prova, provaMap: pmRaw, last, onOrg, o
 
   const trsNum = trs.map((t) => ({ t: t.t, bs: num(t.bs ?? t.v[bi], 30), v: t.v.map((x) => num(x, 30)), min: num(t.min, 15), d0: Math.round(t.d0 || 0), zr: !!t.zr }));
   const trechos = trsNum.length ? trechosEq(trs, legs, rota.legs, ng) : toTrechos(legs, rota.legs);
-  const tulT = comTipos(rota.tul, trechos, trsNum);
+  const tulBase = rota.tul.map((e) => { const p = edTul[e.t + Math.round(e.d || 0)]; return p ? { ...e, ...p } : e; });
+  const tulT = comTipos(tulBase, trechos, trsNum);
 
   // Marcas do levantamento (sem fotos) vão junto na publicação: assim o computador e o celular editam o mesmo levantamento.
   const levParaNuvem = () => {
@@ -290,9 +294,23 @@ export default function Organizador({ st, prova, provaMap: pmRaw, last, onOrg, o
     { id: 'insc', nome: 'Inscrições', ic: '👥', secs: [['inscricoes', 'Inscrições']] },
     { id: 'dl', nome: 'Dataloggers', ic: '📈', secs: [['tracklog', 'Track log']] },
     { id: 'res', nome: 'Resultados', ic: '🏆', secs: [['resultados', 'Resultado oficial'], ['ranking', 'Ranking ao vivo']] },
-    { id: 'pl', nome: 'Planilhas', ic: '🗺', secs: web ? [['planilha', 'Planilha'], ['levantar', 'Levantar']] : [['levantar', 'Levantar'], ['planilha', 'Planilha']] },
+    { id: 'pl', nome: 'Planilhas', ic: '🗺', secs: web ? [['planilha', 'Abrir planilha'], ['levantar', 'Levantar no carro']] : [['levantar', 'Levantar no carro'], ['planilha', 'Planilha']] },
     { id: 'tr', nome: 'Transmissão', ic: '📡', secs: [['transmissao', 'Transmissão'], ['aovivo', 'Ao vivo']] },
   ];
+  const irSec = (k) => { if (k === 'planilha') setCheia(true); setSec(k); };
+  const novoTrecho = (d) => {
+    if (!trs.length) return 'No modo automático cada trecho vai de um PC ao outro. Para criar trechos no meio do percurso, use o levantamento.';
+    const d0 = Math.round(d);
+    if (trs.some((t) => Math.abs((t.d0 || 0) - d0) <= 2)) return 'Já existe um trecho começando aqui.';
+    const ant = [...trs].reverse().find((t) => (t.d0 || 0) < d0) || trs[0];
+    const bs = String(ant.bs ?? ant.v[bi] ?? 30);
+    setTrs((o) => [...o, { t: 'V', bs, v: mk(bs), min: '15', d0, zr: false }].sort((a, b) => (a.d0 || 0) - (b.d0 || 0)));
+    return null;
+  };
+  const salvarRef = ({ key, nm, afer, nt, n }) => {
+    setEdTul((o) => ({ ...o, [key]: { nm: nm || undefined, afer: !!afer } }));
+    if (nt != null) upd(n - 1, { nt: String(nt) });
+  };
   const grupoAtual = MENU.find((g) => g.secs.some(([k]) => k === sec)) || MENU[0];
   const nomeProva = (loadJson('lev_index', []).find((x) => x.code === org.prova) || {}).nome || '';
   return (
@@ -316,7 +334,7 @@ export default function Organizador({ st, prova, provaMap: pmRaw, last, onOrg, o
             {MENU.map((g) => {
               const on = g.id === grupoAtual.id;
               return (
-                <TouchableOpacity key={g.id} style={{ flexDirection: 'row', alignItems: 'center', gap: 14, paddingVertical: 13, paddingHorizontal: 10, borderRadius: 10, marginBottom: 2, backgroundColor: on ? '#ff7a2e' : 'transparent' }} onPress={() => { setSec(g.secs[0][0]); setMenuAb(false); }}>
+                <TouchableOpacity key={g.id} style={{ flexDirection: 'row', alignItems: 'center', gap: 14, paddingVertical: 13, paddingHorizontal: 10, borderRadius: 10, marginBottom: 2, backgroundColor: on ? '#ff7a2e' : 'transparent' }} onPress={() => { irSec(g.secs[0][0]); setMenuAb(false); }}>
                   <Icone n={g.id} cor={on ? '#0c1014' : '#ff7a2e'} />
                   <Text style={{ color: on ? '#0c1014' : '#d0d6de', fontSize: 17, fontWeight: on ? '700' : '500' }}>{g.nome}</Text>
                 </TouchableOpacity>
@@ -334,7 +352,7 @@ export default function Organizador({ st, prova, provaMap: pmRaw, last, onOrg, o
       </Modal>
       {!menuAb && grupoAtual.secs.length > 1 && (
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 10 }}>
-          {grupoAtual.secs.map(([k, n]) => <TouchableOpacity key={k} style={chip(sec === k)} onPress={() => setSec(k)}><Text style={[st.btn2Tx, sec === k && { color: '#0c1014' }]}>{n}</Text></TouchableOpacity>)}
+          {grupoAtual.secs.map(([k, n]) => <TouchableOpacity key={k} style={chip(sec === k)} onPress={() => irSec(k)}><Text style={[st.btn2Tx, sec === k && { color: '#0c1014' }]}>{n}</Text></TouchableOpacity>)}
         </View>
       )}
       {!menuAb && (
@@ -348,7 +366,14 @@ export default function Organizador({ st, prova, provaMap: pmRaw, last, onOrg, o
       {sec === 'inscricoes' && <OrgInscricoes key={org.prova} st={st} prova={org.prova} inscritos={inscritos} categorias={cats} />}
       {sec === 'tracklog' && <OrgTrackLog st={st} prova={org.prova} provaMap={provaMap} grupos={grupos} />}
       {sec === 'resultados' && <OrgResultados st={st} prova={org.prova} provaMap={provaMap} grupos={grupos} inscritos={inscritos} categorias={cats} />}
-      {sec === 'planilha' && (
+      {sec === 'planilha' && (web && cheia ? (
+        <EditorDividido st={st} nome={nomeProva || org.prova} tul={tulT} coords={rota.coords} wps={wps} totalM={total * 1000} nTrechos={planilha.length} grupos={grupos} editable={editaMapa && !manual} busy={busy}
+          onTap={(la, lo) => { if (editaMapa && !manual) setWps((w) => [...w, [la, lo]]); }}
+          onDesfazer={() => setWps((w) => w.slice(0, -1))} onLimpar={() => { setWps([]); setLegs([]); }}
+          onNovoTrecho={novoTrecho} onSalvarRef={salvarRef}
+          onPublicar={publicar} onSimular={() => setSimOpen(true)} onPdf={pdf} onAtualizar={() => { carregado.current = 0; onProva && onProva(prova, true); }}
+          onLista={() => setCheia(false)} onVoltar={() => setSec('geral')} />
+      ) : (
         <View>
       <View style={st.card}>
         <Text style={st.tip}>Planilha da prova {org.prova}</Text>
@@ -362,7 +387,8 @@ export default function Organizador({ st, prova, provaMap: pmRaw, last, onOrg, o
         {planilha.length === 0 ? (
           <Text style={st.tipTx}>Ainda sem percurso. Abra o mapa abaixo e marque a largada, os fins de trecho e a chegada.</Text>
         ) : Platform.OS === 'web' ? (
-          <Text style={st.tipTx}>Total {total.toFixed(3).replace('.', ',')} km · {planilha.length} trecho(s). Roadbook e mapa estão no editor abaixo.</Text>
+          <View><Text style={st.tipTx}>Total {total.toFixed(3).replace('.', ',')} km · {planilha.length} trecho(s).</Text>
+            <TouchableOpacity style={[st.btn, { marginTop: 6 }]} onPress={() => setCheia(true)}><Text style={st.btnTx}>Abrir editor em tela cheia</Text></TouchableOpacity></View>
         ) : (
           <View style={{ marginTop: 6 }}>
             <View style={{ flexDirection: 'row', borderBottomWidth: 1, borderBottomColor: '#555', paddingBottom: 3 }}>
@@ -384,7 +410,7 @@ export default function Organizador({ st, prova, provaMap: pmRaw, last, onOrg, o
             <Text style={st.tipTx}>Total {total.toFixed(3).replace('.', ',')} km · {planilha.length} trecho(s). Para mudar médias e neutros, use os campos abaixo.</Text>
           </View>
         )}
-        {Platform.OS !== 'web' && <TouchableOpacity style={[st.btn2, { marginTop: 8 }]} onPress={() => setMapaAb(!mapaVis)}><Text style={st.btn2Tx}>{mapaVis ? 'Esconder o mapa' : 'Mostrar o mapa do percurso'}</Text></TouchableOpacity>}
+        <TouchableOpacity style={[st.btn2, { marginTop: 8 }]} onPress={() => setMapaAb(!mapaVis)}><Text style={st.btn2Tx}>{mapaVis ? 'Esconder o mapa' : 'Mostrar o mapa do percurso'}</Text></TouchableOpacity>
         {rota.coords.length > 1 && trechos.length > 0 && <TouchableOpacity style={[st.btn, { marginTop: 8, marginBottom: 0, backgroundColor: '#2e7d32' }]} onPress={() => setSimOpen(true)}><Text style={[st.btnTx, { color: '#fff' }]}>▶ Simular a prova</Text></TouchableOpacity>}
       </View>
       {manual && (
@@ -394,10 +420,14 @@ export default function Organizador({ st, prova, provaMap: pmRaw, last, onOrg, o
           <TouchableOpacity style={[st.btn2, { marginTop: 6 }]} onPress={() => Alert.alert('Voltar ao automático', 'As tulipas do levantamento serão substituídas pelas geradas pelo mapa. Continuar?', [{ text: 'Cancelar' }, { text: 'Voltar', onPress: () => setManual(false) }])}><Text style={st.btn2Tx}>Voltar ao automático (OSRM)</Text></TouchableOpacity>
         </View>
       )}
-      {web ? <EditorDividido st={st} tul={tulT} coords={rota.coords} wps={wps} totalM={total * 1000} grupos={grupos} editable={editaMapa && !manual} onTap={(la, lo) => { if (editaMapa && !manual) setWps((w) => [...w, [la, lo]]); }} onDesfazer={() => setWps((w) => w.slice(0, -1))} onLimpar={() => { setWps([]); setLegs([]); }} /> : mapaVis && <MapaWeb wps={wps} coords={rota.coords} editable={editaMapa && !manual} onTap={(la, lo) => { if (editaMapa) setWps((w) => [...w, [la, lo]]); }} me={me} height={380} />}
+      {mapaVis && <MapaWeb wps={wps} coords={rota.coords} editable={editaMapa && !manual} onTap={(la, lo) => { if (editaMapa) setWps((w) => [...w, [la, lo]]); }} me={me} height={380} />}
       <Simulacao st={st} visible={simOpen} onClose={() => setSimOpen(false)} coords={rota.coords} tul={tulT} trs={trsNum} trechos={trechos} inscritos={inscritos} totalM={rota.legs.reduce((a, b) => a + b, 0) * 1000} grupos={grupos} cats={cats && cats.length ? cats.map((c) => c.nome) : CATS_PADRAO.map((c) => c.nome)} />
       {busy ? <Text style={st.tipTx}>{busy}</Text> : null}
       <View style={st.card}>
+        {mapaVis && editaMapa && <View style={st.row}>
+          <TouchableOpacity style={st.btn2} onPress={() => setWps((w) => w.slice(0, -1))}><Text style={st.btn2Tx}>Desfazer ponto</Text></TouchableOpacity>
+          <TouchableOpacity style={st.btn2} onPress={() => { setWps([]); setLegs([]); }}><Text style={st.btn2Tx}>Limpar tudo</Text></TouchableOpacity>
+        </View>}
         {trs.length > 0 && trs.map((l, i) => {
           const fim = i + 1 < trs.length ? trs[i + 1].d0 : total * 1000;
           return (
@@ -471,7 +501,7 @@ export default function Organizador({ st, prova, provaMap: pmRaw, last, onOrg, o
         <TouchableOpacity style={st.btn2} onPress={sair}><Text style={st.btn2Tx}>Sair do modo organizador</Text></TouchableOpacity>
       </View>
         </View>
-      )}
+      ))}
       </View>
       )}
     </View>

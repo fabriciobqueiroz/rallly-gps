@@ -6,7 +6,7 @@ import { HTML } from './mapaHtml';
 const SHIM = '<script>window.ReactNativeWebView={postMessage:function(m){parent.postMessage({rally:m},"*");}};</script>';
 const DOC = HTML.replace('<body>', '<body>' + SHIM);
 
-export default function MapaWeb({ wps = [], coords = [], coords2 = [], rc2 = '#ff7a2e', marks = [], lines = [], sat = false, follow = false, rw = 5, dash = false, rc = '#ff7a2e', ctr = 0, editable = false, me = null, foc = null, focn = 0, onMark, onTap, height = 360 }) {
+export default function MapaWeb({ wps = [], coords = [], coords2 = [], rc2 = '#ff7a2e', marks = [], lines = [], sat = false, follow = false, rw = 5, dash = false, rc = '#ff7a2e', ctr = 0, editable = false, me = null, foc = null, focn = 0, mb = 10, onMark, onTap, height = 360 }) {
   const ref = useRef(null);
   const ready = useRef(false);
   const dados = { wps, coords, coords2, rc2, marks, lines, sat, follow, rw, dash, rc, ctr, editable, me, foc, focn };
@@ -28,7 +28,7 @@ export default function MapaWeb({ wps = [], coords = [], coords2 = [], rc2 = '#f
     return () => window.removeEventListener('message', on);
   });
   return (
-    <View style={{ height, borderRadius: 12, overflow: 'hidden', marginBottom: 10 }}>
+    <View style={{ height, borderRadius: mb ? 12 : 0, overflow: 'hidden', marginBottom: mb }}>
       <iframe ref={ref} srcDoc={DOC} style={{ border: 0, width: '100%', height: '100%', background: '#151a20' }} title="mapa" />
     </View>
   );

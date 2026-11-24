@@ -122,6 +122,7 @@ export function Entrada({ e, st, destaque, faltam, classe, grupos, org }) {
             {neuDw ? <View style={{ backgroundColor: '#6a1b9a', borderRadius: 10, padding: 8, width: 78, alignItems: 'center' }}><Text style={{ color: '#fff', fontWeight: '900', fontSize: 20 }}>N</Text><Text style={{ color: '#fff', fontWeight: '900', fontSize: 18 }}>{rotNeutro(e.nt)}</Text><Text style={{ color: '#fff', fontWeight: '800', fontSize: 12 }}>{e.nt < 60 ? 'Seg' : 'min'}</Text></View> : velBox}
             <View style={{ width: 6 }} />
             {colTempo}
+            {e.nm ? <View style={{ flex: 1, backgroundColor: '#ffe600', borderRadius: 6, padding: 6, marginLeft: 6, alignSelf: 'stretch', justifyContent: 'center' }}><Text style={{ color: '#000', fontWeight: '900', fontSize: 14, textAlign: 'center' }}>{e.nm}</Text></View> : null}
           </>
         )}
       </View>
