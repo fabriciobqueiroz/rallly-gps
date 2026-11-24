@@ -24,6 +24,7 @@ const hms = (ms) => { const d = new Date(ms); return `${p2(d.getHours())}:${p2(d
 
 // Média (ou deslocamento) do trecho que começa nesta linha, para o grupo do competidor.
 function velDoTrecho(e, trs, classe, grupos) {
+  if (e.cont && e.nx && e.nx.t !== 'D') { const gi0 = classe ? grupoIdx(classe, grupos) : 0; const v0 = Array.isArray(e.nx.v) ? (e.nx.v[gi0] ?? e.nx.v[0]) : e.nx.kg; return v0 ? { a: 'V', b: String(Math.round(v0)), c: 'Km/h' } : null; }
   if (!trs || !trs.length) return null;
   const i = e.t === 'L' ? 0 : e.ptr != null && e.ptr > 0 ? e.ptr : -1;
   const t = i >= 0 ? trs[i] : null;
@@ -56,7 +57,7 @@ export function LinhaRb({ e, pct, atual, w, hh, classe, grupos, trs }) {
         <Text style={{ color: '#000', fontSize: 12 * k, textAlign: 'right' }}>{fmtDist(e.p, { un: 'km', dec: 3 })}</Text>
         <Text style={{ color: '#000', fontSize: 26 * k, fontWeight: '800' }}>{fmtDist(e.d, { un: 'km', dec: 3 })}</Text>
         {e.afer ? <Text style={{ color: '#fff', backgroundColor: '#000', fontSize: 16 * k, fontWeight: '900', fontStyle: 'italic', paddingHorizontal: 8, alignSelf: 'flex-start' }}>AFER</Text> : null}
-        {neuDw ? <Text style={{ color: '#fff', backgroundColor: '#6a1b9a', fontSize: 15 * k, fontWeight: '900', paddingHorizontal: 8, alignSelf: 'flex-start', borderRadius: 4 }}>NEUTRO · PARE {Math.floor(e.nt / 60)}:{String(Math.round(e.nt % 60)).padStart(2, '0')}</Text> : null}
+        {neuDw ? <Text style={{ color: '#fff', backgroundColor: '#6a1b9a', fontSize: 15 * k, fontWeight: '900', paddingHorizontal: 8, alignSelf: 'flex-start', borderRadius: 4 }}>N · {e.nt < 60 ? Math.round(e.nt) + ' Seg' : Math.floor(e.nt / 60) + ':' + String(Math.round(e.nt % 60)).padStart(2, '0')}</Text> : null}
         {e.nm ? <Text style={{ color: '#000', fontSize: 11 * k }} numberOfLines={2}>{e.nm}</Text> : null}
       </View>
       {vel ? (

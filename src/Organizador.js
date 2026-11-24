@@ -15,7 +15,7 @@ const pairs = (a) => { const o = []; for (let i = 0; i + 1 < a.length; i += 2) o
 import { OrgTrackLog } from './TrackLog';
 import { Platform } from 'react-native';
 import ListaProvas, { slugProva } from './Provas';
-import { CATS_PADRAO, OrgCategorias, OrgInscricoes, OrgLiberacao, OrgResultados } from './OrgExtras';
+import { CATS_PADRAO, OrgCategorias, OrgInscricoes, OrgVisaoGeral, OrgCriterios, OrgResultados } from './OrgExtras';
 import { compartilharPdf } from './pdf';
 
 const num = (v, d = 0) => { const n = parseFloat(String(v).replace(',', '.')); return isNaN(n) ? d : n; };
@@ -68,10 +68,17 @@ export const comTipos = (tul, trechos, trs) => {
   return tul.map((e, i) => {
     let o = e;
     if (e.t === 'L') { const prox = tul[i + 1]; o = { ...e, nx: prox && prox.t === 'T' && prox.ptr === 0 ? null : nxOf(0) }; }
-    else if (e.t === 'P') o = { ...e, nt: trechos[e.n - 1]?.nt || 0, nx: comTrs ? null : nxOf(e.n) };
+    else if (e.t === 'P') { const ntv = trechos[e.n - 1]?.nt || 0; o = { ...e, nt: ntv, nx: comTrs ? null : nxOf(e.n), ...(ntv > 0 && secs.length ? { cv: nxOf(tnAt(e.d || 0) - 1) } : {}) }; }
     else if (e.t === 'C') o = { ...e, nt: trechos[e.n - 1]?.nt || 0, nx: null };
     else if (e.t === 'T' && e.ptr != null) o = { ...e, nx: nxOf(e.ptr) };
     if (secs.length) o = { ...o, tn: tnAt(e.d || 0), tm: Array.from({ length: ng }, (_, g) => Math.round(tempo(e.d || 0, g))) };
+    // Hodômetro zerado: depois do ponto que manda zerar, a distância mostrada conta desde ele (dz); no próprio ponto aparece a caixa 0.000.
+    if (comTrs) {
+      const zs = trs.filter((x) => x.zr && x.d0 > 0), d = e.d || 0;
+      let off = 0; zs.forEach((x) => { if (x.d0 < d - 1.5) off = x.d0; });
+      if (off > 0) o = { ...o, dz: d - off };
+      if (e.t === 'T' && zs.some((x) => Math.abs(x.d0 - d) <= 1.5)) o = { ...o, zero: true };
+    }
     return o;
   });
 };
@@ -113,6 +120,7 @@ export default function Organizador({ st, prova, provaMap: pmRaw, last, onOrg, o
   const [inscritos, setInscritos] = useState([]);
   const [sec, setSec] = useState(Platform.OS === 'web' ? 'planilha' : 'levantar');
   const [aberta, setAberta] = useState(false);
+  const [menuAb, setMenuAb] = useState(false);
   const [pcl, setPcl] = useState([]);
   const [refs, setRefs] = useState([]);
   const [manual, setManual] = useState(false);
@@ -256,23 +264,57 @@ export default function Organizador({ st, prova, provaMap: pmRaw, last, onOrg, o
   const me = last ? [last.lat, last.lon] : null;
   const chip = (on) => [st.chip, { paddingHorizontal: 14, paddingVertical: 6 }, on && { backgroundColor: '#ff7a2e' }];
   const cats = provaMap.categorias;
-  const SEC = [['levantar', 'Levantar'], ['planilha', 'Planilha'], ['categorias', 'Categorias'], ['inscricoes', 'Inscrições'], ['aovivo', 'Ao vivo'], ['transmissao', 'Transmissão'], ['ranking', 'Ranking'], ['resultados', 'Resultados'], ['tracklog', 'Track log'], ['liberacao', 'Liberação']];
+  const web = Platform.OS === 'web';
+  const MENU = [
+    { id: 'geral', nome: 'Visão geral', ic: '⚙', secs: [['geral', 'Visão geral']] },
+    { id: 'cat', nome: 'Categorias', ic: '▦', secs: [['categorias', 'Categorias']] },
+    { id: 'insc', nome: 'Inscrições', ic: '👥', secs: [['inscricoes', 'Inscrições']] },
+    { id: 'dl', nome: 'Dataloggers', ic: '📈', secs: [['tracklog', 'Track log']] },
+    { id: 'res', nome: 'Resultados', ic: '🏆', secs: [['resultados', 'Resultado oficial'], ['ranking', 'Ranking ao vivo']] },
+    { id: 'pl', nome: 'Planilhas', ic: '🗺', secs: web ? [['planilha', 'Planilha'], ['levantar', 'Levantar']] : [['levantar', 'Levantar'], ['planilha', 'Planilha']] },
+    { id: 'tr', nome: 'Transmissão', ic: '📡', secs: [['transmissao', 'Transmissão'], ['aovivo', 'Ao vivo']] },
+  ];
+  const grupoAtual = MENU.find((g) => g.secs.some(([k]) => k === sec)) || MENU[0];
   const nomeProva = (loadJson('lev_index', []).find((x) => x.code === org.prova) || {}).nome || '';
   return (
     <View>
-      <TouchableOpacity onPress={() => setAberta(false)}><Text style={[st.v, { marginBottom: 6 }]}>‹ Minhas provas</Text></TouchableOpacity>
-      <Text style={st.tip}>{nomeProva || 'Prova'} · código {org.prova}</Text>
-      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 10 }}>
-        {SEC.map(([k, n]) => <TouchableOpacity key={k} style={chip(sec === k)} onPress={() => setSec(k)}><Text style={[st.btn2Tx, sec === k && { color: '#0c1014' }]}>{n}</Text></TouchableOpacity>)}
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 8 }}>
+        <TouchableOpacity onPress={() => setMenuAb((o) => !o)} style={{ paddingHorizontal: 12, paddingVertical: 6, backgroundColor: '#262b32', borderRadius: 8 }}><Text style={{ color: '#fff', fontSize: 20 }}>☰</Text></TouchableOpacity>
+        <View style={{ flex: 1 }}>
+          <Text style={[st.v, { fontSize: 16 }]} numberOfLines={1}>{menuAb ? (nomeProva || 'Evento') : grupoAtual.nome}</Text>
+          <Text style={st.tipTx} numberOfLines={1}>{nomeProva || 'Prova'} · código {org.prova}</Text>
+        </View>
       </View>
+      {menuAb && (
+        <View style={[st.card, { paddingVertical: 6 }]}>
+          <TouchableOpacity onPress={() => { setMenuAb(false); setAberta(false); }}><Text style={[st.v, { paddingVertical: 10 }]}>‹ Eventos</Text></TouchableOpacity>
+          <Text style={[st.tip, { marginBottom: 4 }]}>{nomeProva || 'Evento'}</Text>
+          {MENU.map((g) => {
+            const on = g.id === grupoAtual.id;
+            return (
+              <TouchableOpacity key={g.id} style={{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 11, paddingHorizontal: 10, borderRadius: 10, backgroundColor: on ? '#ff7a2e' : 'transparent' }} onPress={() => { setSec(g.secs[0][0]); setMenuAb(false); }}>
+                <Text style={{ fontSize: 18, width: 26, textAlign: 'center' }}>{g.ic}</Text>
+                <Text style={[st.v, { fontSize: 16 }, on && { color: '#0c1014' }]}>{g.nome}</Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+      )}
+      {!menuAb && grupoAtual.secs.length > 1 && (
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 10 }}>
+          {grupoAtual.secs.map(([k, n]) => <TouchableOpacity key={k} style={chip(sec === k)} onPress={() => setSec(k)}><Text style={[st.btn2Tx, sec === k && { color: '#0c1014' }]}>{n}</Text></TouchableOpacity>)}
+        </View>
+      )}
+      {!menuAb && (
+      <View>
       {sec === 'levantar' && <Levantamento key={org.prova + '_' + (Platform.OS === 'web' ? (provaMap.lev ? provaMap.lev.em || 1 : 0) : '')} st={st} prova={org.prova} last={last} onAplicar={aplicarLevantamento} levNuvem={provaMap.lev} trailNuvem={provaMap.lev && provaMap.lev.trail && provaMap.lev.trail.length >= 4 ? Array.from({ length: provaMap.lev.trail.length >> 1 }, (_, i) => [provaMap.lev.trail[2 * i], provaMap.lev.trail[2 * i + 1]]) : provaMap.coords} />}
       {sec === 'aovivo' && <PainelAoVivo st={st} kind="prova" id={org.prova} rota={provaMap.rota ? pairs(provaMap.rota) : rota.coords} />}
       {sec === 'transmissao' && <PainelTransmissao st={st} prova={org.prova} lib={provaMap.lib || {}} />}
       {sec === 'ranking' && <OrgRankingLive st={st} prova={org.prova} />}
-      {sec === 'categorias' && <OrgCategorias st={st} prova={org.prova} categorias={cats} />}
+      {sec === 'geral' && <OrgVisaoGeral st={st} prova={org.prova} lib={provaMap.lib || {}} />}
+      {sec === 'categorias' && <View><OrgCategorias st={st} prova={org.prova} categorias={cats} /><OrgCriterios st={st} prova={org.prova} lib={provaMap.lib || {}} categorias={cats} /></View>}
       {sec === 'inscricoes' && <OrgInscricoes key={org.prova} st={st} prova={org.prova} inscritos={inscritos} categorias={cats} />}
       {sec === 'tracklog' && <OrgTrackLog st={st} prova={org.prova} provaMap={provaMap} grupos={grupos} />}
-      {sec === 'liberacao' && <OrgLiberacao st={st} prova={org.prova} lib={provaMap.lib || {}} categorias={cats} />}
       {sec === 'resultados' && <OrgResultados st={st} prova={org.prova} provaMap={provaMap} grupos={grupos} inscritos={inscritos} categorias={cats} />}
       {sec === 'planilha' && (
         <View>
@@ -410,6 +452,8 @@ export default function Organizador({ st, prova, provaMap: pmRaw, last, onOrg, o
         <TouchableOpacity style={st.btn2} onPress={sair}><Text style={st.btn2Tx}>Sair do modo organizador</Text></TouchableOpacity>
       </View>
         </View>
+      )}
+      </View>
       )}
     </View>
   );

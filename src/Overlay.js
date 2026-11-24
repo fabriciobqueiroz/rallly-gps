@@ -116,7 +116,7 @@ function Velocimetro({ v, max, maxTrecho }) {
   );
 }
 
-function Overlay({ code, delay, car }) {
+function Overlay({ code, delay, car, teste }) {
   const [prova, setProva] = useState(null);
   const [insc, setInsc] = useState([]);
   const vivos = useAoVivo(code, delay);
@@ -167,7 +167,14 @@ function Overlay({ code, delay, car }) {
   const ini = Math.max(0, ate - 5);
   const rows = []; for (let i = ini; i < ate; i++) rows.push(i);
 
-  if (!dest) return <View style={{ flex: 1, backgroundColor: 'transparent' }} />;
+  if (!dest) return teste ? (
+    <View style={{ flex: 1, backgroundColor: '#0c1014', padding: 30 }}>
+      <Text style={{ color: '#ff7a2e', fontSize: 28, fontWeight: '800' }}>Overlay conectado · prova {code}</Text>
+      <Text style={{ color: '#fff', fontSize: 20, marginTop: 10 }}>{prova ? 'Prova encontrada: ' + (prova.nome || code) : 'Prova não encontrada (confira o código)'}</Text>
+      <Text style={{ color: '#fff', fontSize: 20, marginTop: 6 }}>Carros enviando ao vivo: {carros.length}{delay ? ` (atraso ${delay}s: os dados aparecem ${delay}s depois)` : ''}</Text>
+      <Text style={{ color: '#b0b8c4', fontSize: 18, marginTop: 6 }}>Inicie o trecho no app com o GPS ligado. Sem &teste=1 esta tela fica transparente.</Text>
+    </View>
+  ) : <View style={{ flex: 1, backgroundColor: 'transparent' }} />;
   return (
     <View style={{ width: 1920, height: 1080, backgroundColor: 'transparent' }}>
       {/* Cartão do carro (topo esquerdo) */}
@@ -274,7 +281,7 @@ function Overlay({ code, delay, car }) {
 }
 
 // Raiz do overlay: login uma vez (o OBS guarda a sessão) e fundo transparente.
-export default function OverlayRoot({ code, delay, car }) {
+export default function OverlayRoot({ code, delay, car, teste }) {
   const [user, setUser] = useState(undefined);
   useEffect(() => {
     if (Platform.OS === 'web') { try { document.documentElement.style.background = 'transparent'; document.body.style.background = 'transparent'; const l = document.createElement('link'); l.rel = 'stylesheet'; l.href = 'https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700;800&display=swap'; document.head.appendChild(l); } catch {} }
@@ -288,7 +295,7 @@ export default function OverlayRoot({ code, delay, car }) {
       <Login st={st} soOrganizador onEntrou={() => {}} />
     </ScrollView>
   );
-  return <Overlay code={String(code).trim().toUpperCase().replace(/[^A-Z0-9]+/g, '')} delay={delay} car={car} />;
+  return <Overlay code={String(code).trim().toUpperCase().replace(/[^A-Z0-9]+/g, '')} delay={delay} car={car} teste={teste} />;
 }
 
 // ---------- Painel do organizador: escolher o carro em destaque e ligar o modo transmissão ----------

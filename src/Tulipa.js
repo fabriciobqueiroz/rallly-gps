@@ -1,6 +1,6 @@
 // Desenho de tulipa (cruzamento com a seta do caminho) e lista do roadbook.
 import { Text, View } from 'react-native';
-import { grupoIdx } from './rally';
+import { grupoIdx, comContinuacao, rotNeutro } from './rally';
 import { DesenhoSvg } from './Desenho';
 import Svg, { Circle, Line, Polygon, Rect, Text as SvgText } from 'react-native-svg';
 
@@ -76,14 +76,15 @@ export function Entrada({ e, st, destaque, faltam, classe, grupos, org }) {
   const colKm = (
     <View style={{ width: 66, alignItems: 'flex-end', paddingRight: 8 }}>
       <Text style={{ color: '#a8a8a8', fontSize: 11 }}>{km2(e.p)}</Text>
-      <Text style={{ color: '#f5f5f5', fontWeight: '900', fontSize: 18 }}>{km2(e.d)}</Text>
+      <Text style={{ color: '#f5f5f5', fontWeight: '900', fontSize: 18 }}>{km2(e.dz ?? e.d)}</Text>
+      {e.zero ? <Text style={{ color: '#000', backgroundColor: '#ffe600', fontWeight: '900', fontSize: 14, paddingHorizontal: 6, marginTop: 2 }}>0.000 · ZERE</Text> : null}
       {faltam != null && <Text style={{ color: '#ffb300', fontWeight: '800', fontSize: 11 }}>faltam {Math.max(0, Math.round(faltam))} m</Text>}
     </View>
   );
   const colTempo = tm != null ? (
     <View style={{ width: 70, alignItems: 'center' }}>
       <Text style={{ color: '#f5f5f5', fontWeight: '800', fontSize: 13 }}>{hms(tm)}</Text>
-      <Text style={{ color: '#a8a8a8', fontSize: 11 }}>T{e.tn}</Text>
+      <Text style={{ color: '#a8a8a8', fontSize: 11 }}>{neuDw ? 'N' : 'T' + e.tn}</Text>
     </View>
   ) : null;
   return (
@@ -118,7 +119,7 @@ export function Entrada({ e, st, destaque, faltam, classe, grupos, org }) {
               <Tulipa e={e} size={destaque ? 100 : 76} />
               {e.rn != null && <Text style={{ color: '#a8a8a8', fontSize: 11 }}>{e.rn}</Text>}
             </View>
-            {neuDw ? <View style={{ backgroundColor: '#6a1b9a', borderRadius: 10, padding: 8, width: 78, alignItems: 'center' }}><Text style={{ color: '#fff', fontWeight: '900', fontSize: 12 }}>NEUTRO</Text><Text style={{ color: '#fff', fontWeight: '800', fontSize: 12 }}>PARE</Text><Text style={{ color: '#fff', fontWeight: '900', fontSize: 15 }}>{mmss(e.nt)}</Text></View> : velBox}
+            {neuDw ? <View style={{ backgroundColor: '#6a1b9a', borderRadius: 10, padding: 8, width: 78, alignItems: 'center' }}><Text style={{ color: '#fff', fontWeight: '900', fontSize: 20 }}>N</Text><Text style={{ color: '#fff', fontWeight: '900', fontSize: 18 }}>{rotNeutro(e.nt)}</Text><Text style={{ color: '#fff', fontWeight: '800', fontSize: 12 }}>{e.nt < 60 ? 'Seg' : 'min'}</Text></View> : velBox}
             <View style={{ width: 6 }} />
             {colTempo}
           </>
@@ -131,7 +132,7 @@ export function Entrada({ e, st, destaque, faltam, classe, grupos, org }) {
 
 // Lista completa. 'dist' = posição atual no percurso (m); null = só pré-visualização.
 export function Roadbook({ st, tul: tul0, dist, classe, grupos, org }) {
-  const tul = org ? tul0 : tulComp(tul0);
+  const tul = comContinuacao(org ? tul0 : tulComp(tul0));
   const atual = dist == null ? -1 : tul.findIndex((e) => e.d >= dist - 15);
   return (
     <View>

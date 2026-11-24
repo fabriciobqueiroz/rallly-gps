@@ -3,6 +3,7 @@ import { Platform } from 'react-native';
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
 import { desenhoSvgStr } from './Desenho';
+import { comContinuacao } from './rally';
 
 const km2 = (m) => (m / 1000).toFixed(3).replace('.', ',');
 const mmss = (sec) => `${Math.floor(sec / 60)}:${String(Math.round(sec % 60)).padStart(2, '0')}`;
@@ -46,9 +47,9 @@ const velHtml = (nx) => {
 };
 
 export function roadbookHtml(prova, tul0, org) {
-  const tul = org ? tul0 : tul0.filter((e) => e.t !== 'P' || e.nt > 0);
+  const tul = comContinuacao(org ? tul0 : tul0.filter((e) => e.t !== 'P' || e.nt > 0));
   const rows = tul.map((e) => {
-    const km = `<td style="width:70px;text-align:right"><div style="font-size:11px">${km2(e.p)}</div><div style="font-size:18px;font-weight:bold">${km2(e.d)}</div></td>`;
+    const km = `<td style="width:70px;text-align:right"><div style="font-size:11px">${km2(e.p)}</div><div style="font-size:18px;font-weight:bold">${km2(e.dz ?? e.d)}</div>${e.zero ? '<div style="background:#000;color:#fff;font-weight:bold;text-align:center;margin-top:2px">0.000</div>' : ''}</td>`;
     if (e.t === 'T') {
       const tempo = e.tm ? e.tm.map((t, i) => `<div style="font-weight:bold">${e.tm.length > 1 ? String.fromCharCode(65 + i) + ' ' : ''}${hms(t)}</div>`).join('') + `<div style="font-size:11px">T${e.tn}</div>` : '';
       return `<tr>${km}<td style="text-align:center">${tulSvg(e, 90)}<div style="font-size:11px">${e.rn ?? ''}</div></td><td style="width:70px">${velHtml(e.nx)}</td><td style="width:80px;text-align:center">${tempo}</td><td>${e.nm || ''}</td></tr>`;

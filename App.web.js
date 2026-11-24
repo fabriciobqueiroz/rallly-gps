@@ -66,6 +66,6 @@ function AppOrg() {
 export default function App() {
   let q = null;
   try { q = new URLSearchParams(window.location.search); } catch {}
-  if (q && q.get('overlay')) return <OverlayRoot code={q.get('overlay')} delay={Number(q.get('delay')) || 0} car={q.get('car') || ''} />;
+  if (q && q.get('overlay')) return <OverlayRoot code={q.get('overlay')} delay={Number(q.get('delay')) || 0} car={q.get('car') || ''} teste={!!q.get('teste')} />;
   return <AppOrg />;
 }

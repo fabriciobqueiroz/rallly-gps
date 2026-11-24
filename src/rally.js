@@ -282,3 +282,17 @@ export function zeroOff(trs, dist) {
   if (trs) trs.forEach((t) => { if (t.zr && t.d0 <= dist + 1.5) o = t.d0; });
   return o;
 }
+
+// Neutro (parada no meio da prova): depois da linha do neutro entra a linha de continuação, no mesmo ponto (0,00 km),
+// com a média que vale dali em diante e o tempo de prova já somado à parada. Só para exibição (roadbook, PDF, tela).
+export function comContinuacao(tul) {
+  const out = [];
+  (tul || []).forEach((e) => {
+    out.push(e);
+    if (e.t === 'P' && e.nt > 0 && !e.cont) {
+      out.push({ ...e, t: 'T', cont: true, p: 0, nt: 0, nx: e.cv || null, tm: e.tm ? e.tm.map((x) => x + e.nt) : e.tm, afer: false, zero: false });
+    }
+  });
+  return out;
+}
+export const rotNeutro = (nt) => (nt < 60 ? `${Math.round(nt)}` : `${Math.floor(nt / 60)}:${String(Math.round(nt % 60)).padStart(2, '0')}`);

@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 import { loadJson, saveJson } from './persist';
 import { DateTimePickerAndroid } from './pickers';
 import { Alert, Switch, Text, TextInput, TouchableOpacity, View } from 'react-native';
-import { abrirVitrine, atualizarInscricao, decidirPedido, enviarResultado, inscrever, ouvirDataloggers, ouvirPedidosProva, ouvirRanking, ouvirVitrineProva, removerInscricao, salvarProva } from './firebase';
+import { abrirVitrine, atualizarInscricao, decidirPedido, enviarResultado, inscrever, ouvirDataloggers, ouvirPedidosProva, ouvirProva, ouvirRanking, ouvirVitrineProva, removerInscricao, salvarProva } from './firebase';
 import { compartilharResultadosPdf } from './pdf';
 import { cumulative, oficialDeTrilha, pcsDoLogger, rank } from './rally';
 import { calcDl } from './TrackLog';
@@ -251,42 +251,112 @@ export function escolherDT(atual, set) {
 }
 export const fmtBR = (v) => { const d = parseDT(v); return d ? `${p2(new Date(d).getDate())}/${p2(new Date(d).getMonth() + 1)}/${new Date(d).getFullYear()}  ${p2(new Date(d).getHours())}:${p2(new Date(d).getMinutes())}` : ''; };
 
-export function OrgLiberacao({ st, prova, lib, categorias }) {
-  const cats = (categorias && categorias.length ? categorias : CATS_PADRAO).map((c) => c.nome);
-  const escDe = (c) => ((lib.escalas && lib.escalas[c]) || lib.escala) === 'd' ? 'd' : 's';
+const DIAS = ['Domingo', 'Segunda-feira', 'Terça-feira', 'Quarta-feira', 'Quinta-feira', 'Sexta-feira', 'Sábado'];
+const dataBR = (d) => `${p2(d.getDate())}/${p2(d.getMonth() + 1)}/${d.getFullYear()}`;
+const lerBR = (t) => { const m = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(String(t || '').trim()); return m ? new Date(+m[3], +m[2] - 1, +m[1]) : null; };
+const diaSemana = (t) => { const d = lerBR(t); return d ? DIAS[d.getDay()] : ''; };
+
+// Visão geral do evento (padrão Kraken): dados, período de liberação da planilha e liberações de resultado.
+export function OrgVisaoGeral({ st, prova, lib }) {
+  const [doc, setDoc] = useState({});
+  const [nome, setNome] = useState('');
+  const [cidade, setCidade] = useState('');
+  const [uf, setUf] = useState('');
+  const [data, setData] = useState('');
+  const [fimD, setFimD] = useState('');
+  const carregou = useRef('');
+  useEffect(() => ouvirProva(prova, (d) => {
+    setDoc(d);
+    if (carregou.current !== prova) { // só preenche uma vez por prova: não atropela o que o organizador está digitando
+      carregou.current = prova;
+      setNome(d.nome || ''); setCidade(d.cidade || ''); setUf(d.uf || ''); setData(d.data || ''); setFimD(d.dataFim || d.data || '');
+    }
+  }, () => {}), [prova]);
   const [ini, setIni] = useState(lib.ini || '');
   const [fim, setFim] = useState(lib.fim || '');
   useEffect(() => { setIni(lib.ini || ''); setFim(lib.fim || ''); }, [lib.ini, lib.fim]);
   const ok = planilhaLiberada({ ini, fim });
-  const salvar = (patch) => salvarProva(prova, { lib: patch }).catch((e) => Alert.alert('Não salvou', String(e?.message || e)));
+  const erro = (e) => Alert.alert('Não salvou', String(e?.message || e));
+  const salvar = (patch) => salvarProva(prova, { lib: patch }).catch(erro);
   const semPeriodo = !parseDT(ini) && !parseDT(fim);
+  const escolheData = (v, set) => DateTimePickerAndroid.open({ value: lerBR(v) || new Date(), mode: 'date', onChange: (_, d) => { if (d) set(dataBR(d)); } });
+  const salvarDados = () => {
+    const d = lerBR(data);
+    if (!nome.trim()) return Alert.alert('Falta o nome', 'Dê um nome ao evento.');
+    if (!d) return Alert.alert('Data do evento', 'Escolha a data do evento no calendário.');
+    const f = lerBR(fimD) || d;
+    if (f < d) return Alert.alert('Data de término', 'O término não pode ser antes da data de início.');
+    try {
+      const sl = String(prova).trim().toUpperCase().replace(/[^A-Z0-9]+/g, ''), nm = nome.trim().slice(0, 60);
+      const lv = loadJson('lev_' + sl, null); if (lv) saveJson('lev_' + sl, { ...lv, nome: nm });
+      saveJson('lev_index', loadJson('lev_index', []).map((x) => (x.code === prova || x.code === sl ? { ...x, nome: nm } : x)));
+    } catch {}
+    salvarProva(prova, { nome: nome.trim().slice(0, 60), cidade: cidade.trim(), uf: uf.trim().toUpperCase().slice(0, 2), data: dataBR(d), dataFim: dataBR(f), dataTs: d.getTime() })
+      .then(() => Alert.alert('Salvo', 'Dados do evento atualizados.')).catch(erro);
+  };
+  const campo = (rot, v, set, extra) => (
+    <View style={[{ flex: 1 }, extra]}>
+      <Text style={st.tipTx}>{rot}</Text>
+      <TextInput style={st.input} value={v} onChangeText={set} placeholderTextColor="#666" />
+    </View>
+  );
+  const dataBtn = (rot, v, set) => (
+    <View style={{ flex: 1 }}>
+      <Text style={st.tipTx}>{rot}</Text>
+      <TouchableOpacity style={[st.field, { justifyContent: 'center' }]} onPress={() => escolheData(v, set)}>
+        <Text style={{ color: v ? '#fff' : '#666', fontSize: 16 }}>{v ? `📅  ${v}` : '📅  escolher'}</Text>
+      </TouchableOpacity>
+      <Text style={st.tipTx}>{diaSemana(v)}</Text>
+    </View>
+  );
+  return (
+    <View>
+      <View style={st.card}>
+        <Text style={st.tip}>Dados do evento · código {prova}</Text>
+        {campo('Nome do evento', nome, setNome)}
+        <View style={{ flexDirection: 'row', gap: 8 }}>{dataBtn('Data', data, (v) => { setData(v); if (!lerBR(fimD) || (lerBR(fimD) < lerBR(v))) setFimD(v); })}{dataBtn('Data de término', fimD, setFimD)}</View>
+        <View style={{ flexDirection: 'row', gap: 8 }}>{campo('Cidade', cidade, setCidade, { flex: 2 })}{campo('Estado', uf, (v) => setUf(v.toUpperCase().slice(0, 2)))}</View>
+        <TouchableOpacity style={[st.btn2, { marginVertical: 8 }]} onPress={salvarDados}><Text style={st.btn2Tx}>Salvar dados do evento</Text></TouchableOpacity>
+      </View>
+      <View style={st.card}>
+        <Text style={st.tip}>Liberação da planilha</Text>
+        <Text style={st.tipTx}>Período em que as tulipas e o roadbook ficam visíveis aos competidores. Toque para escolher data e hora. Vazio = sempre liberado.</Text>
+        {[['Início', ini, setIni], ['Fim', fim, setFim]].map(([nm, v, set]) => (
+          <View key={nm} style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
+            <TouchableOpacity style={[st.field, { flex: 1, justifyContent: 'center' }]} onPress={() => escolherDT(v, set)}>
+              <Text style={{ color: v ? '#fff' : '#666', fontSize: 16 }}>{v ? `📅  ${nm}: ${fmtBR(v)}` : `📅  ${nm}: escolher data e hora`}</Text>
+            </TouchableOpacity>
+            {v ? <TouchableOpacity onPress={() => set('')} style={{ marginTop: 8, padding: 10 }}><Text style={{ color: '#ff5252', fontWeight: '800' }}>✕</Text></TouchableOpacity> : null}
+          </View>
+        ))}
+        <Text style={[st.tipTx, { color: semPeriodo ? '#a8a8a8' : ok ? '#4caf50' : '#ffb300' }]}>{semPeriodo ? 'Sem período de liberação definido' : ok ? 'Liberada agora' : 'Fora do período agora'}</Text>
+        <TouchableOpacity style={[st.btn2, { marginVertical: 8 }]} onPress={() => salvar({ ini: ini.trim(), fim: fim.trim() })}><Text style={st.btn2Tx}>Salvar período</Text></TouchableOpacity>
+        <View style={st.line}>
+          <Text style={[st.k, { flex: 1 }]}>Liberar resultado geral no app{'\n'}<Text style={{ fontSize: 12 }}>Só habilite após a premiação.</Text></Text>
+          <Switch value={lib.resultado !== false} onValueChange={(v) => salvar({ resultado: v })} />
+        </View>
+        <View style={st.line}>
+          <Text style={[st.k, { flex: 1 }]}>Liberar soma de pontos no app</Text>
+          <Switch value={lib.soma !== false} onValueChange={(v) => salvar({ soma: v })} />
+        </View>
+        <View style={st.line}>
+          <Text style={[st.k, { flex: 1 }]}>Liberar track log (rastro) ao competidor{'\n'}<Text style={{ fontSize: 12 }}>Ele vê o próprio rastro sobre o percurso.</Text></Text>
+          <Switch value={lib.track === true} onValueChange={(v) => salvar({ track: v })} />
+        </View>
+        <Text style={st.tipTx}>Nos testes tudo começa liberado. O organizador sempre vê tudo.</Text>
+      </View>
+    </View>
+  );
+}
+
+// Critérios de pontuação por categoria (fica em Categorias).
+export function OrgCriterios({ st, prova, lib, categorias }) {
+  const cats = (categorias && categorias.length ? categorias : CATS_PADRAO).map((c) => c.nome);
+  const escDe = (c) => ((lib.escalas && lib.escalas[c]) || lib.escala) === 'd' ? 'd' : 's';
+  const salvar = (patch) => salvarProva(prova, { lib: patch }).catch((e) => Alert.alert('Não salvou', String(e?.message || e)));
   return (
     <View style={st.card}>
-      <Text style={st.tip}>Liberação para os competidores</Text>
-      <Text style={st.tipTx}>Período em que as tulipas e o roadbook ficam visíveis aos competidores. Toque para escolher data e hora. Vazio = sempre liberado.</Text>
-      {[['Início', ini, setIni], ['Fim', fim, setFim]].map(([nm, v, set]) => (
-        <View key={nm} style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
-          <TouchableOpacity style={[st.field, { flex: 1, justifyContent: 'center' }]} onPress={() => escolherDT(v, set)}>
-            <Text style={{ color: v ? '#fff' : '#666', fontSize: 16 }}>{v ? `📅  ${nm}: ${fmtBR(v)}` : `📅  ${nm}: escolher data e hora`}</Text>
-          </TouchableOpacity>
-          {v ? <TouchableOpacity onPress={() => set('')} style={{ marginTop: 8, padding: 10 }}><Text style={{ color: '#ff5252', fontWeight: '800' }}>✕</Text></TouchableOpacity> : null}
-        </View>
-      ))}
-      <Text style={[st.tipTx, { color: semPeriodo ? '#a8a8a8' : ok ? '#4caf50' : '#ffb300' }]}>{semPeriodo ? 'Sem período de liberação definido' : ok ? 'Liberada agora' : 'Fora do período agora'}</Text>
-      <TouchableOpacity style={[st.btn2, { marginVertical: 8 }]} onPress={() => salvar({ ini: ini.trim(), fim: fim.trim() })}><Text style={st.btn2Tx}>Salvar período</Text></TouchableOpacity>
-      <View style={st.line}>
-        <Text style={[st.k, { flex: 1 }]}>Liberar resultado geral no app{'\n'}<Text style={{ fontSize: 12 }}>Só habilite após a premiação.</Text></Text>
-        <Switch value={lib.resultado !== false} onValueChange={(v) => salvar({ resultado: v })} />
-      </View>
-      <View style={st.line}>
-        <Text style={[st.k, { flex: 1 }]}>Liberar soma de pontos no app</Text>
-        <Switch value={lib.soma !== false} onValueChange={(v) => salvar({ soma: v })} />
-      </View>
-      <View style={st.line}>
-        <Text style={[st.k, { flex: 1 }]}>Liberar track log (rastro) ao competidor{'\n'}<Text style={{ fontSize: 12 }}>Ele vê o próprio rastro sobre o percurso.</Text></Text>
-        <Switch value={lib.track === true} onValueChange={(v) => salvar({ track: v })} />
-      </View>
-      <Text style={[st.tip, { marginTop: 10 }]}>Pontuação dos PCs</Text>
+      <Text style={st.tip}>Critérios de pontuação</Text>
       <Text style={st.tipTx}>Atrasado ou adiantado pontua igual. Não passar no PC, ou passar fora de ±10 min do ideal, vale a pontuação máxima (600 pontos no segundo, 6.000 no décimo). Escolha o sistema de cada categoria.</Text>
       {cats.map((c) => (
         <View key={c} style={{ borderTopWidth: 1, borderTopColor: '#262b32', paddingVertical: 8 }}>
@@ -298,7 +368,6 @@ export function OrgLiberacao({ st, prova, lib, categorias }) {
           </View>
         </View>
       ))}
-      <Text style={st.tipTx}>Nos testes tudo começa liberado. O organizador sempre vê tudo.</Text>
     </View>
   );
 }

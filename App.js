@@ -23,7 +23,7 @@ import { compartilharPdf } from './src/pdf';
 import Erro from './src/Erro';
 import { TrilhasComp, TrilhasOrg } from './src/Trilhas';
 import { begin, clear, getState, subscribe, summarize, toCsv, haversine } from './src/store';
-import { gruposDe, cumulative, newStage, startStage, status, markPc, parseRoteiro, resolverTrecho, pontos, rank, fmtDur, fmtSigned, pcsToText, zeroOff } from './src/rally';
+import { gruposDe, cumulative, newStage, startStage, status, markPc, parseRoteiro, resolverTrecho, pontos, rank, fmtDur, fmtSigned, pcsToText, zeroOff, comContinuacao } from './src/rally';
 
 const fmtTime = (ms) => {
   const s = Math.floor(ms / 1000);
@@ -171,7 +171,7 @@ export default function App() {
   const cats = provaMap.categorias.length ? provaMap.categorias.map((c) => c.nome) : CATS_PADRAO.map((c) => c.nome);
   const souOrg = papel === 'organizador';
   const libOk = souOrg || planilhaLiberada(provaMap.lib);
-  const tulVis = souOrg ? provaMap.tul : tulComp(provaMap.tul); // o PC é do organizador; o competidor vê só o neutro
+  const tulVis = comContinuacao(souOrg ? provaMap.tul : tulComp(provaMap.tul)); // o PC é do organizador; o competidor vê só o neutro
   const rot = provaMap.trechos.length
     ? { trechos: provaMap.trechos.map((t) => resolverTrecho(t, piloto.classe, grupos)), erros: [] }
     : parseRoteiro(rotTxt);
@@ -550,7 +550,7 @@ export default function App() {
                 <Text style={{ color: cor || '#f5f5f5', fontSize: 16, fontWeight: '700' }}>{t}</Text>
               </TouchableOpacity>
             ))}
-            <Text style={{ color: '#6b7480', fontSize: 11, textAlign: 'center', paddingBottom: 8 }}>Rally GPS · passo79</Text>
+            <Text style={{ color: '#6b7480', fontSize: 11, textAlign: 'center', paddingBottom: 8 }}>Rally GPS · passo83</Text>
           </View>
         </TouchableOpacity>
       </Modal>
