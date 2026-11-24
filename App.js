@@ -280,7 +280,7 @@ export default function App() {
       if (typeof d.largada === 'string') setLargadaTxt(d.largada);
       {
         const pair = (a) => { const o = []; for (let i = 0; i + 1 < a.length; i += 2) o.push([a[i], a[i + 1]]); return o; };
-        setProvaMap({ code: slugP, wps: pair(d.wps || []), coords: pair(d.rota || []), legs: d.legs || [], kmh: d.kmh || [], tul: d.tul || [], trechos: d.trechos || [], trs: d.trs || [], categorias: d.categorias || [], lib: d.lib || {}, refs: d.refs || [], pcl: d.pcl || [], lev: d.lev || null, nome: d.nome || '', pub: d.publicadoEm || 1 });
+        setProvaMap({ code: slugP, wps: pair(d.wps || []), coords: pair(d.rota || []), legs: d.legs || [], kmh: d.kmh || [], tul: d.tul || [], trechos: d.trechos || [], trs: d.trs || [], categorias: d.categorias || [], lib: d.lib || {}, refs: d.refs || [], pcl: d.pcl || [], lev: d.lev || null, ed: d.ed || {}, ex: d.ex || [], cg: !!d.cg, nome: d.nome || '', pub: d.publicadoEm || 1 });
       }
       if (d.intervalo != null) setIntervalo(String(d.intervalo));
     };
@@ -460,11 +460,10 @@ export default function App() {
   useEffect(() => { if (navOpen) setInfoOpen(true); }, [navOpen]);
   if (user === undefined) return <View style={[st.root, { justifyContent: 'center' }]}><Text style={[st.sub, { textAlign: 'center' }]}>Carregando…</Text></View>;
   if (!user) return (
-    <ScrollView style={st.root} contentContainerStyle={st.wrap}>
+    <View style={{ flex: 1 }}>
       <StatusBar style="light" />
-      <Text style={st.h1}>Rally GPS</Text>
       <Login st={st} onEntrou={(p) => setPapel(p)} />
-    </ScrollView>
+    </View>
   );
   const infoProva = (() => {
     const tr = rot.trechos || [];
@@ -552,7 +551,7 @@ export default function App() {
                 <Text style={{ color: cor || '#f5f5f5', fontSize: 16, fontWeight: '700' }}>{t}</Text>
               </TouchableOpacity>
             ))}
-            <Text style={{ color: '#6b7480', fontSize: 11, textAlign: 'center', paddingBottom: 8 }}>Rally GPS · passo90</Text>
+            <Text style={{ color: '#6b7480', fontSize: 11, textAlign: 'center', paddingBottom: 8 }}>Rally GPS · passo92</Text>
           </View>
         </TouchableOpacity>
       </Modal>

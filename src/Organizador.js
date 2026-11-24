@@ -68,19 +68,21 @@ export const comTipos = (tul, trechos, trs) => {
   };
   const tnAt = (d) => { let n = 1; secs.forEach((x, i) => { if (x.d0 <= d + 1.5) n = i + 1; }); return n; };
   const comTrs = !!(trs && trs.length);
+  const kOf = (d) => (comTrs ? trs.findIndex((x) => Math.abs((x.d0 || 0) - d) <= 3) : -1);
+  const zks = tul.filter((x) => x.zk).map((x) => x.d || 0);
   return tul.map((e, i) => {
     let o = e;
     if (e.t === 'L') { const prox = tul[i + 1]; o = { ...e, nx: prox && prox.t === 'T' && prox.ptr === 0 ? null : nxOf(0) }; }
-    else if (e.t === 'P') { const ntv = trechos[e.n - 1]?.nt || 0; o = { ...e, nt: ntv, nx: comTrs ? null : nxOf(e.n), ...(ntv > 0 && secs.length ? { cv: nxOf(tnAt(e.d || 0) - 1) } : {}) }; }
+    else if (e.t === 'P') { const ntv = trechos[e.n - 1]?.nt || 0; const kp = comTrs && !tul.some((x) => x.t === 'T' && Math.abs((x.d || 0) - (e.d || 0)) <= 3) ? kOf(e.d || 0) : -1; o = { ...e, nt: ntv, nx: comTrs ? (kp >= 0 ? nxOf(kp) : null) : nxOf(e.n), ...(ntv > 0 && secs.length ? { cv: nxOf(tnAt(e.d || 0) - 1) } : {}) }; }
     else if (e.t === 'C') o = { ...e, nt: trechos[e.n - 1]?.nt || 0, nx: null };
-    else if (e.t === 'T' && e.ptr != null) o = { ...e, nx: nxOf(e.ptr) };
+    else if (e.t === 'T' && (e.ptr != null || comTrs)) { const k = kOf(e.d || 0); const ix = k >= 0 ? k : e.ptr; if (ix != null) o = { ...e, nx: nxOf(ix) }; }
     if (secs.length) o = { ...o, tn: tnAt(e.d || 0), tm: Array.from({ length: ng }, (_, g) => Math.round(tempo(e.d || 0, g) * 100) / 100) };
     // Hodômetro zerado: depois do ponto que manda zerar, a distância mostrada conta desde ele (dz); no próprio ponto aparece a caixa 0.000.
-    if (comTrs) {
-      const zs = trs.filter((x) => x.zr && x.d0 > 0), d = e.d || 0;
-      let off = 0; zs.forEach((x) => { if (x.d0 < d - 1.5) off = x.d0; });
+    {
+      const zs = [...(comTrs ? trs.filter((x) => x.zr && x.d0 > 0).map((x) => x.d0) : []), ...zks].sort((a, b) => a - b), d = e.d || 0;
+      let off = 0; zs.forEach((z) => { if (z < d - 1.5) off = z; });
       if (off > 0) o = { ...o, dz: d - off };
-      if (e.t === 'T' && zs.some((x) => Math.abs(x.d0 - d) <= 1.5)) o = { ...o, zero: true };
+      if (e.t === 'T' && (e.zk || (comTrs && trs.some((x) => x.zr && x.d0 > 0 && Math.abs(x.d0 - d) <= 1.5)))) o = { ...o, zero: true };
     }
     return o;
   });
@@ -149,6 +151,7 @@ export default function Organizador({ st, prova, provaMap: pmRaw, last, onOrg, o
   const [simOpen, setSimOpen] = useState(false);
   const [cheia, setCheia] = useState(true);
   const [edTul, setEdTul] = useState({});
+  const [extras, setExtras] = useState([]);
   const nPend = useRef(new Set());
   const grupos = gruposDe(provaMap.categorias);
   const ng = grupos.length;
@@ -163,17 +166,18 @@ export default function Organizador({ st, prova, provaMap: pmRaw, last, onOrg, o
     if (logado && provaMap.wps.length && (carregado.current === 0 || (provaMap.pub || 1) > carregado.current)) {
       carregado.current = provaMap.pub || 1;
       setWps(provaMap.wps);
-      setRota({ coords: provaMap.coords, legs: provaMap.legs, tul: provaMap.tul });
+      setRota({ coords: provaMap.coords, legs: provaMap.legs, tul: provaMap.cg ? provaMap.tul.filter((e) => !e.ex) : provaMap.tul });
       setRefs(provaMap.refs || []);
-      setEdTul({});
+      setEdTul(provaMap.ed || {});
+      setExtras(provaMap.ex || []);
       setPcl(provaMap.pcl || []);
-      setManual(provaMap.tul.some((e) => e.man));
+      setManual(provaMap.tul.some((e) => e.man) || !!provaMap.cg);
       setLegs((provaMap.trechos || []).map((t) => {
         const bs = String(t.bs ?? (t.v || [t.kg])[bi] ?? (t.v || [t.kg])[0] ?? 30);
         const v = mk(bs);
         return { t: t.t, bs, v, min: String(t.min), nt: String(t.nt || 0) };
       }));
-      setTrs((provaMap.trs || []).map((t) => { const bs = String(t.bs ?? (t.v || [])[bi] ?? (t.v || [])[0] ?? 30); const v = mk(bs); return { t: t.t, bs, v, min: String(t.min), d0: t.d0, zr: !!t.zr }; }));
+      setTrs((provaMap.trs || []).map((t) => { const bs = String(t.bs ?? (t.v || [])[bi] ?? (t.v || [])[0] ?? 30); const v = Array.isArray(t.v) && t.v.length === ng ? t.v.map(String) : mk(bs); return { t: t.t, bs, v, min: String(t.min), d0: t.d0, zr: !!t.zr, fx: !!t.fx }; }));
     }
   }, [logado, provaMap]);
 
@@ -201,7 +205,7 @@ export default function Organizador({ st, prova, provaMap: pmRaw, last, onOrg, o
 
   // Mudou a diferença de alguma categoria (ou a lista): recalcula a média de todas a partir da média do Graduado de cada trecho.
   useEffect(() => {
-    const re = (l) => { const bs = String(l.bs ?? l.v[bi] ?? l.v[0] ?? 30); return { ...l, bs, v: mk(bs) }; };
+    const re = (l) => { if (l.fx) return l; const bs = String(l.bs ?? l.v[bi] ?? l.v[0] ?? 30); return { ...l, bs, v: mk(bs) }; };
     setTrs((o) => o.map(re));
     setLegs((o) => o.map(re));
   }, [dvs.join(','), bi, ng]);
@@ -226,7 +230,7 @@ export default function Organizador({ st, prova, provaMap: pmRaw, last, onOrg, o
       onProva && onProva(code, true);
       const o = { prova: code.trim().toUpperCase() };
       saveJson('org', o); setOrg(o); onOrg && onOrg(o);
-      carregado.current = 0; setLevPub(null); setEdTul({}); setCheia(true);
+      carregado.current = 0; setLevPub(null); setEdTul({}); setExtras([]); setCheia(true);
       setWps([]); setRota({ coords: [], legs: [], tul: [] }); setLegs([]); setTrs([]); setRefs([]); setPcl([]); setManual(false); setInscritos([]);
       setSec(Platform.OS === 'web' ? 'planilha' : 'levantar'); setAberta(true);
     } catch (e) { Alert.alert('Sem conexão', String(e?.message || e)); }
@@ -235,9 +239,18 @@ export default function Organizador({ st, prova, provaMap: pmRaw, last, onOrg, o
   useEffect(() => { if (abrirReq && abrirReq.code && abrirReq.n !== reqFeito) { reqFeito = abrirReq.n; abrirProva(abrirReq.code, false); } }, [abrirReq && abrirReq.n]);
   const sair = () => { saveJson('org', null); setOrg(null); onOrg && onOrg(null); };
 
-  const trsNum = trs.map((t) => ({ t: t.t, bs: num(t.bs ?? t.v[bi], 30), v: t.v.map((x) => num(x, 30)), min: num(t.min, 15), d0: Math.round(t.d0 || 0), zr: !!t.zr }));
+  const trsNum = trs.map((t) => ({ t: t.t, bs: num(t.bs ?? t.v[bi], 30), v: t.v.map((x) => num(x, 30)), min: num(t.min, 15), d0: Math.round(t.d0 || 0), zr: !!t.zr, fx: !!t.fx }));
   const trechos = trsNum.length ? trechosEq(trs, legs, rota.legs, ng) : toTrechos(legs, rota.legs);
-  const tulBase = rota.tul.map((e) => { const p = edTul[e.t + Math.round(e.d || 0)]; return p ? { ...e, ...p } : e; });
+  const edKey = (e) => e.t + Math.round(e.d || 0);
+  const tulBase = (() => {
+    const mexeu = Object.keys(edTul).length > 0 || extras.length > 0;
+    let out = rota.tul.map((e) => { const p = edTul[edKey(e)]; return { ...e, ...(p || {}), ok: edKey(e) }; }).filter((e) => !e.del);
+    extras.forEach((x) => out.push({ ...x, t: 'T', ex: true, ok: 'X' + x.id }));
+    if (!mexeu) return out;
+    out = out.map((e, i) => ({ e, i })).sort((a, b) => ((a.e.d || 0) - (b.e.d || 0)) || (a.i - b.i)).map((x) => x.e);
+    let prev = 0;
+    return out.map((e) => { const p = (e.d || 0) - prev; prev = e.d || 0; return { ...e, p }; });
+  })();
   const tulT = comTipos(tulBase, trechos, trsNum);
 
   // Marcas do levantamento (sem fotos) vão junto na publicação: assim o computador e o celular editam o mesmo levantamento.
@@ -261,6 +274,9 @@ export default function Organizador({ st, prova, provaMap: pmRaw, last, onOrg, o
         tul: JSON.parse(JSON.stringify(tulT)),
         refs,
         pcl: manual ? pcl : [],
+        ed: JSON.parse(JSON.stringify(edTul)),
+        ex: JSON.parse(JSON.stringify(extras)),
+        cg: !!manual,
         ...(levParaNuvem() ? { lev: levParaNuvem() } : {}),
         ...(((loadJson('lev_' + String(prova).trim().toUpperCase().replace(/[^A-Z0-9]+/g, ''), {}).nome || '').slice(0, 60)) ? { nome: (loadJson('lev_' + String(prova).trim().toUpperCase().replace(/[^A-Z0-9]+/g, ''), {}).nome || '').slice(0, 60) } : {}),
         publicadoEm: stampPub,
@@ -298,19 +314,57 @@ export default function Organizador({ st, prova, provaMap: pmRaw, last, onOrg, o
     { id: 'tr', nome: 'Transmissão', ic: '📡', secs: [['transmissao', 'Transmissão'], ['aovivo', 'Ao vivo']] },
   ];
   const irSec = (k) => { if (k === 'planilha') setCheia(true); setSec(k); };
+  const limpo = (o) => { const r = {}; Object.keys(o).forEach((k) => { if (o[k] !== undefined && o[k] !== null && o[k] !== '') r[k] = o[k]; }); return r; };
+  const remapPtr = (fn) => setRota((r) => ({ ...r, tul: r.tul.map((e) => (e.ptr != null ? { ...e, ptr: fn(e.ptr) } : e)) }));
+  const trAqui = (d) => trs.find((t) => Math.abs((t.d0 || 0) - d) <= 3);
   const novoTrecho = (d) => {
-    if (!trs.length) return 'No modo automático cada trecho vai de um PC ao outro. Para criar trechos no meio do percurso, use o levantamento.';
     const d0 = Math.round(d);
-    if (trs.some((t) => Math.abs((t.d0 || 0) - d0) <= 2)) return 'Já existe um trecho começando aqui.';
-    const ant = [...trs].reverse().find((t) => (t.d0 || 0) < d0) || trs[0];
+    let base = trs;
+    if (!trs.length) {
+      if (!rota.legs.length) return 'Marque o percurso no mapa antes de criar trechos.';
+      if (typeof window !== 'undefined' && !window.confirm('Para criar trechos no meio do percurso, o percurso automático será congelado (como no levantamento): marcar novos PCs no mapa fica desligado até você voltar ao automático. Continuar?')) return 'Cancelado.';
+      let a = 0;
+      base = legs.map((l, i) => { const x = { t: l.t, bs: String(l.bs ?? l.v[bi] ?? 30), v: l.v, min: l.min, d0: Math.round(a * 1000), zr: false }; a += rota.legs[i] || 0; return x; });
+      setManual(true);
+    }
+    if (base.some((t) => Math.abs((t.d0 || 0) - d0) <= 3)) return 'Já existe um trecho começando aqui.';
+    const ant = [...base].reverse().find((t) => (t.d0 || 0) < d0) || base[0];
     const bs = String(ant.bs ?? ant.v[bi] ?? 30);
-    setTrs((o) => [...o, { t: 'V', bs, v: mk(bs), min: '15', d0, zr: false }].sort((a, b) => (a.d0 || 0) - (b.d0 || 0)));
+    const novo = { t: 'V', bs, v: ant.v.slice(), min: '15', d0, zr: false };
+    const k = base.filter((t) => (t.d0 || 0) < d0).length;
+    setTrs([...base.slice(0, k), novo, ...base.slice(k)]);
+    remapPtr((p) => (p >= k ? p + 1 : p));
     return null;
   };
-  const salvarRef = ({ key, patch, nt, n }) => {
-    setEdTul((o) => ({ ...o, [key]: { nm: undefined, nb: undefined, ni: undefined, cu: undefined, afer: false, ...patch } }));
-    if (nt != null) upd(n - 1, { nt: String(nt) });
+  const salvarTr = (d0, patch) => setTrs((o) => o.map((t) => (Math.abs((t.d0 || 0) - d0) <= 3 ? { ...t, ...patch } : t)));
+  const limparTr = (d0) => {
+    const k = trs.findIndex((t) => Math.abs((t.d0 || 0) - d0) <= 3);
+    if (k <= 0) return 'O primeiro trecho não pode ser apagado.';
+    setTrs((o) => o.filter((_, i) => i !== k));
+    remapPtr((p) => (p === k ? null : p > k ? p - 1 : p));
+    return null;
   };
+  const salvarRef = ({ e, patch, nt, shift }) => {
+    const totalM2 = total * 1000;
+    const nd = patch.d != null ? Math.max(1, Math.min(totalM2 - 1, patch.d)) : null;
+    const delta = nd != null ? nd - (e.d || 0) : 0;
+    if (nd != null) patch = { ...patch, d: nd };
+    if (e.novo) setExtras((o) => [...o, { id: Date.now(), ...limpo(patch), d: nd != null ? nd : Math.round(e.d) }]);
+    else if (e.ex) setExtras((o) => o.map((x) => (x.id === e.id ? { id: x.id, ...limpo(patch), d: nd != null ? nd : x.d } : x)));
+    else setEdTul((o) => ({ ...o, [e.ok]: limpo(patch) }));
+    if (shift && delta) {
+      const ref = e.d || 0;
+      setExtras((o) => o.map((x) => (x.id !== e.id && x.d > ref ? { ...x, d: Math.max(1, Math.min(totalM2 - 1, x.d + delta)) } : x)));
+      setEdTul((o) => { const r = { ...o }; tulBase.filter((x) => x.t === 'T' && !x.ex && x.d > ref && x.ok !== e.ok).forEach((x) => { r[x.ok] = { ...(r[x.ok] || {}), d: Math.max(1, Math.min(totalM2 - 1, x.d + delta)) }; }); return r; });
+    }
+    if (nt != null) upd(e.n - 1, { nt: String(nt) });
+  };
+  const excluirRef = (e) => {
+    if (e.ex) setExtras((o) => o.filter((x) => x.id !== e.id));
+    else if (e.t === 'T') setEdTul((o) => ({ ...o, [e.ok]: { ...(o[e.ok] || {}), del: true } }));
+  };
+  const addPc = (la, lo, idx) => { if (manual) return 'Percurso congelado: volte ao automático para marcar PCs.'; setWps((w) => [...w.slice(0, idx), [la, lo], ...w.slice(idx)]); return null; };
+  const voltarAuto = () => { if (typeof window !== 'undefined' && !window.confirm('Voltar ao percurso automático (pelas ruas)? Os trechos e tulipas do levantamento serão substituídos.')) return; setManual(false); setTrs([]); };
   const grupoAtual = MENU.find((g) => g.secs.some(([k]) => k === sec)) || MENU[0];
   const nomeProva = (loadJson('lev_index', []).find((x) => x.code === org.prova) || {}).nome || '';
   return (
@@ -370,7 +424,8 @@ export default function Organizador({ st, prova, provaMap: pmRaw, last, onOrg, o
         <EditorDividido st={st} nome={nomeProva || org.prova} tul={tulT} coords={rota.coords} wps={wps} totalM={total * 1000} nTrechos={planilha.length} grupos={grupos} editable={editaMapa && !manual} busy={busy}
           onTap={(la, lo) => { if (editaMapa && !manual) setWps((w) => [...w, [la, lo]]); }}
           onDesfazer={() => setWps((w) => w.slice(0, -1))} onLimpar={() => { setWps([]); setLegs([]); }}
-          onNovoTrecho={novoTrecho} onSalvarRef={salvarRef}
+          trs={trs} bi={bi} manual={manual} totalSec={null}
+          onNovoTrecho={novoTrecho} onSalvarRef={salvarRef} onExcluirRef={excluirRef} onSalvarTr={salvarTr} onLimparTr={limparTr} onAddPc={addPc} onAuto={voltarAuto} trAqui={trAqui}
           onPublicar={publicar} onSimular={() => setSimOpen(true)} onPdf={pdf} onAtualizar={() => { carregado.current = 0; onProva && onProva(prova, true); }}
           onLista={() => setCheia(false)} onVoltar={() => setSec('geral')} />
       ) : (

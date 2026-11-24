@@ -23,39 +23,43 @@ function pontoEm(coords, cum, totalM, d) {
 }
 
 const AZUL = '#2fb6d3';
+const FONTE = 'Montserrat, Arial, sans-serif';
 const TIPO = { L: 'Largada', T: 'Tulipa', P: 'PC', C: 'Chegada' };
-const chave = (e) => e.t + Math.round(e.d || 0);
 const km3 = (m) => (m / 1000).toFixed(3);
 const hms = (sec) => { const x = Math.max(0, sec); const h = Math.floor(x / 3600), m = Math.floor((x % 3600) / 60), r = x - h * 3600 - m * 60; return `${h}:${String(m).padStart(2, '0')}:${r.toFixed(2).padStart(5, '0')}`; };
 const mmss = (sec) => `${Math.floor(sec / 60)}:${String(Math.round(sec % 60)).padStart(2, '0')}`;
-const CREME = '#f6f2e8', BORDA = '1px solid #000';
-const GAL = 34; // altura de cada categoria dentro da linha
+const CREME = '#f6f2e8', BORDA = '1px solid #000', CIANO = '#19e8f0';
+const GAL = 34;
+
+const linhasObs = (e) => (e.ob && e.ob.length ? e.ob.filter((o) => o.t) : e.nm ? String(e.nm).split('\n').map((t) => ({ t, n: true })) : []);
 
 // Linha do roadbook no padrão do Kraken: km | velocidade (verde) | tempos | tulipa | instrução.
-function Linha({ e, num, sel, grupos, onKm, onTul, onSel, refEl }) {
+function Linha({ e, num, atual, sel, grupos, onKm, onTul, onSel, refEl }) {
   const nTm = Math.max(1, e.tm ? e.tm.length : (grupos || []).length);
   const alt = Math.max(nTm * GAL, 96);
   const ehPc = e.t === 'P' && !(e.nt > 0 && e.pn == null) && !e.cont;
   const ehN = e.t === 'P' && e.nt > 0 && !e.cont;
   const temTul = e.t === 'T' || (ehN && !!((e.dw && e.dw.length) || Array.isArray(e.b)));
-  const bg = sel ? '#ffee00' : ehN ? '#e1bee7' : e.nm ? '#aadaff' : CREME;
+  const obs = linhasObs(e);
+  const bg = atual ? '#ffee00' : sel ? CIANO : ehN ? '#e1bee7' : obs.length ? '#aadaff' : CREME;
   const brd = e.t === 'P' && !e.cont ? '3px solid #e53935' : BORDA;
   const v = e.nx && Array.isArray(e.nx.v) ? e.nx.v : null;
   const txtN = e.t === 'L' ? 'LARGADA' : e.t === 'C' ? 'CHEGADA' : null;
   const celula = { borderRight: BORDA, boxSizing: 'border-box', height: '100%' };
   return (
-    <div ref={refEl} onClick={onSel} style={{ display: 'flex', height: alt, background: bg, borderTop: brd, borderBottom: brd, color: '#111', cursor: 'pointer', fontFamily: 'Arial, sans-serif' }}>
+    <div ref={refEl} onClick={onSel} style={{ display: 'flex', height: alt, background: bg, borderTop: brd, borderBottom: brd, color: '#111', cursor: 'pointer', fontFamily: FONTE }}>
       <div title="Editar referência" onClick={(ev) => { ev.stopPropagation(); onKm(); }} style={{ ...celula, width: 104, padding: '4px 6px', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: '#555', minHeight: 14 }}>
           <span>{e.t === 'T' ? (e.p / 1000).toFixed(2) : ''}</span><span>{e.tl ? e.tl.replace(' ', '') : ''}</span>
         </div>
         <div style={{ fontSize: 24, fontWeight: 800, lineHeight: 1.1 }}>{km3(e.dz ?? e.d)}</div>
         {e.zero ? <div style={{ background: '#111', color: '#ffe600', fontSize: 11, fontWeight: 800, padding: '1px 4px', marginTop: 2, alignSelf: 'flex-start' }}>0.000 · ZERE</div> : null}
-        {e.afer ? <div style={{ background: '#111', color: '#fff', fontSize: 11, fontWeight: 800, padding: '1px 5px', marginTop: 2, alignSelf: 'flex-start' }}>AFER</div> : null}
+        {e.afer || e.zk ? <div style={{ background: '#111', color: '#fff', fontSize: 11, fontWeight: 800, padding: '1px 5px', marginTop: 2, alignSelf: 'flex-start' }}>AFER</div> : null}
+        {e.np ? <div style={{ background: '#111', color: '#fff', fontSize: 10, fontWeight: 800, padding: '1px 5px', marginTop: 2, alignSelf: 'flex-start' }}>NOVA PROVA</div> : null}
       </div>
       <div style={{ ...celula, width: 100, display: 'flex' }}>
         {ehPc ? (
-          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', fontWeight: 800, fontSize: 26, lineHeight: 1.1, background: sel ? '#ffee00' : '#fff' }}><span>PC</span><span>{e.pn ?? e.n}</span></div>
+          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', fontWeight: 800, fontSize: 26, lineHeight: 1.1, background: atual ? '#ffee00' : '#fff' }}><span>PC</span><span>{e.pn ?? e.n}</span></div>
         ) : ehN ? (
           <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', background: '#6a1b9a', color: '#fff', fontWeight: 800 }}><span style={{ fontSize: 20 }}>N</span><span style={{ fontSize: 22 }}>{e.nt < 60 ? Math.round(e.nt) : mmss(e.nt)}</span><span style={{ fontSize: 11 }}>{e.nt < 60 ? 'Seg' : 'min'}</span></div>
         ) : e.nx && e.nx.t === 'D' ? (
@@ -71,7 +75,7 @@ function Linha({ e, num, sel, grupos, onKm, onTul, onSel, refEl }) {
           </>
         ) : null}
       </div>
-      <div style={{ ...celula, width: 104, display: 'flex', flexDirection: 'column', background: sel ? '#ffee00' : '#fff' }}>
+      <div style={{ ...celula, width: 104, display: 'flex', flexDirection: 'column', background: atual ? '#ffee00' : sel ? CIANO : '#fff' }}>
         {Array.from({ length: nTm }, (_, g) => (
           <div key={g} style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 15, fontWeight: 600, borderBottom: g < nTm - 1 ? BORDA : 0 }}>{e.tm ? hms(e.tm[g] ?? e.tm[0]) : ''}</div>
         ))}
@@ -82,101 +86,192 @@ function Linha({ e, num, sel, grupos, onKm, onTul, onSel, refEl }) {
       </div>
       <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: 6, textAlign: 'center' }}>
         {txtN ? <div style={{ fontWeight: 800, fontSize: 20 }}>{txtN}</div> : null}
-        {e.nm ? <div style={{ fontWeight: e.nb === false ? 500 : 800, fontSize: 16, whiteSpace: 'pre-line', ...(e.ni ? { background: '#111', color: '#fff', padding: '2px 8px' } : null) }}>{e.nm}</div> : null}
+        {obs.map((o, i) => <div key={i} style={{ fontWeight: o.n === false ? 500 : 800, fontSize: 15, ...(o.i ? { background: '#111', color: '#fff', padding: '1px 8px', width: '100%', boxSizing: 'border-box' } : null) }}>{o.t}</div>)}
         {e.cu > 0 ? <div style={{ fontSize: 22, marginTop: 4 }}>{'☠'.repeat(e.cu)}</div> : null}
-        {ehPc && !e.nm ? <div style={{ fontSize: 13, color: '#555' }}>Raio: 15 m</div> : null}
+        {ehPc && !obs.length ? <div style={{ fontSize: 13, color: '#555' }}>Raio: 15 m</div> : null}
       </div>
     </div>
   );
 }
 
-function Campo({ rot, children }) {
-  return <label style={{ display: 'block', marginBottom: 10 }}><div style={{ color: '#666', fontSize: 12, marginBottom: 3 }}>{rot}</div>{children}</label>;
-}
-const INP = { width: '100%', boxSizing: 'border-box', border: '1px solid #bbb', borderRadius: 4, padding: '8px 10px', fontSize: 15, fontFamily: 'inherit' };
-const BTAB = (on) => ({ padding: '6px 14px', border: '1px solid ' + (on ? '#1a7f37' : '#bbb'), background: on ? '#1a7f37' : '#fff', color: on ? '#fff' : '#333', borderRadius: 4, cursor: 'pointer', fontSize: 13 });
+const INP = { width: '100%', boxSizing: 'border-box', border: '1px solid #bbb', borderRadius: 4, padding: '8px 10px', fontSize: 15, fontFamily: 'inherit', background: '#fff' };
+const ROT = { color: '#777', fontSize: 11, marginBottom: 3 };
+const abaTr = (on) => ({ padding: '6px 12px', fontSize: 12, fontWeight: 600, cursor: 'pointer', borderRadius: 4, border: '1px solid ' + (on ? '#1a9d5a' : '#ccc'), background: on ? '#1a9d5a' : '#fff', color: on ? '#fff' : '#333' });
+const BT = (bg, cor, extra) => ({ width: '100%', boxSizing: 'border-box', border: bg === '#fff' ? '1px solid #bbb' : 0, background: bg, color: cor, fontWeight: 700, fontSize: 13, padding: '10px 6px', borderRadius: 4, cursor: 'pointer', fontFamily: 'inherit', marginBottom: 8, ...extra });
 
 // Janela "Referência", como a do Kraken.
-function Referencia({ e, n, onFechar, onSalvar, onNav }) {
-  const [nm, setNm] = useState(e.nm || '');
-  const [nb, setNb] = useState(e.nb !== false);
-  const [ni, setNi] = useState(!!e.ni);
+function Referencia({ e, n, grupos, bi, manual, tr, atualKm, onFechar, onSalvar, onNav, onNovoTrecho, onSalvarTr, onLimparTr, onExcluir, onEstouAqui, onMostrar, onAddPc }) {
+  const ng = Math.max(1, grupos.length);
+  const novo = !!e.novo;
+  const [km, setKm] = useState(km3(novo ? Math.round(atualKm * 1000) : e.d));
+  const [shift, setShift] = useState(false);
+  const [obs, setObs] = useState(() => { const a = linhasObs(e); return Array.from({ length: 4 }, (_, k) => a[k] ? { t: a[k].t, n: a[k].n !== false, i: !!a[k].i } : { t: '', n: true, i: false }); });
   const [cu, setCu] = useState(e.cu || 0);
   const [nt, setNt] = useState(String(e.nt || 0));
   const [afer, setAfer] = useState(!!e.afer);
+  const [zk, setZk] = useState(!!e.zk);
+  const [np, setNp] = useState(!!e.np);
+  const [nr, setNr] = useState(e.nr || '');
+  const [tipoT, setTipoT] = useState(tr ? tr.t : 'V');
+  const [vals, setVals] = useState(() => Array.from({ length: ng }, (_, g) => String(tr && tr.v ? tr.v[g] ?? tr.v[0] ?? '' : '')));
+  const [minT, setMinT] = useState(tr ? String(tr.min || 15) : '15');
+  const [fx, setFx] = useState(!!(tr && tr.fx));
+  const [tocouTr, setTocouTr] = useState(false);
+  const [sujo, setSujo] = useState(false);
   const [conf, setConf] = useState(null);
-  const ehP = e.t === 'P';
-  const sujo = nm !== (e.nm || '') || nb !== (e.nb !== false) || ni !== !!e.ni || cu !== (e.cu || 0) || afer !== !!e.afer || (ehP && Number(nt || 0) !== (e.nt || 0));
-  const salvar = () => onSalvar({ key: chave(e), n: e.n, nt: ehP ? Number(nt) || 0 : null, patch: { nm: nm.trim() || undefined, nb: nb ? undefined : false, ni: ni || undefined, cu: cu || undefined, afer } });
-  const tentar = (acao) => { if (sujo) setConf(acao); else acao(); };
+  const trK = tr ? tr.d0 : null;
+  useEffect(() => {
+    if (!tr) return;
+    setTipoT(tr.t); setVals(Array.from({ length: ng }, (_, g) => String(tr.v ? tr.v[g] ?? tr.v[0] ?? '' : ''))); setMinT(String(tr.min || 15)); setFx(!!tr.fx); setTocouTr(false);
+  }, [trK]);
+  const ehP = e.t === 'P' && !e.cont;
+  const ehT = e.t === 'T';
+  const [aba, setAba] = useState(ehP && e.nt > 0 ? 'N' : null);
+  const tab = aba || tipoT;
+  const m = (fn) => (...a) => { setSujo(true); fn(...a); };
+  const parseKm = () => { const x = parseFloat(String(km).replace(',', '.')); return Number.isNaN(x) ? null : Math.round(x * 1000); };
+
+  const salvar = () => {
+    const linhas = obs.map((o) => ({ t: o.t.trim(), n: o.n, i: o.i }));
+    const txt = linhas.filter((o) => o.t);
+    const dNovo = ehT || novo ? parseKm() : null;
+    const patch = {
+      nm: txt.map((o) => o.t).join('\n') || undefined, ob: txt.length ? linhas : undefined,
+      cu: cu || undefined, afer: afer || undefined, np: np || undefined, nr: nr.trim() || undefined, zk: zk || undefined,
+      d: dNovo != null && (novo || Math.abs(dNovo - e.d) >= 1) ? dNovo : undefined,
+    };
+    onSalvar({ e, patch, nt: ehP ? Number(nt) || 0 : null, shift: shift && patch.d != null });
+    if (tr && tocouTr && tab !== 'N') onSalvarTr(tr.d0, { t: tipoT === 'D' ? 'D' : 'V', v: vals, bs: vals[bi] || vals[0], min: minT, fx });
+  };
   const ref = useRef({});
-  ref.current = { tentar, salvar, onFechar };
+  ref.current = { salvar, onFechar, sujo, setConf };
   useEffect(() => {
     const k = (ev) => {
-      if (ev.key === 'Escape') ref.current.tentar(ref.current.onFechar);
-      else if (ev.key === 'Enter' && ev.target.tagName !== 'TEXTAREA') { ref.current.salvar(); ref.current.onFechar(); }
+      const r = ref.current;
+      if (ev.key === 'Escape') { if (r.sujo) r.setConf(() => r.onFechar); else r.onFechar(); }
+      else if (ev.key === 'Enter' && ev.target.tagName !== 'TEXTAREA') { r.salvar(); r.onFechar(); }
     };
     window.addEventListener('keydown', k);
     return () => window.removeEventListener('keydown', k);
   }, []);
-  const v = e.nx && Array.isArray(e.nx.v) ? e.nx.v : null;
+  const tentar = (acao) => { if (sujo) setConf(() => acao); else acao(); };
+  const nomeG = (g) => (grupos[g] && grupos[g].nome ? String(grupos[g].nome).slice(0, 8) : String.fromCharCode(65 + g));
+  const cx = (rot, val, on, dis, note) => (
+    <label style={{ display: 'flex', alignItems: 'flex-start', gap: 8, marginBottom: 8, color: dis ? '#aaa' : '#222', fontSize: 13, cursor: dis ? 'default' : 'pointer' }}>
+      <input type="checkbox" checked={val} disabled={dis} onChange={(ev) => on(ev.target.checked)} style={{ marginTop: 2 }} />
+      <span>{rot}{note ? <div style={{ fontSize: 10, color: '#999' }}>{note}</div> : null}</span>
+    </label>
+  );
   return (
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.5)', zIndex: 60, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-      <div style={{ background: '#fff', color: '#111', borderRadius: 8, width: 760, maxWidth: '96vw', maxHeight: '96vh', overflow: 'auto', fontFamily: 'Arial, sans-serif' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 18px', borderBottom: '1px solid #ddd' }}>
-          <span style={{ fontSize: 20, fontWeight: 600 }}>Referência {n}</span>
-          <span style={{ background: '#2ecc71', color: '#fff', fontSize: 12, borderRadius: 10, padding: '2px 10px' }}>{TIPO[e.t] || e.t}</span>
+      <div style={{ background: '#fff', color: '#111', borderRadius: 6, width: 920, maxWidth: '97vw', maxHeight: '97vh', overflow: 'auto', fontFamily: FONTE }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 18px', borderBottom: '1px solid #e3e3e3' }}>
+          <span style={{ fontSize: 17, fontWeight: 600 }}>{novo ? 'Nova referência' : `Referência ${n}`}</span>
+          {!novo && e.nx ? <span style={{ background: '#2ecc71', color: '#fff', fontSize: 11, borderRadius: 10, padding: '2px 10px' }}>{e.nx.t === 'D' ? 'Deslocamento' : 'Velocidade'}</span> : null}
           <span style={{ flex: 1 }} />
-          <span style={{ cursor: 'pointer', fontSize: 22 }} title="Anterior" onClick={() => tentar(() => onNav(-1))}>‹</span>
-          <span style={{ cursor: 'pointer', fontSize: 22 }} title="Próxima" onClick={() => tentar(() => onNav(1))}>›</span>
+          {!novo && <><span style={{ cursor: 'pointer', fontSize: 22 }} title="Anterior" onClick={() => tentar(() => onNav(-1))}>‹</span>
+          <span style={{ cursor: 'pointer', fontSize: 22 }} title="Próxima" onClick={() => tentar(() => onNav(1))}>›</span></>}
           <span style={{ cursor: 'pointer', fontSize: 20, marginLeft: 8 }} onClick={() => tentar(onFechar)}>✕</span>
         </div>
-        <div style={{ display: 'flex', gap: 18, padding: 18 }}>
+        <div style={{ display: 'flex', gap: 18, padding: '14px 18px' }}>
           <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ display: 'flex', gap: 10 }}>
-              <div style={{ flex: 1 }}><Campo rot="Km da referência"><div style={{ ...INP, background: '#eaf6ff', fontWeight: 700, borderColor: '#2fb6d3' }}>{km3(e.dz ?? e.d)}</div></Campo></div>
-              <div style={{ flex: 1 }}><Campo rot="Km atual"><div style={{ ...INP, background: '#f3f3f3', color: '#888' }}>{km3(e.d)}</div></Campo></div>
+            <div style={{ display: 'flex', gap: 12, alignItems: 'flex-end' }}>
+              <div style={{ flex: 1 }}>
+                <div style={ROT}>Km da referência</div>
+                <input style={{ ...INP, border: '1px solid #2fb6d3', fontWeight: 700, background: ehT || novo ? '#fff' : '#f3f3f3' }} value={km} disabled={!(ehT || novo)} onChange={m((ev) => setKm(ev.target.value))} />
+              </div>
+              <div style={{ flex: 1 }}>
+                <div style={ROT}>Km atual</div>
+                <div style={{ display: 'flex', gap: 6 }}>
+                  <div style={{ ...INP, background: '#eef3f6', color: '#555' }}>{atualKm.toFixed(3)}</div>
+                  <button style={{ ...BT(AZUL, '#fff'), width: 100, marginBottom: 0, fontSize: 11 }} disabled={!(ehT || novo)} onClick={() => { setSujo(true); setKm(atualKm.toFixed(3)); }}>USAR ATUAL</button>
+                </div>
+              </div>
             </div>
-            <div style={{ color: '#666', fontSize: 12, marginBottom: 4 }}>Trecho</div>
-            <div style={{ border: '1px solid #ddd', background: '#fafafa', borderRadius: 4, padding: '8px 10px', fontSize: 13, color: '#555', marginBottom: 12 }}>
-              {e.tl ? <b>{e.tl}</b> : null}{v ? ` · ${(grupoNomes(e, v))}` : ' · sem mudança de trecho nesta referência'}
-              <div style={{ fontSize: 12, color: '#888', marginTop: 4 }}>Para criar um trecho novo aqui, feche a janela e use o botão TRC.</div>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 8, margin: '8px 0 12px', fontSize: 12, color: ehT || novo ? '#444' : '#aaa' }}><input type="checkbox" disabled={!(ehT || novo)} checked={shift} onChange={(ev) => setShift(ev.target.checked)} />Recalcular referências seguintes</label>
+            {!novo && (
+              <div style={{ marginBottom: 12 }}>
+                <div style={{ display: 'flex', alignItems: 'center', marginBottom: 6 }}>
+                  <span style={{ fontSize: 12, color: '#555', flex: 1 }}>{tr ? `Trecho ${(tr.d0 === 0 ? 1 : '')}`.trim() : 'Trecho'}</span>
+                  {tr && tr.d0 > 0 && <span style={{ color: '#e53935', fontSize: 11, cursor: 'pointer' }} onClick={() => { const r = onLimparTr(tr.d0); if (r) window.alert(r); }}>Limpar trecho</span>}
+                </div>
+                {tr ? (
+                  <div style={{ border: '1px solid #e3e3e3', borderRadius: 4, padding: 10 }}>
+                    <div style={{ display: 'flex', gap: 6, marginBottom: 10 }}>
+                      <span style={abaTr(tab === 'V')} onClick={() => { setAba(null); setSujo(true); setTocouTr(true); setTipoT('V'); }}>Velocidade</span>
+                      <span style={abaTr(tab === 'D')} onClick={() => { setAba(null); setSujo(true); setTocouTr(true); setTipoT('D'); }}>Deslocamento</span>
+                      <span style={{ ...abaTr(tab === 'N'), opacity: ehP ? 1 : 0.4 }} onClick={() => { if (ehP) setAba('N'); }}>Neutro</span>
+                    </div>
+                    {tab === 'V' && (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+                        <span style={{ fontSize: 12, color: '#666' }}>km/h</span>
+                        {vals.map((x, g) => (
+                          <label key={g} style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 12 }}>{nomeG(g)}<input style={{ ...INP, width: 64, padding: '6px 8px' }} inputMode="decimal" value={x} onChange={(ev) => { setSujo(true); setTocouTr(true); setVals((o) => o.map((y, i) => (i === g ? ev.target.value.replace(',', '.') : y))); }} /></label>
+                        ))}
+                      </div>
+                    )}
+                    {tab === 'D' && <label style={{ fontSize: 12 }}>Tempo (min) <input style={{ ...INP, width: 80, padding: '6px 8px' }} inputMode="decimal" value={minT} onChange={(ev) => { setSujo(true); setTocouTr(true); setMinT(ev.target.value.replace(',', '.')); }} /></label>}
+                    {tab === 'N' && <label style={{ fontSize: 12 }}>Segundos parado neste PC <input style={{ ...INP, width: 80, padding: '6px 8px' }} inputMode="numeric" value={nt} onChange={m((ev) => setNt(ev.target.value.replace(/[^0-9]/g, '')))} /></label>}
+                    {tab === 'V' && <label style={{ display: 'flex', alignItems: 'flex-start', gap: 6, fontSize: 11, color: '#666', marginTop: 10 }}><input type="checkbox" checked={fx} onChange={(ev) => { setSujo(true); setTocouTr(true); setFx(ev.target.checked); }} /><span>Fixar média<div style={{ fontSize: 10, color: '#999' }}>Não é alterada por "Alterar médias"</div></span></label>}
+                  </div>
+                ) : (
+                  <div style={{ border: '1px solid #e3e3e3', borderRadius: 4, padding: '10px 12px', fontSize: 12, color: '#777', background: '#fafafa', display: 'flex', alignItems: 'center', gap: 12 }}>
+                    <span style={{ flex: 1 }}>Sem trecho nesta referência</span>
+                    <span style={{ color: AZUL, fontWeight: 700, cursor: 'pointer' }} onClick={() => { const r = onNovoTrecho(e.d); if (r && r !== 'Cancelado.') window.alert(r); }}>+ Adicionar trecho</span>
+                  </div>
+                )}
+                {ehP && !tr && (
+                  <label style={{ display: 'block', fontSize: 12, marginTop: 8 }}>Neutro: segundos parado neste PC (0 = sem) <input style={{ ...INP, width: 90, padding: '6px 8px', marginLeft: 6 }} inputMode="numeric" value={nt} onChange={m((ev) => setNt(ev.target.value.replace(/[^0-9]/g, '')))} /></label>
+                )}
+              </div>
+            )}
+            <div style={{ display: 'flex', alignItems: 'center', fontSize: 11, color: '#777', marginBottom: 4 }}>
+              <span style={{ flex: 1 }}>Observações</span><span style={{ width: 150, textAlign: 'center' }}>Ctrl+N Negrito · Ctrl+I Invertido</span>
             </div>
-            {ehP && <Campo rot="Neutro: segundos parado neste ponto (0 = sem)"><input style={INP} inputMode="numeric" value={nt} onChange={(ev) => setNt(ev.target.value.replace(/[^0-9]/g, ''))} /></Campo>}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 12, color: '#666', fontSize: 12, marginBottom: 3 }}>
-              <span style={{ flex: 1 }}>Observações</span>
-              <label style={{ cursor: 'pointer' }}><input type="checkbox" checked={nb} onChange={(ev) => setNb(ev.target.checked)} /> Negrito</label>
-              <label style={{ cursor: 'pointer' }}><input type="checkbox" checked={ni} onChange={(ev) => setNi(ev.target.checked)} /> Invertido</label>
-            </div>
-            <textarea style={{ ...INP, height: 64, resize: 'none', textTransform: 'uppercase' }} maxLength={60} value={nm} onChange={(ev) => setNm(ev.target.value)} placeholder="EX.: VIRE P/ DIR" autoFocus />
-            <div style={{ fontSize: 11, color: '#999', textAlign: 'right' }}>{nm.length}/60 · Enter na caixa = nova linha</div>
+            {obs.map((o, k) => (
+              <div key={k} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+                <input style={{ ...INP, flex: 1, fontWeight: o.n ? 700 : 400, textTransform: 'uppercase', ...(o.i ? { background: '#111', color: '#fff' } : null) }} maxLength={25} value={o.t} autoFocus={k === 0}
+                  onKeyDown={(ev) => { if (ev.ctrlKey && (ev.key === 'n' || ev.key === 'N')) { ev.preventDefault(); setSujo(true); setObs((a) => a.map((x, i) => (i === k ? { ...x, n: !x.n } : x))); } else if (ev.ctrlKey && (ev.key === 'i' || ev.key === 'I')) { ev.preventDefault(); setSujo(true); setObs((a) => a.map((x, i) => (i === k ? { ...x, i: !x.i } : x))); } }}
+                  onChange={(ev) => { setSujo(true); setObs((a) => a.map((x, i) => (i === k ? { ...x, t: ev.target.value } : x))); }} />
+                <label style={{ fontSize: 12, display: 'flex', alignItems: 'center', gap: 3 }}><input type="checkbox" checked={o.n} onChange={(ev) => { setSujo(true); setObs((a) => a.map((x, i) => (i === k ? { ...x, n: ev.target.checked } : x))); }} />N</label>
+                <label style={{ fontSize: 12, display: 'flex', alignItems: 'center', gap: 3 }}><input type="checkbox" checked={o.i} onChange={(ev) => { setSujo(true); setObs((a) => a.map((x, i) => (i === k ? { ...x, i: ev.target.checked } : x))); }} />Inv</label>
+              </div>
+            ))}
+            <div style={{ fontSize: 10, color: '#aaa', textAlign: 'right' }}>até 25 caracteres por linha</div>
           </div>
-          <div style={{ width: 210, flexShrink: 0 }}>
-            <button style={{ ...INP, background: '#1565c0', color: '#fff', border: 0, fontWeight: 700, cursor: 'pointer', marginBottom: 8 }} onClick={() => { salvar(); onFechar(); }}>SALVAR <span style={{ fontWeight: 400, fontSize: 11 }}>Enter</span></button>
-            <button style={{ ...INP, background: '#fff', color: '#1565c0', fontWeight: 700, cursor: 'pointer', marginBottom: 14 }} onClick={() => tentar(onFechar)}>CANCELAR <span style={{ fontWeight: 400, fontSize: 11 }}>Esc</span></button>
-            <div style={{ border: '1px solid #ddd', borderRadius: 4, padding: 10 }}>
-              <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, cursor: 'pointer' }}><input type="checkbox" checked={afer} onChange={(ev) => setAfer(ev.target.checked)} />Afer</label>
-              <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, color: '#aaa' }} title="Use a opção do trecho no levantamento"><input type="checkbox" disabled checked={!!e.zero} />Zera km (0.000)</label>
-              <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10, color: '#aaa' }}><input type="checkbox" disabled />Nova prova</label>
-              <div style={{ color: '#666', fontSize: 12, marginBottom: 4 }}>Curvas</div>
+          <div style={{ width: 250, flexShrink: 0 }}>
+            <button style={BT('#2aa6b8', '#fff')} onClick={() => { salvar(); onFechar(); }}>SALVAR <span style={{ fontWeight: 400, fontSize: 10 }}>Enter</span></button>
+            <button style={BT('#fff', '#2aa6b8', { marginBottom: 12 })} onClick={() => tentar(onFechar)}>CANCELAR <span style={{ fontWeight: 400, fontSize: 10 }}>Esc</span></button>
+            <div style={{ fontSize: 11, color: '#777', marginBottom: 4 }}>Aplicar na hora</div>
+            <button style={BT(AZUL, '#fff', { opacity: novo ? 0.4 : 1 })} disabled={novo} onClick={() => { onEstouAqui(); onFechar(); }}>◉ ESTOU AQUI</button>
+            <button style={BT('#fff', '#2aa6b8', { opacity: novo ? 0.4 : 1 })} disabled={novo} onClick={() => { onMostrar(); onFechar(); }}>MOSTRAR NO MAPA</button>
+            <button style={BT('#1fb35e', '#fff', { opacity: novo || manual ? 0.4 : 1 })} disabled={novo || manual} title={manual ? 'Percurso congelado' : ''} onClick={() => { onAddPc(); onFechar(); }}>+ ADD PC NA REFERÊNCIA</button>
+            <div style={{ border: '1px solid #e3e3e3', borderRadius: 4, padding: 10, margin: '6px 0 10px' }}>
+              {cx('Afer', afer || zk, m(setAfer), zk, zk ? 'Ligado pelo zera km' : null)}
+              {cx('Zera km (0.000)', zk, m((v) => { setZk(v); }), !(ehT || novo))}
+              {cx('Nova prova', np, m(setNp), false)}
+              <div style={{ fontSize: 11, color: '#777', margin: '6px 0 4px' }}>Curvas</div>
               <div style={{ display: 'flex', gap: 6 }}>
                 {[0, 1, 2, 3].map((k) => (
-                  <span key={k} onClick={() => setCu(k)} style={{ width: 36, height: 30, border: '1px solid ' + (cu === k ? '#1565c0' : '#ccc'), background: cu === k ? '#e3f0ff' : '#fff', borderRadius: 4, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', fontSize: k > 1 ? 11 : 15 }}>{k === 0 ? '⊘' : '☠'.repeat(k)}</span>
+                  <span key={k} onClick={() => { setSujo(true); setCu(k); }} style={{ width: 40, height: 30, border: '1px solid ' + (cu === k ? '#2aa6b8' : '#ccc'), background: cu === k ? '#e3f6f9' : '#fff', borderRadius: 4, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', fontSize: k > 1 ? 10 : 14 }}>{k === 0 ? '⊘' : '☠'.repeat(k)}</span>
                 ))}
               </div>
             </div>
+            <div style={ROT}>Nome da referência</div>
+            <input style={{ ...INP, marginBottom: 12 }} value={nr} onChange={m((ev) => setNr(ev.target.value))} />
+            {!novo && ehT && <button style={BT('#e53935', '#fff')} onClick={() => { if (window.confirm('Deletar esta referência?')) { onExcluir(); onFechar(); } }}>🗑 DELETAR REFERÊNCIA</button>}
           </div>
         </div>
       </div>
       {conf && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.35)', zIndex: 65, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <div style={{ background: '#fff', borderRadius: 8, padding: 20, width: 320, color: '#111', fontFamily: 'Arial, sans-serif' }}>
-            <div style={{ fontSize: 18, fontWeight: 600, marginBottom: 6 }}>Salvar alterações?</div>
-            <div style={{ color: '#666', fontSize: 14, marginBottom: 16 }}>Há alterações não salvas nesta referência.</div>
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 14, fontWeight: 700, fontSize: 14 }}>
-              <span style={{ color: '#1565c0', cursor: 'pointer' }} onClick={() => setConf(null)}>CANCELAR</span>
+          <div style={{ background: '#fff', borderRadius: 6, padding: 20, width: 340, color: '#111', fontFamily: FONTE }}>
+            <div style={{ fontSize: 17, fontWeight: 600, marginBottom: 6 }}>Salvar alterações?</div>
+            <div style={{ color: '#777', fontSize: 13, marginBottom: 16 }}>Há alterações não salvas nesta referência.</div>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 16, fontWeight: 700, fontSize: 13 }}>
+              <span style={{ color: '#2aa6b8', cursor: 'pointer' }} onClick={() => setConf(null)}>CANCELAR</span>
               <span style={{ color: '#e53935', cursor: 'pointer' }} onClick={() => { const a = conf; setConf(null); a(); }}>DESCARTAR</span>
-              <span style={{ color: '#1565c0', cursor: 'pointer' }} onClick={() => { const a = conf; setConf(null); salvar(); a(); }}>SALVAR</span>
+              <span style={{ color: '#2aa6b8', cursor: 'pointer' }} onClick={() => { const a = conf; setConf(null); salvar(); a(); }}>SALVAR</span>
             </div>
           </div>
         </div>
@@ -184,22 +279,26 @@ function Referencia({ e, n, onFechar, onSalvar, onNav }) {
     </div>
   );
 }
-const grupoNomes = (e, v) => v.map((x, i) => `${String.fromCharCode(65 + i)} ${x}`).join(' · ') + ' km/h';
 
-export default function EditorDividido({ st, nome, tul, coords, wps, totalM, nTrechos, grupos, editable, busy, onTap, onDesfazer, onLimpar, onNovoTrecho, onSalvarRef, onPublicar, onSimular, onPdf, onAtualizar, onLista, onVoltar }) {
+export default function EditorDividido({ st, nome, tul, coords, wps, totalM, grupos, bi, trs, manual, editable, busy, onTap, onDesfazer, onLimpar, onNovoTrecho, onSalvarRef, onExcluirRef, onSalvarTr, onLimparTr, onAddPc, onAuto, trAqui, onPublicar, onSimular, onPdf, onAtualizar, onLista, onVoltar }) {
   const [frac, setFrac] = useState(0.5);
   const [sel, setSel] = useState(-1);
+  const [atual, setAtual] = useState(-1);
+  const [focI, setFocI] = useState(-1);
   const [focn, setFocn] = useState(0);
   const [modoPc, setModoPc] = useState(false);
   const [menu, setMenu] = useState(false);
   const [dlg, setDlg] = useState(-1);
+  const [novoD, setNovoD] = useState(null);
   const [aviso, setAviso] = useState('');
+  const [eu, setEu] = useState(null);
+  const [ctr, setCtr] = useState(0);
+  const [gps, setGps] = useState(null);
   const cont = useRef(null);
   const esq = useRef(null);
   const linhas = useRef({});
   const arrasta = useRef(false);
 
-  // Tela travada: a página de trás não rola.
   useEffect(() => {
     const o = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
@@ -216,74 +315,79 @@ export default function EditorDividido({ st, nome, tul, coords, wps, totalM, nTr
   const pos = useMemo(() => lista.map((e) => (e.cont ? null : pontoEm(coords, cum, totalM, e.d))), [sig, cum, totalM]);
   const marks = useMemo(() => lista.map((e, i) => {
     if (!pos[i]) return null;
-    const cls = i === sel ? 'r' : e.t === 'L' ? 'l' : e.t === 'C' ? 'c' : e.t === 'P' ? 's' : 'k';
-    return { id: i, lat: pos[i][0], lon: pos[i][1], txt: String(i + 1), cls };
-  }).filter(Boolean), [sig, pos, sel]);
-  const foc = sel >= 0 && pos[sel] ? pos[sel] : null;
+    const cls = i === focI ? 'r' : e.t === 'L' ? 'l' : e.t === 'C' ? 'c' : e.t === 'P' ? 's' : 'k';
+    return { id: i, lat: pos[i][0], lon: pos[i][1], txt: e.t === 'P' ? 'PC' + (e.pn ?? e.n) : String(i + 1), cls };
+  }).filter(Boolean), [sig, pos, focI]);
+  const foc = focI >= 0 && pos[focI] ? pos[focI] : null;
 
-  const avisar = (m) => { setAviso(m); setTimeout(() => setAviso(''), 4500); };
-  const escolher = (i, rolar, centrar) => {
-    setSel(i);
-    if (centrar) setFocn((n) => n + 1);
-    if (rolar) {
-      const el = linhas.current[i], box = esq.current;
-      if (el && box) box.scrollTo({ top: el.offsetTop - box.clientHeight / 2 + el.clientHeight / 2, behavior: 'smooth' });
-    }
+  const avisar = (m) => { setAviso(m); setTimeout(() => setAviso(''), 5000); };
+  const rolarPara = (i) => {
+    const el = linhas.current[i], box = esq.current;
+    if (el && box) box.scrollTo({ top: el.offsetTop - box.clientHeight / 2 + el.clientHeight / 2, behavior: 'smooth' });
   };
-  useEffect(() => { if (sel >= lista.length) setSel(-1); }, [lista.length]);
+  useEffect(() => { if (sel >= lista.length) setSel(-1); if (atual >= lista.length) setAtual(-1); if (focI >= lista.length) setFocI(-1); }, [lista.length]);
 
   const mover = (ev) => {
     if (!arrasta.current || !cont.current) return;
     const r = cont.current.getBoundingClientRect();
     setFrac(Math.max(0.12, Math.min(0.88, (ev.clientX - r.left) / r.width)));
   };
+  const localizar = () => {
+    if (!navigator.geolocation) return avisar('Este navegador não tem localização.');
+    navigator.geolocation.getCurrentPosition(
+      (p) => { setEu([p.coords.latitude, p.coords.longitude]); setCtr((c) => c + 1); setGps({ acc: p.coords.accuracy, spd: p.coords.speed }); },
+      (er) => avisar('Não consegui a localização do computador (' + (er && er.message ? er.message : 'sem permissão') + ').'),
+      { enableHighAccuracy: true, timeout: 15000 },
+    );
+  };
 
   const numT = (() => { let c = 0; return lista.map((e) => (e.t === 'T' && !e.cont ? ++c : 0)); })();
-  const nTul = lista.filter((e) => e.t === 'T' && !e.cont).length;
-  const nPc = lista.filter((e) => e.t === 'P' && !e.cont && !(e.nt > 0 && e.pn == null)).length;
-  const selecionada = sel >= 0 ? lista[sel] : null;
-  const abrirRef = (i) => { const e = lista[i]; if (!e || e.cont) return avisar('Esta é a continuação do neutro: edite a linha do neutro.'); setDlg(i); };
+  const abrirRef = (i) => { const e = lista[i]; if (!e || e.cont) return avisar('Esta é a continuação do neutro: edite a linha do neutro.'); setNovoD(null); setDlg(i); };
+  const navRef = (d) => { let j = dlg + d; while (j >= 0 && j < lista.length && lista[j].cont) j += d; if (j >= 0 && j < lista.length) { setDlg(j); setSel(j); setFocI(j); setFocn((n) => n + 1); rolarPara(j); } };
+  const atualKm = atual >= 0 && lista[atual] ? (lista[atual].dz ?? lista[atual].d) / 1000 : 0;
+  const dE = dlg >= 0 ? lista[dlg] : null;
+  const kmTotal = (totalM / 1000).toFixed(3);
 
-  const navRef = (d) => { let j = dlg + d; while (j >= 0 && j < lista.length && lista[j].cont) j += d; if (j >= 0 && j < lista.length) { setDlg(j); escolher(j, true, true); } };
   const BTN = (cor, txt, on, extra) => (
-    <button onClick={on} style={{ border: 0, background: cor, fontWeight: 700, fontSize: 18, cursor: 'pointer', color: '#111', ...extra }}>{txt}</button>
+    <button onClick={on} style={{ border: 0, background: cor, fontWeight: 700, fontSize: 18, cursor: 'pointer', color: '#111', fontFamily: FONTE, ...extra }}>{txt}</button>
   );
   const item = (txt, fn) => <div style={{ padding: '10px 18px', cursor: 'pointer', whiteSpace: 'nowrap' }} onClick={() => { setMenu(false); fn(); }}>{txt}</div>;
+  const cel = (v, r) => <div style={{ textAlign: 'center', borderRight: '1px solid #666' }}><div style={{ fontSize: 26, fontWeight: 700, lineHeight: 1.1 }}>{v}</div><div style={{ fontSize: 11, color: '#ccc' }}>{r}</div></div>;
 
   return (
-    <div style={{ position: 'fixed', inset: 0, zIndex: 40, display: 'flex', flexDirection: 'column', background: '#12161b' }}>
+    <div style={{ position: 'fixed', inset: 0, zIndex: 40, display: 'flex', flexDirection: 'column', background: '#12161b', fontFamily: FONTE }}>
       <div style={{ height: 56, background: AZUL, color: '#fff', display: 'flex', alignItems: 'center', gap: 14, padding: '0 16px', flexShrink: 0 }}>
         <span style={{ fontSize: 24, cursor: 'pointer' }} title="Voltar" onClick={onVoltar}>←</span>
-        <span style={{ fontSize: 20, fontWeight: 500, flex: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{nome}</span>
+        <span style={{ fontSize: 19, fontWeight: 500, flex: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{nome}</span>
         <span style={{ fontSize: 13 }}>{aviso || busy || ''}</span>
+        <span title="Planilha na nuvem" style={{ fontSize: 18 }}>☁✓</span>
         <div style={{ position: 'relative' }}>
-          <span style={{ fontSize: 24, cursor: 'pointer', padding: '0 6px' }} onClick={() => setMenu((m) => !m)}>⋮</span>
+          <span style={{ fontSize: 24, cursor: 'pointer', padding: '0 6px' }} onClick={() => setMenu((x) => !x)}>⋮</span>
           {menu && (
-            <div style={{ position: 'absolute', right: 0, top: 36, background: '#fff', color: '#111', borderRadius: 6, boxShadow: '0 4px 16px rgba(0,0,0,.35)', zIndex: 70, fontSize: 15 }}>
+            <div style={{ position: 'absolute', right: 0, top: 36, background: '#fff', color: '#111', borderRadius: 6, boxShadow: '0 4px 16px rgba(0,0,0,.35)', zIndex: 70, fontSize: 14 }}>
               {item('Publicar prova para os celulares', onPublicar)}
               {item('Simular a prova', onSimular)}
               {item('Gerar PDF do roadbook', onPdf)}
               {item('Buscar atualização da nuvem', onAtualizar)}
-              {item('Desfazer último ponto', onDesfazer)}
+              {item('Desfazer último PC', onDesfazer)}
               {item('Limpar tudo', onLimpar)}
-              {item('Trechos e médias (lista)', onLista)}
+              {manual ? item('Voltar ao percurso automático', onAuto) : null}
+              {item('Tela antiga (lista de trechos)', onLista)}
             </div>
           )}
         </div>
       </div>
-      <div style={{ background: '#3a3a3a', color: '#fff', display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', textAlign: 'center', padding: '6px 0', flexShrink: 0 }}>
-        {[[km3(totalM), 'Km total'], [nTul, 'Tulipas'], [nPc, 'PCs'], [nTrechos, 'Trechos']].map(([v, r]) => (
-          <div key={r}><div style={{ fontSize: 24, fontWeight: 600 }}>{v}</div><div style={{ fontSize: 12, color: '#bbb' }}>{r}</div></div>
-        ))}
+      <div style={{ background: '#2b2b2b', color: '#fff', display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', padding: '4px 0', flexShrink: 0 }}>
+        {cel(atualKm.toFixed(3), 'Odômetro (GPS)')}{cel(kmTotal, 'Odôm. total')}{cel(gps && gps.spd != null ? Math.round(gps.spd * 3.6) : '-', 'Velocidade')}{cel(gps ? '±' + Math.round(gps.acc) + ' m' : '-', 'GPS')}
       </div>
       <div ref={cont} style={{ flex: 1, minHeight: 0, display: 'flex' }}>
         <div ref={esq} style={{ width: `${frac * 100}%`, overflowY: 'auto', overflowX: 'auto', position: 'relative', minWidth: 0, background: '#fff' }}>
-          {lista.length === 0 && <div style={{ color: '#a8a8a8', padding: 16, fontSize: 15 }}>Toque em PC (embaixo do mapa) e clique no mapa para marcar a largada, os PCs e a chegada. O roadbook aparece aqui.</div>}
+          {lista.length === 0 && <div style={{ color: '#666', padding: 16, fontSize: 15 }}>Toque em PC (embaixo do mapa) e clique no mapa para marcar a largada, os PCs e a chegada. O roadbook aparece aqui.</div>}
           {lista.map((e, i) => (
-            <Linha key={i} e={e} num={numT[i]} sel={i === sel} grupos={grupos} refEl={(el) => { linhas.current[i] = el; }}
-              onSel={() => escolher(i, false, true)}
-              onKm={() => { escolher(i, false, true); abrirRef(i); }}
-              onTul={() => { escolher(i, false, true); avisar('O editor de tulipa (Desenho, Tulipas e Imagens) chega no próximo passo.'); }} />
+            <Linha key={i} e={e} num={numT[i]} atual={i === atual} sel={i === sel} grupos={grupos} refEl={(el) => { linhas.current[i] = el; }}
+              onSel={() => { setAtual(i); setFocI(i); setFocn((n) => n + 1); }}
+              onKm={() => { setSel(i); setFocI(i); setFocn((n) => n + 1); abrirRef(i); }}
+              onTul={() => { setSel(i); avisar('O editor de tulipa (Desenho, Tulipas e Imagens) chega no próximo passo.'); }} />
           ))}
         </div>
         <div style={{ width: 22, background: AZUL, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 14, cursor: 'col-resize', touchAction: 'none', userSelect: 'none', flexShrink: 0, color: '#fff' }}
@@ -297,19 +401,41 @@ export default function EditorDividido({ st, nome, tul, coords, wps, totalM, nTr
         <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
           <div style={{ flex: 1, position: 'relative', minHeight: 0 }}>
             <div style={{ position: 'absolute', inset: 0 }}>
-              <MapaWeb wps={wps} coords={coords} marks={marks} sat editable={editable && modoPc} onTap={onTap} onMark={(id) => escolher(id, true, false)} foc={foc} focn={focn} height="100%" mb={0} />
+              <MapaWeb wps={wps} coords={coords} marks={marks} sat editable={editable && modoPc} onTap={onTap} onMark={(id) => { setSel(id); setFocI(id); rolarPara(id); }} foc={foc} focn={focn} me={eu} ctr={ctr} height="100%" mb={0} />
             </div>
-            {modoPc && <div style={{ position: 'absolute', left: 50, top: 10, background: '#ef5350', color: '#fff', borderRadius: 6, padding: '6px 12px', fontSize: 14, zIndex: 5 }}>Marcando PCs: clique no mapa</div>}
+            <div title="Localizar (precisa do GPS do computador)" onClick={localizar} style={{ position: 'absolute', right: 10, top: 110, width: 40, height: 40, borderRadius: 20, background: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', zIndex: 800, boxShadow: '0 1px 4px rgba(0,0,0,.4)', fontSize: 22 }}>◎</div>
+            {modoPc && <div style={{ position: 'absolute', left: 50, top: 10, background: '#ef5350', color: '#fff', borderRadius: 6, padding: '6px 12px', fontSize: 14, zIndex: 800 }}>Marcando PCs: clique no mapa</div>}
           </div>
           <div style={{ height: 56, display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', flexShrink: 0 }}>
-            {BTN('#ffee00', 'REF', () => (selecionada ? abrirRef(sel) : avisar('Clique numa linha do roadbook (ou num ponto do mapa) e toque em REF.')))}
-            {BTN('#00d56b', 'TRC', () => { if (!selecionada) return avisar('Escolha a linha onde o novo trecho começa e toque em TRC.'); const m = onNovoTrecho(selecionada.d); avisar(m || 'Trecho criado: ajuste a média em "Trechos e médias".'); })}
-            {BTN('#ef5350', 'PC', () => { if (!editable) return avisar('Percurso do levantamento: para editar pelo mapa volte ao automático (menu ⋮ > Trechos e médias).'); setModoPc((m) => !m); }, modoPc ? { outline: '4px solid #fff', outlineOffset: -4 } : null)}
+            {BTN('#ffee00', 'REF', () => { if (!totalM) return avisar('Marque o percurso primeiro (botão PC e cliques no mapa).'); setNovoD(Math.round(atualKm * 1000)); setDlg(-1); })}
+            {BTN('#00d56b', 'TRC', () => {
+              const i = atual >= 0 ? atual : sel;
+              if (i < 0 || !lista[i]) return avisar('Clique numa linha do roadbook (posição atual) e toque em TRC.');
+              const m = onNovoTrecho(lista[i].d);
+              if (m) return m === 'Cancelado.' ? null : avisar(m);
+              setSel(i); setTimeout(() => abrirRef(i), 60);
+            })}
+            {BTN('#ef5350', 'PC', () => { if (!editable) return avisar(manual ? 'Percurso congelado: no menu ⋮ use "Voltar ao percurso automático" para marcar PCs.' : 'Não dá para editar o percurso agora.'); setModoPc((x) => !x); }, modoPc ? { outline: '4px solid #fff', outlineOffset: -4 } : null)}
             {BTN('#ff6d00', 'REG', () => avisar('REG ainda não está disponível.'), { opacity: 0.45 })}
           </div>
         </div>
       </div>
-      {dlg >= 0 && lista[dlg] && <Referencia key={dlg} e={lista[dlg]} n={dlg + 1} onFechar={() => setDlg(-1)} onSalvar={onSalvarRef} onNav={navRef} />}
+      {(dlg >= 0 && dE) || novoD != null ? (
+        <Referencia key={novoD != null ? 'novo' : dlg} e={novoD != null ? { t: 'T', d: novoD, novo: true } : dE} n={dlg + 1} grupos={grupos} bi={bi} manual={manual} atualKm={atualKm}
+          tr={novoD != null ? null : (trAqui ? trAqui(dE.d) : null)}
+          onFechar={() => { setDlg(-1); setNovoD(null); }} onSalvar={onSalvarRef} onNav={navRef}
+          onNovoTrecho={onNovoTrecho} onSalvarTr={onSalvarTr} onLimparTr={onLimparTr}
+          onExcluir={() => onExcluirRef(dE)}
+          onEstouAqui={() => { setAtual(dlg); setFocI(dlg); setFocn((n) => n + 1); }}
+          onMostrar={() => { setFocI(dlg); setFocn((n) => n + 1); }}
+          onAddPc={() => {
+            const idx = lista.slice(0, dlg).filter((x) => (x.t === 'L' || x.t === 'P') && !x.cont).length;
+            const p = pos[dlg];
+            if (!p) return;
+            const r = onAddPc(p[0], p[1], idx);
+            if (r) avisar(r);
+          }} />
+      ) : null}
     </div>
   );
 }

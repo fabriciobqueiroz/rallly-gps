@@ -9,6 +9,13 @@ import { st } from './src/estilos';
 import { ouvirAuth, ouvirProva, sairConta } from './src/firebase';
 import { loadJson, saveJson } from './src/persist';
 
+// Fonte do editor de planilha (mesma família do Kraken).
+if (typeof document !== 'undefined' && !document.getElementById('fonte-montserrat')) {
+  const l = document.createElement('link');
+  l.id = 'fonte-montserrat'; l.rel = 'stylesheet';
+  l.href = 'https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap';
+  document.head.appendChild(l);
+}
 // No navegador o Alert do React Native não faz nada: troca por caixas do próprio navegador.
 Alert.alert = (titulo, msg, botoes) => {
   const texto = [titulo, msg].filter(Boolean).join('\n\n');
@@ -35,17 +42,12 @@ function AppOrg() {
   useEffect(() => {
     if (!prova.trim()) { setProvaMap(VAZIO); return undefined; }
     setProvaMap(VAZIO);
-    return ouvirProva(prova, (d) => setProvaMap({ code: String(prova).trim().toUpperCase().replace(/[^A-Z0-9]+/g, ''), wps: pair(d.wps || []), coords: pair(d.rota || []), legs: d.legs || [], kmh: d.kmh || [], tul: d.tul || [], trechos: d.trechos || [], trs: d.trs || [], categorias: d.categorias || [], lib: d.lib || {}, refs: d.refs || [], pcl: d.pcl || [], pub: d.publicadoEm || 1, lev: d.lev || null }), () => {});
+    return ouvirProva(prova, (d) => setProvaMap({ code: String(prova).trim().toUpperCase().replace(/[^A-Z0-9]+/g, ''), wps: pair(d.wps || []), coords: pair(d.rota || []), legs: d.legs || [], kmh: d.kmh || [], tul: d.tul || [], trechos: d.trechos || [], trs: d.trs || [], categorias: d.categorias || [], lib: d.lib || {}, refs: d.refs || [], pcl: d.pcl || [], pub: d.publicadoEm || 1, lev: d.lev || null, ed: d.ed || {}, ex: d.ex || [], cg: !!d.cg }), () => {});
   }, [prova]);
   const escolher = (p) => { setProva(p); saveJson('piloto', { ...loadJson('piloto', {}), prova: p }); };
   const caixa = { width: '100%', maxWidth: 1100, alignSelf: 'center' };
   if (user === undefined) return <View style={[st.root, { justifyContent: 'center' }]}><Text style={[st.sub, { textAlign: 'center' }]}>Carregando…</Text></View>;
-  if (!user) return (
-    <ScrollView style={st.root} contentContainerStyle={[st.wrap, caixa]}>
-      <Text style={st.h1}>Rally GPS · Organizador</Text>
-      <Login st={st} soOrganizador onEntrou={() => {}} />
-    </ScrollView>
-  );
+  if (!user) return <Login st={st} soOrganizador onEntrou={() => {}} />;
   return (
     <ScrollView style={st.root} contentContainerStyle={[st.wrap, caixa]} keyboardShouldPersistTaps="handled">
       <Text style={st.h1}>Rally GPS · Organizador</Text>
