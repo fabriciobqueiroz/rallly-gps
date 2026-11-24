@@ -11,7 +11,7 @@ var map=L.map('m',{zoomControl:true}).setView([-20.82,-49.38],13);
 var osm=L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'© OpenStreetMap'}).addTo(map);
 var satl=L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',{maxZoom:19,attribution:'Esri'});
 L.control.layers({'Mapa':osm,'Satélite':satl}).addTo(map);var satSet=false;
-var layer=L.layerGroup().addTo(map),me=null,editable=false,fitted=false,lastCtr=0;
+var layer=L.layerGroup().addTo(map),me=null,editable=false,fitted=false,lastCtr=0,lastFoc=0;
 function send(o){window.ReactNativeWebView.postMessage(JSON.stringify(o));}
 map.on('click',function(e){if(editable)send({t:'tap',lat:e.latlng.lat,lon:e.latlng.lng});});
 function setData(d){
@@ -21,8 +21,11 @@ function setData(d){
   if(d.sat&&!satSet){satSet=true;map.removeLayer(osm);satl.addTo(map);}
   (d.lines||[]).forEach(function(l){L.polyline([[l[0],l[1]],[l[2],l[3]]],{color:'#ff1744',weight:4,opacity:1}).addTo(layer);});
   (d.marks||[]).forEach(function(w){
-    L.marker([w.lat,w.lon],{icon:L.divIcon({className:'',html:'<div class="pin '+(w.cls||'')+'">'+w.txt+'</div>',iconSize:null})}).addTo(layer);
+    var mk=L.marker([w.lat,w.lon],{icon:L.divIcon({className:'',html:'<div class="pin '+(w.cls||'')+'">'+w.txt+'</div>',iconSize:null}),zIndexOffset:w.cls=='r'?1000:0}).addTo(layer);
+    if(w.id!=null)mk.on('click',function(){send({t:'mk',id:w.id});});
   });
+  if(d.foc){L.circleMarker(d.foc,{radius:16,color:'#ff1744',weight:3,fillOpacity:0}).addTo(layer);
+    if(d.focn&&d.focn!==lastFoc){lastFoc=d.focn;map.setView(d.foc,Math.max(map.getZoom(),17));}}
   (d.wps||[]).forEach(function(w,i){
     var last=i==d.wps.length-1&&i>0,cls=i==0?'l':(last?'c':''),txt=i==0?'Largada':(last?'Chegada':'PC'+i);
     L.marker([w[0],w[1]],{icon:L.divIcon({className:'',html:'<div class="pin '+cls+'">'+txt+'</div>',iconSize:null})}).addTo(layer);

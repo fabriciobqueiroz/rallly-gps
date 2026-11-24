@@ -4,6 +4,7 @@ import { Alert, Modal, Text, TextInput, TouchableOpacity, View } from 'react-nat
 import Svg, { Path } from 'react-native-svg';
 import { VERSAO } from './versao';
 import MapaWeb from './MapaWeb';
+import EditorDividido from './EditorDividido';
 import { calcularRota } from './osrm';
 import { salvarProva, ouvirInscritos, ouvirRanking } from './firebase';
 import { loadJson, saveJson } from './persist';
@@ -360,6 +361,8 @@ export default function Organizador({ st, prova, provaMap: pmRaw, last, onOrg, o
         )}
         {planilha.length === 0 ? (
           <Text style={st.tipTx}>Ainda sem percurso. Abra o mapa abaixo e marque a largada, os fins de trecho e a chegada.</Text>
+        ) : Platform.OS === 'web' ? (
+          <Text style={st.tipTx}>Total {total.toFixed(3).replace('.', ',')} km · {planilha.length} trecho(s). Roadbook e mapa estão no editor abaixo.</Text>
         ) : (
           <View style={{ marginTop: 6 }}>
             <View style={{ flexDirection: 'row', borderBottomWidth: 1, borderBottomColor: '#555', paddingBottom: 3 }}>
@@ -381,7 +384,7 @@ export default function Organizador({ st, prova, provaMap: pmRaw, last, onOrg, o
             <Text style={st.tipTx}>Total {total.toFixed(3).replace('.', ',')} km · {planilha.length} trecho(s). Para mudar médias e neutros, use os campos abaixo.</Text>
           </View>
         )}
-        <TouchableOpacity style={[st.btn2, { marginTop: 8 }]} onPress={() => setMapaAb(!mapaVis)}><Text style={st.btn2Tx}>{mapaVis ? 'Esconder o mapa' : 'Mostrar o mapa do percurso'}</Text></TouchableOpacity>
+        {Platform.OS !== 'web' && <TouchableOpacity style={[st.btn2, { marginTop: 8 }]} onPress={() => setMapaAb(!mapaVis)}><Text style={st.btn2Tx}>{mapaVis ? 'Esconder o mapa' : 'Mostrar o mapa do percurso'}</Text></TouchableOpacity>}
         {rota.coords.length > 1 && trechos.length > 0 && <TouchableOpacity style={[st.btn, { marginTop: 8, marginBottom: 0, backgroundColor: '#2e7d32' }]} onPress={() => setSimOpen(true)}><Text style={[st.btnTx, { color: '#fff' }]}>▶ Simular a prova</Text></TouchableOpacity>}
       </View>
       {manual && (
@@ -391,14 +394,10 @@ export default function Organizador({ st, prova, provaMap: pmRaw, last, onOrg, o
           <TouchableOpacity style={[st.btn2, { marginTop: 6 }]} onPress={() => Alert.alert('Voltar ao automático', 'As tulipas do levantamento serão substituídas pelas geradas pelo mapa. Continuar?', [{ text: 'Cancelar' }, { text: 'Voltar', onPress: () => setManual(false) }])}><Text style={st.btn2Tx}>Voltar ao automático (OSRM)</Text></TouchableOpacity>
         </View>
       )}
-      {mapaVis && <MapaWeb wps={wps} coords={rota.coords} editable={editaMapa && !manual} onTap={(la, lo) => { if (editaMapa) setWps((w) => [...w, [la, lo]]); }} me={me} height={380} />}
+      {web ? <EditorDividido st={st} tul={tulT} coords={rota.coords} wps={wps} totalM={total * 1000} grupos={grupos} editable={editaMapa && !manual} onTap={(la, lo) => { if (editaMapa && !manual) setWps((w) => [...w, [la, lo]]); }} onDesfazer={() => setWps((w) => w.slice(0, -1))} onLimpar={() => { setWps([]); setLegs([]); }} /> : mapaVis && <MapaWeb wps={wps} coords={rota.coords} editable={editaMapa && !manual} onTap={(la, lo) => { if (editaMapa) setWps((w) => [...w, [la, lo]]); }} me={me} height={380} />}
       <Simulacao st={st} visible={simOpen} onClose={() => setSimOpen(false)} coords={rota.coords} tul={tulT} trs={trsNum} trechos={trechos} inscritos={inscritos} totalM={rota.legs.reduce((a, b) => a + b, 0) * 1000} grupos={grupos} cats={cats && cats.length ? cats.map((c) => c.nome) : CATS_PADRAO.map((c) => c.nome)} />
       {busy ? <Text style={st.tipTx}>{busy}</Text> : null}
       <View style={st.card}>
-        {mapaVis && editaMapa && <View style={st.row}>
-          <TouchableOpacity style={st.btn2} onPress={() => setWps((w) => w.slice(0, -1))}><Text style={st.btn2Tx}>Desfazer ponto</Text></TouchableOpacity>
-          <TouchableOpacity style={st.btn2} onPress={() => { setWps([]); setLegs([]); }}><Text style={st.btn2Tx}>Limpar tudo</Text></TouchableOpacity>
-        </View>}
         {trs.length > 0 && trs.map((l, i) => {
           const fim = i + 1 < trs.length ? trs[i + 1].d0 : total * 1000;
           return (
