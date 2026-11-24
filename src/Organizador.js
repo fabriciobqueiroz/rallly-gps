@@ -307,8 +307,8 @@ export default function Organizador({ st, prova, provaMap: pmRaw, last, onOrg, o
     setTrs((o) => [...o, { t: 'V', bs, v: mk(bs), min: '15', d0, zr: false }].sort((a, b) => (a.d0 || 0) - (b.d0 || 0)));
     return null;
   };
-  const salvarRef = ({ key, nm, afer, nt, n }) => {
-    setEdTul((o) => ({ ...o, [key]: { nm: nm || undefined, afer: !!afer } }));
+  const salvarRef = ({ key, patch, nt, n }) => {
+    setEdTul((o) => ({ ...o, [key]: { nm: undefined, nb: undefined, ni: undefined, cu: undefined, afer: false, ...patch } }));
     if (nt != null) upd(n - 1, { nt: String(nt) });
   };
   const grupoAtual = MENU.find((g) => g.secs.some(([k]) => k === sec)) || MENU[0];
