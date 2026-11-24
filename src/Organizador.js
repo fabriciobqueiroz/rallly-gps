@@ -73,7 +73,7 @@ export const comTipos = (tul, trechos, trs) => {
     else if (e.t === 'P') { const ntv = trechos[e.n - 1]?.nt || 0; o = { ...e, nt: ntv, nx: comTrs ? null : nxOf(e.n), ...(ntv > 0 && secs.length ? { cv: nxOf(tnAt(e.d || 0) - 1) } : {}) }; }
     else if (e.t === 'C') o = { ...e, nt: trechos[e.n - 1]?.nt || 0, nx: null };
     else if (e.t === 'T' && e.ptr != null) o = { ...e, nx: nxOf(e.ptr) };
-    if (secs.length) o = { ...o, tn: tnAt(e.d || 0), tm: Array.from({ length: ng }, (_, g) => Math.round(tempo(e.d || 0, g))) };
+    if (secs.length) o = { ...o, tn: tnAt(e.d || 0), tm: Array.from({ length: ng }, (_, g) => Math.round(tempo(e.d || 0, g) * 100) / 100) };
     // Hodômetro zerado: depois do ponto que manda zerar, a distância mostrada conta desde ele (dz); no próprio ponto aparece a caixa 0.000.
     if (comTrs) {
       const zs = trs.filter((x) => x.zr && x.d0 > 0), d = e.d || 0;
@@ -266,7 +266,7 @@ export default function Organizador({ st, prova, provaMap: pmRaw, last, onOrg, o
   };
 
   const pdf = async () => {
-    try { await compartilharPdf(prova.trim().toUpperCase(), tulT, true); }
+    try { await compartilharPdf(prova.trim().toUpperCase(), tulT, true, grupos.map((g) => g.nome), null, (loadJson('lev_index', []).find((x) => x.code === prova) || {}).nome || ''); }
     catch (e) { Alert.alert('Não gerou o PDF', String(e?.message || e)); }
   };
 
@@ -433,17 +433,6 @@ export default function Organizador({ st, prova, provaMap: pmRaw, last, onOrg, o
             <TouchableOpacity style={chip(!!r.afer)} onPress={() => setRefs((o) => o.map((x, j) => (j === i ? { ...x, afer: !x.afer } : x)))}><Text style={[st.btn2Tx, r.afer && { color: '#0c1014' }]}>{r.afer ? '✓ AFER' : 'AFER'}</Text></TouchableOpacity>
           </View>
         ))}
-        {trs.length > 0 && legs.length > 1 && <Text style={[st.tip, { marginTop: 8 }]}>Neutros (parada no ponto)</Text>}
-        {trs.length > 0 && legs.slice(0, -1).map((l, i) => {
-          const pt = rota.tul.filter((e) => e.t === 'P')[i];
-          const ate = rota.legs.slice(0, i + 1).reduce((x, y) => x + y, 0);
-          return (
-            <View key={'n' + i} style={st.line}>
-              <Text style={st.k}>{pt && pt.pn ? `PC ${pt.pn}` : 'Neutro'} · km {ate.toFixed(3)} (s parado, 0 = sem)</Text>
-              <TextInput style={st.input} value={l.nt} onChangeText={(v) => upd(i, { nt: v })} keyboardType="number-pad" />
-            </View>
-          );
-        })}
         {trs.length === 0 && legs.map((l, i) => (
           <View key={i} style={{ borderTopWidth: 1, borderTopColor: '#262b32', paddingVertical: 8 }}>
             <Text style={st.v}>Trecho {i + 1} · {(rota.legs[i] ?? 0).toFixed(3)} km</Text>

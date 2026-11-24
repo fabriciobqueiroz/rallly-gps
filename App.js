@@ -13,6 +13,7 @@ import * as ScreenOrientation from 'expo-screen-orientation';
 import Organizador from './src/Organizador';
 import { enviarResultado, ouvirRanking, salvarProva, ouvirProva, ouvirInscricao, ouvirMinhaLargada, enviarDatalogger, ouvirAuth, sairConta, lerPerfil, enviarAoVivo, limparAoVivo, ehMaster, ouvirMasters } from './src/firebase';
 import UsuariosTela from './src/Usuarios';
+import NbpTela from './src/Nbp';
 import Login from './src/Login';
 import { st } from './src/estilos';
 import Fluxo, { DlTela, EventosAbertos, InfoProva } from './src/Fluxo';
@@ -540,6 +541,7 @@ export default function App() {
               ...(papel === 'organizador' ? [['Organizar prova', () => { setListaReq((n) => n + 1); setTab('organizar'); }], ['Organizar trilha', () => setTab('trilhas')]] : []),
               ['Meus eventos', () => setTab('provas')],
               ['Eventos abertos', () => setTab('abertos')],
+              ['Roadbook externo (.nbp)', () => setTab('nbp')],
               ...(ehMaster(user.email, mastersX) ? [['Usuários (master)', () => setTab('usuarios')]] : []),
               ['Ranking', () => setTab('ranking')],
               ['Perfil', () => setPerfilOpen(true)],
@@ -550,7 +552,7 @@ export default function App() {
                 <Text style={{ color: cor || '#f5f5f5', fontSize: 16, fontWeight: '700' }}>{t}</Text>
               </TouchableOpacity>
             ))}
-            <Text style={{ color: '#6b7480', fontSize: 11, textAlign: 'center', paddingBottom: 8 }}>Rally GPS · passo84</Text>
+            <Text style={{ color: '#6b7480', fontSize: 11, textAlign: 'center', paddingBottom: 8 }}>Rally GPS · passo87</Text>
           </View>
         </TouchableOpacity>
       </Modal>
@@ -576,13 +578,15 @@ export default function App() {
           )}
           {libOk && <Roadbook st={st} tul={provaMap.tul} org={souOrg} classe={piloto.classe} grupos={grupos} dist={rs || stage.idx >= 0 ? globalDist : 0} />}
           {libOk && provaMap.tul.length > 0 && (
-            <TouchableOpacity style={[st.btn2, { marginTop: 8 }]} onPress={() => compartilharPdf(piloto.prova.trim().toUpperCase(), provaMap.tul, souOrg).catch((e) => Alert.alert('Não gerou o PDF', String(e?.message || e)))}>
+            <TouchableOpacity style={[st.btn2, { marginTop: 8 }]} onPress={() => compartilharPdf(piloto.prova.trim().toUpperCase(), provaMap.tul, souOrg, grupos.map((g) => g.nome), souOrg ? null : piloto.classe, provaMap.nome || '').catch((e) => Alert.alert('Não gerou o PDF', String(e?.message || e)))}>
               <Text style={st.btn2Tx}>Gerar PDF do roadbook</Text>
             </TouchableOpacity>
           )}
         </View>
       ) : tab === 'usuarios' && ehMaster(user.email, mastersX) ? (
         <UsuariosTela st={st} email={user.email} masters={mastersX} />
+      ) : tab === 'nbp' ? (
+        <NbpTela st={st} points={points} running={running} start={start} />
       ) : tab === 'abertos' ? (
         <EventosAbertos st={st} user={user} extra={<TrilhasComp st={st} modo="abertas" gps={{ nome: piloto.nome || user.email, uid: user.uid, running, start, getPoints: () => getState().points }} />} />
       ) : tab === 'trilhas' ? (

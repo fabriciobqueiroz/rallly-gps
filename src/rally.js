@@ -293,6 +293,12 @@ export function comContinuacao(tul) {
       out.push({ ...e, t: 'T', cont: true, p: 0, nt: 0, nx: e.cv || null, tm: e.tm ? e.tm.map((x) => x + e.nt) : e.tm, afer: false, zero: false });
     }
   });
-  return out;
+  // Numeração como na planilha: cada média nova e cada neutro abre um trecho (V 6, V 7, N 9, V 10...).
+  let seq = 0;
+  return out.map((e) => {
+    const ehN = e.t === 'P' && e.nt > 0 && !e.cont;
+    if (e.nx || ehN) seq++;
+    return { ...e, tl: `${ehN ? 'N' : e.nx && e.nx.t === 'D' ? 'D' : 'V'} ${Math.max(1, seq)}` };
+  });
 }
 export const rotNeutro = (nt) => (nt < 60 ? `${Math.round(nt)}` : `${Math.floor(nt / 60)}:${String(Math.round(nt % 60)).padStart(2, '0')}`);

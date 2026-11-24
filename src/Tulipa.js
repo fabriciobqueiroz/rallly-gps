@@ -56,7 +56,7 @@ export function rotuloNx(nx, classe, grupos) {
 // O PC (cronometragem) é do organizador: o competidor só vê os pontos com neutro.
 export const tulComp = (tul) => tul.filter((e) => e.t !== 'P' || e.nt > 0);
 
-const hms = (sec) => { const t = Math.max(0, Math.round(sec)); return `${String(Math.floor(t / 3600)).padStart(2, '0')}:${String(Math.floor((t % 3600) / 60)).padStart(2, '0')}:${String(t % 60).padStart(2, '0')}`; };
+const hms = (sec) => { const x = Math.max(0, sec); const h = Math.floor(x / 3600), m = Math.floor((x % 3600) / 60), r = x - h * 3600 - m * 60; return `${h}:${String(m).padStart(2, '0')}:${r.toFixed(2).padStart(5, '0')}`; };
 
 export function Entrada({ e, st, destaque, faltam, classe, grupos, org }) {
   const neuDw = e.t === 'P' && e.nt > 0 && !!((e.dw && e.dw.length) || Array.isArray(e.b));
@@ -82,9 +82,9 @@ export function Entrada({ e, st, destaque, faltam, classe, grupos, org }) {
     </View>
   );
   const colTempo = tm != null ? (
-    <View style={{ width: 70, alignItems: 'center' }}>
+    <View style={{ width: 82, alignItems: 'center' }}>
       <Text style={{ color: '#f5f5f5', fontWeight: '800', fontSize: 13 }}>{hms(tm)}</Text>
-      <Text style={{ color: '#a8a8a8', fontSize: 11 }}>{neuDw ? 'N' : 'T' + e.tn}</Text>
+      <Text style={{ color: '#a8a8a8', fontSize: 11 }}>{e.tl || (neuDw ? 'N' : 'T' + e.tn)}</Text>
     </View>
   ) : null;
   return (

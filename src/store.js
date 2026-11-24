@@ -30,6 +30,7 @@ const toPoint = (l) => ({
   spd: l.coords.speed, // m/s, pode ser null
   hdg: l.coords.heading, // graus, pode ser null
   mocked: !!l.mocked,
+  rx: Date.now(), // quando o app recebeu o ponto (serve para estimar a diferença entre o relógio do GPS e o do celular)
 });
 
 export function addLocations(locations) {
