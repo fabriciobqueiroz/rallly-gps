@@ -1,11 +1,13 @@
 // Versão para o navegador do computador: só o modo organizador (planilha, inscrições, resultados, track log).
 import { useEffect, useRef, useState } from 'react';
-import { Alert, ScrollView, Text, TouchableOpacity, View } from 'react-native';
+import { Alert, Modal, ScrollView, Text, TouchableOpacity, View } from 'react-native';
+import { Cab } from './src/Pos';
 import Login from './src/Login';
 import Organizador from './src/Organizador';
 import OverlayRoot from './src/Overlay';
 import { TrilhasOrg } from './src/Trilhas';
-import { st } from './src/estilos';
+import { st as stDark, stClaro as st } from './src/estilos';
+import { VERSAO } from './src/versao';
 import { ouvirAuth, ouvirProva, sairConta } from './src/firebase';
 import { loadJson, saveJson } from './src/persist';
 
@@ -38,6 +40,7 @@ function AppOrg() {
   const [, setOrg] = useState(null);
   const [mod, setMod] = useState('rally');
   const [abrirReq] = useState(null);
+  const [menu, setMenu] = useState(false);
   useEffect(() => ouvirAuth((u) => setUser(u || null)), []);
   useEffect(() => {
     if (!prova.trim()) { setProvaMap(VAZIO); return undefined; }
@@ -45,21 +48,28 @@ function AppOrg() {
     return ouvirProva(prova, (d) => setProvaMap({ code: String(prova).trim().toUpperCase().replace(/[^A-Z0-9]+/g, ''), wps: pair(d.wps || []), coords: pair(d.rota || []), legs: d.legs || [], kmh: d.kmh || [], tul: d.tul || [], trechos: d.trechos || [], trs: d.trs || [], categorias: d.categorias || [], lib: d.lib || {}, refs: d.refs || [], pcl: d.pcl || [], pub: d.publicadoEm || 1, lev: d.lev || null, ed: d.ed || {}, ex: d.ex || [], cg: !!d.cg }), () => {});
   }, [prova]);
   const escolher = (p) => { setProva(p); saveJson('piloto', { ...loadJson('piloto', {}), prova: p }); };
-  const caixa = { width: '100%', maxWidth: 1100, alignSelf: 'center' };
-  if (user === undefined) return <View style={[st.root, { justifyContent: 'center' }]}><Text style={[st.sub, { textAlign: 'center' }]}>Carregando…</Text></View>;
-  if (!user) return <Login st={st} soOrganizador onEntrou={() => {}} />;
+  const caixa = { width: '100%' };
+  if (user === undefined) return <View style={[stDark.root, { justifyContent: 'center' }]}><Text style={[stDark.sub, { textAlign: 'center' }]}>Carregando…</Text></View>;
+  if (!user) return <Login st={stDark} soOrganizador onEntrou={() => {}} />;
   return (
-    <ScrollView style={st.root} contentContainerStyle={[st.wrap, caixa]} keyboardShouldPersistTaps="handled">
-      <Text style={st.h1}>Rally GPS · Organizador</Text>
-      <View style={[st.row, { alignItems: 'center' }]}>
-        <Text style={[st.sub, { flex: 1 }]}>{user.email}</Text>
-        <TouchableOpacity onPress={() => { sairConta().catch(() => {}); }}><Text style={{ color: '#ff5252', fontWeight: '800' }}>Sair</Text></TouchableOpacity>
-      </View>
-      <View style={[st.row, { marginBottom: 8 }]}>
-        <TouchableOpacity style={[st.chip, { paddingHorizontal: 16, paddingVertical: 8 }, mod === 'rally' && { backgroundColor: '#ff7a2e' }]} onPress={() => setMod('rally')}><Text style={[st.btn2Tx, mod === 'rally' && { color: '#0c1014' }]}>Rally</Text></TouchableOpacity>
-        <TouchableOpacity style={[st.chip, { paddingHorizontal: 16, paddingVertical: 8 }, mod === 'trilhas' && { backgroundColor: '#ff7a2e' }]} onPress={() => setMod('trilhas')}><Text style={[st.btn2Tx, mod === 'trilhas' && { color: '#0c1014' }]}>Trilhas</Text></TouchableOpacity>
-      </View>
-      {mod === 'trilhas' ? <TrilhasOrg st={st} /> : <Organizador st={st} onProva={escolher} prova={prova} provaMap={provaMap} last={null} onOrg={setOrg} abrirReq={abrirReq} onTab={() => {}} />}
+    <ScrollView style={[st.root, { backgroundColor: '#fafafa' }]} contentContainerStyle={[st.wrap, caixa, { padding: 0, paddingTop: 0, paddingBottom: 0 }]} keyboardShouldPersistTaps="handled">
+      {mod === 'trilhas' ? (
+        <View>
+          <Cab titulo="Trilhas" azul onVoltar={() => setMod('rally')} />
+          <View style={{ padding: 16, width: '100%', maxWidth: 900, alignSelf: 'center' }}><TrilhasOrg st={st} /></View>
+        </View>
+      ) : <Organizador st={st} onMenu={() => setMenu(true)} onProva={escolher} prova={prova} provaMap={provaMap} last={null} onOrg={setOrg} abrirReq={abrirReq} onTab={(t) => { if (t === 'trilhas') setMod('trilhas'); }} />}
+      <Modal visible={menu} transparent animationType="fade" onRequestClose={() => setMenu(false)}>
+        <TouchableOpacity activeOpacity={1} style={{ flex: 1 }} onPress={() => setMenu(false)}>
+          <View style={{ position: 'absolute', top: 44, right: 10, width: 260, backgroundColor: '#fff', paddingVertical: 6, shadowColor: '#000', shadowOpacity: 0.3, shadowRadius: 8, shadowOffset: { width: 0, height: 3 }, elevation: 10 }}>
+            <Text style={{ color: '#6b7480', fontSize: 12, paddingHorizontal: 18, paddingVertical: 8 }}>{user.email}</Text>
+            <TouchableOpacity onPress={() => { setMenu(false); setMod('rally'); }} style={{ paddingVertical: 12, paddingHorizontal: 18 }}><Text style={{ color: '#1c1c1c', fontSize: 15, fontWeight: '600' }}>Eventos</Text></TouchableOpacity>
+            <TouchableOpacity onPress={() => { setMenu(false); setMod('trilhas'); }} style={{ paddingVertical: 12, paddingHorizontal: 18 }}><Text style={{ color: '#1c1c1c', fontSize: 15, fontWeight: '600' }}>Trilhas</Text></TouchableOpacity>
+            <TouchableOpacity onPress={() => { setMenu(false); sairConta().catch(() => {}); }} style={{ paddingVertical: 12, paddingHorizontal: 18 }}><Text style={{ color: '#1c1c1c', fontSize: 15, fontWeight: '600' }}>Sair</Text></TouchableOpacity>
+            <Text style={{ color: '#9aa5ae', fontSize: 11, textAlign: 'center', paddingVertical: 4 }}>Rally GPS · {VERSAO}</Text>
+          </View>
+        </TouchableOpacity>
+      </Modal>
     </ScrollView>
   );
 }
