@@ -344,6 +344,10 @@ export default function Organizador({ st, prova, provaMap: pmRaw, last, onOrg, o
     remapPtr((p) => (p === k ? null : p > k ? p - 1 : p));
     return null;
   };
+  const salvarDw = (e, dw) => {
+    if (e.ex) setExtras((o) => o.map((x) => (x.id === e.id ? { ...x, dw } : x)));
+    else setEdTul((o) => ({ ...o, [e.ok]: { ...(o[e.ok] || {}), dw } }));
+  };
   const salvarRef = ({ e, patch, nt, shift }) => {
     const totalM2 = total * 1000;
     const nd = patch.d != null ? Math.max(1, Math.min(totalM2 - 1, patch.d)) : null;
@@ -425,7 +429,7 @@ export default function Organizador({ st, prova, provaMap: pmRaw, last, onOrg, o
           onTap={(la, lo) => { if (editaMapa && !manual) setWps((w) => [...w, [la, lo]]); }}
           onDesfazer={() => setWps((w) => w.slice(0, -1))} onLimpar={() => { setWps([]); setLegs([]); }}
           trs={trs} bi={bi} manual={manual} totalSec={null}
-          onNovoTrecho={novoTrecho} onSalvarRef={salvarRef} onExcluirRef={excluirRef} onSalvarTr={salvarTr} onLimparTr={limparTr} onAddPc={addPc} onAuto={voltarAuto} trAqui={trAqui}
+          onNovoTrecho={novoTrecho} onSalvarRef={salvarRef} onSalvarDw={salvarDw} onExcluirRef={excluirRef} onSalvarTr={salvarTr} onLimparTr={limparTr} onAddPc={addPc} onAuto={voltarAuto} trAqui={trAqui}
           onPublicar={publicar} onSimular={() => setSimOpen(true)} onPdf={pdf} onAtualizar={() => { carregado.current = 0; onProva && onProva(prova, true); }}
           onLista={() => setCheia(false)} onVoltar={() => setSec('geral')} />
       ) : (

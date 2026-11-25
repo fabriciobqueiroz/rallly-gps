@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import MapaWeb from './MapaWeb';
 import { Tulipa } from './Tulipa';
+import EditorDesenho from './EditorDesenho';
 import { comContinuacao } from './rally';
 
 const rad = (x) => (x * Math.PI) / 180;
@@ -280,9 +281,10 @@ function Referencia({ e, n, grupos, bi, manual, tr, atualKm, onFechar, onSalvar,
   );
 }
 
-export default function EditorDividido({ st, nome, tul, coords, wps, totalM, grupos, bi, trs, manual, editable, busy, onTap, onDesfazer, onLimpar, onNovoTrecho, onSalvarRef, onExcluirRef, onSalvarTr, onLimparTr, onAddPc, onAuto, trAqui, onPublicar, onSimular, onPdf, onAtualizar, onLista, onVoltar }) {
+export default function EditorDividido({ st, nome, tul, coords, wps, totalM, grupos, bi, trs, manual, editable, busy, onTap, onDesfazer, onLimpar, onNovoTrecho, onSalvarRef, onSalvarDw, onExcluirRef, onSalvarTr, onLimparTr, onAddPc, onAuto, trAqui, onPublicar, onSimular, onPdf, onAtualizar, onLista, onVoltar }) {
   const [frac, setFrac] = useState(0.5);
   const [sel, setSel] = useState(-1);
+  const [tulEd, setTulEd] = useState(null);
   const [atual, setAtual] = useState(-1);
   const [focI, setFocI] = useState(-1);
   const [focn, setFocn] = useState(0);
@@ -387,7 +389,7 @@ export default function EditorDividido({ st, nome, tul, coords, wps, totalM, gru
             <Linha key={i} e={e} num={numT[i]} atual={i === atual} sel={i === sel} grupos={grupos} refEl={(el) => { linhas.current[i] = el; }}
               onSel={() => { setAtual(i); setFocI(i); setFocn((n) => n + 1); }}
               onKm={() => { setSel(i); setFocI(i); setFocn((n) => n + 1); abrirRef(i); }}
-              onTul={() => { setSel(i); avisar('O editor de tulipa (Desenho, Tulipas e Imagens) chega no próximo passo.'); }} />
+              onTul={() => { setSel(i); setTulEd(lista[i]); }} />
           ))}
         </div>
         <div style={{ width: 22, background: AZUL, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 14, cursor: 'col-resize', touchAction: 'none', userSelect: 'none', flexShrink: 0, color: '#fff' }}
@@ -436,6 +438,7 @@ export default function EditorDividido({ st, nome, tul, coords, wps, totalM, gru
             if (r) avisar(r);
           }} />
       ) : null}
-    </div>
+      {tulEd && <EditorDesenho visible km={(tulEd.d || 0) / 1000} inicial={tulEd.dw || []} onCancel={() => setTulEd(null)} onSave={(it) => { onSalvarDw && onSalvarDw(tulEd, it); setTulEd(null); }} />}
+</div>
   );
 }

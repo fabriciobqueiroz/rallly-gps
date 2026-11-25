@@ -67,10 +67,18 @@ export function haversine(a, b) {
 const MAX_ACC = 25;
 // Carro parado: o GPS "anda" alguns metros sozinho. Se a velocidade medida (efeito Doppler) é menor que 0,8 m/s
 // (ou, sem velocidade, se o passo é menor que o erro do GPS), não conta distância e o ponto de referência fica parado.
+// Filtro do odômetro (Configurações > GPS): velocidade mínima (km/h) e distância mínima entre pontos (m).
+export const filtroGps = { vmin: 3, dmin: 0 };
+export function setFiltroGps(f) {
+  if (!f) return;
+  if (Number.isFinite(Number(f.vmin))) filtroGps.vmin = Math.max(0, Number(f.vmin));
+  if (Number.isFinite(Number(f.dmin))) filtroGps.dmin = Math.max(0, Number(f.dmin));
+}
 export function passoGps(last, p) {
   const d = haversine(last, p);
   const v = p.spd != null && p.spd >= 0 ? p.spd : null;
-  if (v != null ? v < 0.8 : d <= Math.max(3, p.acc || 0)) return { d: 0, mover: false };
+  const parado = v != null ? v < filtroGps.vmin / 3.6 : d <= Math.max(3, p.acc || 0);
+  if (parado || d < filtroGps.dmin) return { d: 0, mover: false };
   return { d: d > 1 ? d : 0, mover: true };
 }
 export function summarize(points) {

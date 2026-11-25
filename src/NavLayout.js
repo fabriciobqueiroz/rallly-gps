@@ -24,6 +24,10 @@ export const BLOCOS = {
   rb: { nome: 'Roadbook (tulipas)', w: 0.62, h: 0.7 },
   wpct: { nome: 'W% (calibração)', w: 0.25, h: 0.08 },
   afer: { nome: 'AFER (aferir)', w: 0.25, h: 0.08 },
+  odosel: { nome: 'Seleção de odômetro GPS/Box', w: 0.3, h: 0.08 },
+  odoaj: { nome: 'Indicador de ajuste do odômetro', w: 0.34, h: 0.08 },
+  aferv: { nome: 'Botão AFER visual', w: 0.25, h: 0.1 },
+  derrap: { nome: 'Detector de derrapagem (em breve)', w: 0.4, h: 0.1, breve: true },
   regtb: { nome: 'Regressivo do trecho (em breve)', w: 0.4, h: 0.08, breve: true },
 };
 

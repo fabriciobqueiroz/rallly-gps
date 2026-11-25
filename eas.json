@@ -1,0 +1,9 @@
+{
+  "cli": { "version": ">= 12.0.0" },
+  "build": {
+    "teste": {
+      "android": { "buildType": "apk" },
+      "distribution": "internal"
+    }
+  }
+}

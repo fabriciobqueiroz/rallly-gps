@@ -1,7 +1,7 @@
 // Editor do layout da tela de prova: arrastar, redimensionar, adicionar, remover e ordenar blocos.
 import { useRef, useState } from 'react';
 import { useEffect } from 'react';
-import { Alert, Modal, PanResponder, ScrollView, Text, TouchableOpacity, View } from 'react-native';
+import { Alert, Modal, PanResponder, ScrollView, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import * as ScreenOrientation from 'expo-screen-orientation';
 import { Bloco } from './Blocos';
 import Seguro from './Seguro';
@@ -70,6 +70,7 @@ export default function LayoutEditor({ layout, cfg, piloto, onSalvar, onClose })
   const [menu, setMenu] = useState(false);
   const [add, setAdd] = useState(false);
   const [dirty, setDirty] = useState(false);
+  const [aj, setAj] = useState(false);
   const [cv, setCv] = useState({ w: 360, h: 600 });
   const set = (id, patch) => { setDirty(true); setItems((l) => l.map((x) => (x.id === id ? { ...x, ...patch } : x))); };
   const d = { ...EXEMPLO, cfg };
@@ -92,6 +93,12 @@ export default function LayoutEditor({ layout, cfg, piloto, onSalvar, onClose })
     setItems((l) => [...l, { id, tipo, x: 0.1, y: 0.1, w: Math.min(b.w, 0.8), h: Math.min(b.h, 0.8) }]);
     setSel(id); setAdd(false);
   };
+  const duplicar = () => {
+    if (!selIt) return;
+    const id = novoId(); setDirty(true);
+    setItems((l) => [...l, { ...selIt, id, x: Math.min(selIt.x + 0.04, 1 - selIt.w), y: Math.min(selIt.y + 0.04, 1 - selIt.h) }]);
+    setSel(id);
+  };
   const salvar = () => { onSalvar({ ...layout, orient, items }); setDirty(false); setMenu(false); onClose(); };
   const fechar = () => {
     setMenu(false);
@@ -110,6 +117,17 @@ export default function LayoutEditor({ layout, cfg, piloto, onSalvar, onClose })
         <View style={{ flex: 1 }} onLayout={(e) => setCv({ w: e.nativeEvent.layout.width, h: e.nativeEvent.layout.height })}>
           <View style={{ position: 'absolute', left: 0, top: 0, right: 0, bottom: 0 }} onStartShouldSetResponder={() => { setSel(null); return false; }} />
           {items.map((it) => <Item key={it.id} it={it} sel={it.id === sel} cv={cv} d={d} onSel={() => { setSel(it.id); setMenu(false); }} onSet={(p) => set(it.id, p)} />)}
+          {selIt && (() => {
+            const L = 4 * 44 + 16, top = selIt.y * cv.h - 50 >= 2 ? selIt.y * cv.h - 50 : Math.min(cv.h - 48, (selIt.y + selIt.h) * cv.h + 8);
+            const left = Math.max(4, Math.min(cv.w - L - 4, (selIt.x + selIt.w / 2) * cv.w - L / 2));
+            return (
+              <View style={{ position: 'absolute', left, top, flexDirection: 'row', backgroundColor: '#fff', borderRadius: 22, paddingHorizontal: 8, elevation: 12, zIndex: 20 }}>
+                {[['⧉', duplicar, '#37474f'], ['⇧', () => ordem(true), '#37474f'], ['⚙', () => setAj(true), '#37474f'], ['🗑', remover, '#d32f2f']].map(([ic, fn, cor]) => (
+                  <TouchableOpacity key={ic} onPress={fn} style={{ width: 44, height: 40, alignItems: 'center', justifyContent: 'center' }}><Text style={{ fontSize: 20, color: cor }}>{ic}</Text></TouchableOpacity>
+                ))}
+              </View>
+            );
+          })()}
         </View>
         {menu && (
           <View style={{ position: 'absolute', top: 26 + TOPO, right: 8, zIndex: 9, backgroundColor: '#fff', borderRadius: 10, padding: 4, elevation: 10, minWidth: 210 }}>
@@ -118,6 +136,22 @@ export default function LayoutEditor({ layout, cfg, piloto, onSalvar, onClose })
             ))}
           </View>
         )}
+        <Modal visible={aj && !!selIt} animationType="fade" transparent onRequestClose={() => setAj(false)}>
+          <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', padding: 24 }}>
+            <View style={{ backgroundColor: '#fff', borderRadius: 6, padding: 20 }}>
+              <Text style={{ fontSize: 18, fontWeight: '500', color: '#263238', marginBottom: 4 }}>{selIt ? ((BLOCOS[selIt.tipo] || {}).nome || selIt.tipo) : ''}</Text>
+              <Text style={{ fontSize: 12, color: '#546e7a', marginBottom: 10 }}>Posição e tamanho, em % da tela.</Text>
+              {selIt && [['x', 'Esquerda'], ['y', 'Topo'], ['w', 'Largura'], ['h', 'Altura']].map(([k, nm]) => (
+                <View key={k} style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                  <Text style={{ color: '#263238', fontSize: 15 }}>{nm}</Text>
+                  <TextInput key={selIt.id + k + selIt[k]} defaultValue={String(Math.round(selIt[k] * 100))} keyboardType="number-pad" style={{ width: 80, borderWidth: 1, borderColor: '#cfd8dc', borderRadius: 4, padding: 6, textAlign: 'right', color: '#263238' }}
+                    onEndEditing={(e) => { const v = parseFloat(String(e.nativeEvent.text).replace(',', '.')); if (isNaN(v)) return; const f = v / 100; const p = {}; if (k === 'x') p.x = clamp(f, 0, 1 - selIt.w); if (k === 'y') p.y = clamp(f, 0, 1 - selIt.h); if (k === 'w') p.w = clamp(f, 0.06, 1 - selIt.x); if (k === 'h') p.h = clamp(f, 0.04, 1 - selIt.y); set(selIt.id, p); }} />
+                </View>
+              ))}
+              <TouchableOpacity onPress={() => setAj(false)} style={{ alignSelf: 'flex-end', padding: 10 }}><Text style={{ color: '#00a3c4', fontWeight: '700' }}>OK</Text></TouchableOpacity>
+            </View>
+          </View>
+        </Modal>
         <Modal visible={add} animationType="slide" transparent onRequestClose={() => setAdd(false)}>
           <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' }}>
             <View style={{ backgroundColor: '#fff', borderTopLeftRadius: 16, borderTopRightRadius: 16, maxHeight: '80%', paddingTop: 12 }}>

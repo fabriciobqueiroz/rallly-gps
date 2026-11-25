@@ -1,6 +1,7 @@
 // Fluxo do competidor: eventos → evento → modo de uso → largada → configurações → equipamento → prova.
 import { useEffect, useState } from 'react';
-import { Alert, AppState, Linking, Modal, ScrollView, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { Alert, AppState, Linking, Modal, ScrollView, Text, TextInput, TouchableOpacity, View, useWindowDimensions } from 'react-native';
+import { COR, Cab, OpcaoClara, Passo, Performance, ResultadosEvento } from './Pos';
 import { MeuTrackLog } from './TrackLog';
 import * as Location from 'expo-location';
 import * as Battery from 'expo-battery';
@@ -147,84 +148,103 @@ function Eventos({ st, user, onEvento, onAdmin }) {
     } },
   ]);
   const Cartao = ({ x, tag, hero }) => (
-    <TouchableOpacity style={[st.card, { marginBottom: 8, borderLeftWidth: 5, borderLeftColor: x.kind === 'adm' ? '#4fc3f7' : '#ff7a2e' }, hero && { backgroundColor: '#ff7a2e', borderLeftColor: '#ffb27a' }]} onPress={() => (x.kind === 'adm' ? onAdmin(x) : onEvento(x))}>
-      <Text style={{ color: hero ? '#0c1014' : '#fff', fontSize: hero ? 22 : 18, fontWeight: '800' }}>{x.nome}</Text>
-      <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 4 }}>
-        <Text style={[st.tipTx, hero && { color: '#0c1014' }]}>{x.cidade || '—'}</Text><Text style={[st.tipTx, hero && { color: '#0c1014' }]}>{x.data || ''}</Text>
+    <TouchableOpacity activeOpacity={0.8} style={{ backgroundColor: '#fff', borderRadius: 8, padding: 14, marginBottom: 12, shadowColor: '#000', shadowOpacity: 0.18, shadowRadius: 5, shadowOffset: { width: 0, height: 2 }, elevation: 3, borderLeftWidth: hero ? 5 : 0, borderLeftColor: COR.azul }} onPress={() => (x.kind === 'adm' ? onAdmin(x) : onEvento(x))}>
+      <Text style={{ color: COR.tx, fontSize: 19, fontWeight: '500' }}>{x.nome}</Text>
+      <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 8 }}>
+        <Text style={{ color: COR.tx, fontSize: 15 }}>{x.cidade || '—'}</Text><Text style={{ color: COR.tx, fontSize: 15 }}>{x.data || ''}</Text>
       </View>
-      {tag ? <Text style={[st.tipTx, { color: hero ? '#0c1014' : '#4fc3f7', fontWeight: '700' }]}>{x.kind === 'adm' ? 'Organizador' : 'Competidor'}{hero ? ' · toque para abrir' : ''}</Text> : null}
-      {x.kind === 'comp' && temCache(x.code) ? <Text style={[st.tipTx, { color: hero ? '#0c1014' : '#4caf50' }]}>Disponível offline ✓</Text> : null}
-      {x.kind === 'comp' ? <TouchableOpacity onPress={() => remover(x)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}><Text style={{ color: '#ff5252', fontWeight: '700', marginTop: 6 }}>Remover da lista</Text></TouchableOpacity> : null}
+      {tag ? <Text style={{ color: COR.azulTx, fontSize: 14, marginTop: 4 }}>{x.kind === 'adm' ? 'Organizador' : 'Competidor'}{hero ? ' · toque para abrir' : ''}</Text> : null}
+      {x.kind === 'comp' && temCache(x.code) ? <Text style={{ color: COR.verde, fontSize: 14, marginTop: 4 }}>Disponível offline ✓</Text> : null}
+      {x.kind === 'comp' ? <TouchableOpacity onPress={() => remover(x)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}><Text style={{ color: COR.verm, fontSize: 13, marginTop: 8 }}>Remover da lista</Text></TouchableOpacity> : null}
     </TouchableOpacity>
   );
-  const Sec = ({ t, a, tag, hero }) => (a.length ? <View style={{ marginTop: 6 }}><Text style={[st.tip, { marginBottom: 6 }]}>{t}</Text>{a.map((x, i) => <Cartao key={x.kind + x.code + (x.insc?.numero || '')} x={x} tag={tag} hero={hero && i === 0} />)}</View> : null);
+  const Sec = ({ t, a, tag, hero }) => (a.length ? <View style={{ marginTop: 6 }}><Text style={{ color: COR.tx, fontSize: 17, fontWeight: '500', marginBottom: 8, marginTop: 6 }}>{t}</Text>{a.map((x, i) => <Cartao key={x.kind + x.code + (x.insc?.numero || '')} x={x} tag={tag} hero={hero && i === 0} />)}</View> : null);
   return (
-    <View>
-      <Topo st={st} titulo="Escolha o evento" />
-      {erro ? <Text style={[st.tipTx, { color: '#ffb300' }]}>{erro}</Text> : null}
-      <Sec t="Hoje" a={sHoje} tag hero /><Sec t="Amanhã" a={sAman} tag />
-      <Sec t="Admin" a={resto(adm)} /><Sec t="Eventos inscritos" a={resto(comp)} />
-      {todos.length === 0 && <View style={st.card}><Text style={st.tipTx}>Nenhum evento inscrito ainda. Veja o menu "Eventos abertos" e peça inscrição, ou peça ao organizador para inscrever o e-mail {user.email}. Se é organizador, crie a prova na aba Organizar.</Text></View>}
+    <View style={{ marginHorizontal: -16, marginTop: -56, minHeight: 700, backgroundColor: '#d3eef5' }}>
+      <Cab titulo="Escolha o evento" azul />
+      <View style={{ padding: 16, paddingBottom: 30 }}>
+        {erro ? <Text style={{ color: '#b26a00', marginBottom: 8 }}>{erro}</Text> : null}
+        <Sec t="Hoje" a={sHoje} tag hero /><Sec t="Amanhã" a={sAman} tag />
+        <Sec t="Admin" a={resto(adm)} /><Sec t="Eventos inscritos" a={resto(comp)} />
+        {todos.length === 0 && <View style={{ backgroundColor: '#fff', borderRadius: 8, padding: 14 }}><Text style={{ color: COR.tx }}>Nenhum evento inscrito ainda. Veja o menu "Eventos abertos" e peça inscrição, ou peça ao organizador para inscrever o e-mail {user.email}. Se é organizador, crie a prova na aba Organizar.</Text></View>}
+      </View>
     </View>
   );
 }
 
 // ---------- 2. Evento ----------
-function Evento({ st, user, x, provaMap, lib, dlStat, pointsN, onDl, enviandoDl, onIniciar, onPersonalizar, onVoltar, onZerarDl }) {
+function Evento({ st, user, x, provaMap, lib, dlStat, pointsN, onDl, enviandoDl, onIniciar, onPersonalizar, onVoltar, onZerarDl, onExportar, gpsCfg, setGpsCfg }) {
   const [aba, setAba] = useState('info');
+  const [sub, setSub] = useState(null);
   const [aberto, setAberto] = useState(false);
-  const [rows, setRows] = useState([]);
+  const [ocupado, setOcupado] = useState(false);
+  const { height } = useWindowDimensions();
   const key = slug(x.code) + '_' + x.insc.numero;
   const s = dlStat[key];
   const pend = !s && pointsN >= 10;
-  useEffect(() => { if (aba !== 'res') return; return ouvirRanking(x.code, (r) => setRows(rank(r)), () => {}); }, [aba, x.code]);
   const atualizar = () => lerProva(x.code).then((d) => { if (d) saveJson('prova_' + slug(x.code), d); Alert.alert('Atualizado', 'Planilha e informações salvas no celular.'); }).catch(() => Alert.alert('Sem conexão', 'Não deu para atualizar agora.'));
   const off = temCache(x.code);
-  const corDl = s ? '#4caf50' : pend ? '#ff5252' : '#888';
+  const corDl = s ? COR.verde : pend ? '#c62828' : '#78909c';
+  const fim = parseDataBR(x.data);
+  const finalizado = fim != null && fim + 86400000 <= Date.now();
+  const raiz = { marginHorizontal: -16, marginTop: -56, marginBottom: -40, minHeight: height, backgroundColor: COR.fundo };
+  const Chip = ({ ativo, t, onPress }) => <TouchableOpacity onPress={onPress} style={{ backgroundColor: ativo ? COR.azul : '#cfd8dc', borderRadius: 14, paddingHorizontal: 10, paddingVertical: 6, marginRight: 6, marginBottom: 6 }}><Text style={{ color: ativo ? '#fff' : COR.tx, fontSize: 13 }}>{t}</Text></TouchableOpacity>;
+  if (sub === 'perf') return <View style={[raiz, { height }]}><Performance user={user} x={x} provaMap={provaMap} onVoltar={() => setSub(null)} /></View>;
+  if (sub === 'res') return <View style={[raiz, { height }]}><ResultadosEvento x={x} provaMap={provaMap} onVoltar={() => setSub(null)} /></View>;
   return (
-    <View>
-      <Topo st={st} titulo="Evento" onVoltar={onVoltar} />
-      <View style={[st.row, { marginBottom: 6 }]}>
+    <View style={raiz}>
+      <Cab titulo="Evento" onVoltar={onVoltar} azul />
+      <View style={{ flexDirection: 'row', borderBottomWidth: 1, borderBottomColor: COR.linha }}>
         {[['info', 'Informações'], ['res', 'Resultados']].map(([k, t]) => (
-          <TouchableOpacity key={k} style={[st.btn2, aba === k && { backgroundColor: '#ff7a2e' }]} onPress={() => setAba(k)}><Text style={[st.btn2Tx, aba === k && { color: '#0c1014' }]}>{t}</Text></TouchableOpacity>
+          <TouchableOpacity key={k} style={{ flex: 1, alignItems: 'center', paddingVertical: 12, borderBottomWidth: 2, borderBottomColor: aba === k ? COR.azulTx : 'transparent' }} onPress={() => setAba(k)}><Text style={{ color: aba === k ? COR.azulTx : COR.tx, fontSize: 15, fontWeight: '500' }}>{t}</Text></TouchableOpacity>
         ))}
       </View>
       {aba === 'info' ? (
-        <View>
-          <Text style={{ color: '#fff', fontSize: 24, fontWeight: '800', marginTop: 6 }}>{x.nome}</Text>
-          {provaMap && provaMap.pub > 1 ? <Text style={{ color: '#9aa3ad', marginTop: 2 }}>Planilha do organizador: versão de {new Date(provaMap.pub).toLocaleString('pt-BR')}</Text> : null}
-          <View style={[st.line, { marginTop: 8 }]}>
-            <Text style={st.v}>{x.data || 'data a definir'}{x.cidade ? ` · ${x.cidade}` : ''}</Text>
-            <TouchableOpacity onPress={atualizar}><Text style={{ color: '#4fc3f7', fontSize: 24 }}>↻</Text></TouchableOpacity>
+        <View style={{ padding: 16 }}>
+          <Text style={{ color: COR.tx, fontSize: 26, fontWeight: '500', marginTop: 4 }}>{x.nome}</Text>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 14 }}>
+            <Text style={{ color: COR.tx, fontSize: 16 }}>📅  {x.data || 'data a definir'}{x.cidade ? ` · ${x.cidade}` : ''}</Text>
+            <TouchableOpacity onPress={atualizar}><Text style={{ color: COR.azulTx, fontSize: 24 }}>↻</Text></TouchableOpacity>
           </View>
-          <Text style={[st.tipTx, { color: off ? '#4caf50' : '#ffb300' }]}>{off ? 'Disponível offline ✓' : 'Planilha ainda não publicada'}</Text>
-          {off && !lib ? <Text style={[st.tipTx, { color: '#ffb300' }]}>Planilha ainda não liberada pelo organizador{provaMap.lib?.ini ? ` (libera em ${provaMap.lib.ini})` : ''}.</Text> : null}
-          <Text style={st.tipTx}>#{x.insc.numero} · {x.insc.classe} · {x.insc.piloto}{x.insc.navegador ? ` / ${x.insc.navegador}` : ''}{x.insc.largada ? ` · largada ${x.insc.largada}` : ''}</Text>
-          <TouchableOpacity style={[st.card, { borderColor: corDl, borderWidth: 1, marginTop: 12 }]} onPress={() => setAberto(!aberto)}>
-            <View style={st.line}>
-              <View><Text style={{ color: '#fff', fontSize: 17, fontWeight: '700' }}>Datalogger</Text>
-                <Text style={{ color: corDl }}>{s ? `Enviado ✓ (${s.n} pontos)` : pend ? `1 não sincronizado (${pointsN} pontos)` : 'nenhum gravado'}</Text></View>
-              <Text style={{ color: '#fff', fontSize: 18 }}>{aberto ? '⌃' : '⌄'}</Text>
-            </View>
+          <Text style={{ color: off ? COR.verde : '#b26a00', fontSize: 14, marginTop: 8 }}>{off ? 'Disponível offline ✓' : 'Planilha ainda não publicada'}</Text>
+          {off && !lib ? <Text style={{ color: '#b26a00', marginTop: 4 }}>Planilha ainda não liberada pelo organizador{provaMap.lib?.ini ? ` (libera em ${provaMap.lib.ini})` : ''}.</Text> : null}
+          {provaMap && provaMap.pub > 1 ? <Text style={{ color: COR.tx2, fontSize: 12, marginTop: 2 }}>Planilha do organizador: versão de {new Date(provaMap.pub).toLocaleString('pt-BR')}</Text> : null}
+          <Text style={{ color: COR.tx, fontSize: 19, fontWeight: '500', textAlign: 'center', marginTop: 22 }}>Inscrição confirmada!</Text>
+          <View style={{ marginTop: 10 }}>
+            {[['Piloto(a)', x.insc.piloto], ['Navegador(a)', x.insc.navegador], ['Categoria', x.insc.classe], ['Largada', x.insc.largada], ['N°', x.insc.numero]].filter(([, v]) => v).map(([k, v]) => (
+              <Text key={k} style={{ color: COR.tx, fontSize: 16, lineHeight: 26 }}>{k}: {v}</Text>
+            ))}
+          </View>
+          <View style={{ backgroundColor: '#fff', borderRadius: 12, padding: 12, marginTop: 14, borderWidth: 1, borderColor: COR.linha }}>
+            <TouchableOpacity onPress={() => setAberto(!aberto)} style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+              <View><Text style={{ color: COR.tx, fontSize: 17, fontWeight: '500' }}>Datalogger</Text>
+                <Text style={{ color: corDl, fontSize: 15 }}>{s ? `Enviado ✓ (${s.n} pontos)` : pend ? `1 não sincronizado (${pointsN} pontos)` : 'nenhum gravado'}</Text></View>
+              <Text style={{ color: COR.tx, fontSize: 18 }}>{aberto ? '⌃' : '⌄'}</Text>
+            </TouchableOpacity>
             {aberto && (
-              <View style={{ marginTop: 8 }}>
-                {s ? <Text style={st.tipTx}>Enviado em {new Date(s.em).toLocaleString('pt-BR')}.</Text> : <Text style={st.tipTx}>Ainda não enviado para a apuração.</Text>}
-                {pointsN >= 10 && <TouchableOpacity style={[st.btn2, { marginTop: 6 }]} onPress={onDl} disabled={enviandoDl}><Text style={st.btn2Tx}>{enviandoDl ? 'Enviando…' : s ? 'Enviar de novo' : 'Sincronizar agora'}</Text></TouchableOpacity>}
-                {onZerarDl && <TouchableOpacity style={[st.btn2, { marginTop: 6 }]} onPress={onZerarDl}><Text style={[st.btn2Tx, { color: '#ff5252' }]}>Zerar datalogger</Text></TouchableOpacity>}
+              <View style={{ marginTop: 10 }}>
+                <Text style={{ color: COR.tx2, fontSize: 13 }}>{s ? `Enviado em ${new Date(s.em).toLocaleString('pt-BR')}.` : 'Ainda não enviado para a apuração.'}</Text>
+                {pointsN >= 10 && <TouchableOpacity style={{ borderWidth: 1, borderColor: COR.azulTx, borderRadius: 10, padding: 10, alignItems: 'center', marginTop: 8 }} onPress={onDl} disabled={enviandoDl}><Text style={{ color: COR.azulTx }}>{enviandoDl ? 'Enviando…' : s ? 'Enviar de novo' : 'Sincronizar agora'}</Text></TouchableOpacity>}
+                {onExportar && pointsN > 0 && <TouchableOpacity style={{ borderWidth: 1, borderColor: COR.azulTx, borderRadius: 10, padding: 10, alignItems: 'center', marginTop: 8 }} onPress={onExportar}><Text style={{ color: COR.azulTx }}>Exportar pontos do GPS (CSV)</Text></TouchableOpacity>}
+                {onZerarDl && <TouchableOpacity style={{ borderWidth: 1, borderColor: '#c62828', borderRadius: 10, padding: 10, alignItems: 'center', marginTop: 8 }} onPress={onZerarDl}><Text style={{ color: '#c62828' }}>Zerar datalogger</Text></TouchableOpacity>}
               </View>
             )}
+          </View>
+          {provaMap.lib?.track === true && <View style={{ marginTop: 12 }}><MeuTrackLog st={st} prova={x.insc.prova} uid={user?.uid} provaMap={provaMap} grupos={gruposDe(provaMap.categorias)} /></View>}
+          <Text style={{ color: COR.tx, fontSize: 16, textAlign: 'center', marginTop: 22 }}>{finalizado ? 'Evento finalizado' : ''}</Text>
+          <TouchableOpacity style={{ backgroundColor: finalizado ? '#9e9e9e' : COR.azul, borderRadius: 28, paddingVertical: 14, alignItems: 'center', marginTop: 10, marginHorizontal: 40 }} onPress={onIniciar}>
+            <Text style={{ color: '#fff', fontSize: 17, fontWeight: '500' }}>⏲  Iniciar Rally</Text>
           </TouchableOpacity>
-          {provaMap.lib?.track === true && <MeuTrackLog st={st} prova={x.insc.prova} uid={user?.uid} provaMap={provaMap} grupos={gruposDe(provaMap.categorias)} />}
-          <TouchableOpacity style={[st.btn, { backgroundColor: '#1aa6c9', marginTop: 24 }]} onPress={onIniciar}><Text style={[st.btnTx, { color: '#fff' }]}>INICIAR RALLY</Text></TouchableOpacity>
-          <TouchableOpacity style={st.btn2} onPress={onPersonalizar}><Text style={st.btn2Tx}>Personalizar tela</Text></TouchableOpacity>
+          <TouchableOpacity style={{ alignItems: 'center', padding: 12 }} onPress={onPersonalizar}><Text style={{ color: COR.azulTx }}>Personalizar tela</Text></TouchableOpacity>
         </View>
       ) : (
-        <View style={st.card}>
-          {provaMap.lib?.resultado === false ? <Text style={[st.tipTx, { color: '#ffb300' }]}>Resultado ainda não liberado pelo organizador.</Text> : rows.length === 0 ? <Text style={st.tipTx}>Nenhum resultado ainda.</Text> : rows.map((r, i) => (
-            <View key={r.numero} style={st.line}>
-              <Text style={st.k}>{i + 1}º  #{r.numero} {r.nome} · {r.classe ? r.classe.slice(0, 3) : ''}{r.oficial ? ' ✔' : ''}</Text>
-              {provaMap.lib?.soma !== false && <Text style={st.v}>{Number(r.pontos).toFixed(1)} pts</Text>}
-            </View>
+        <View style={{ padding: 16 }}>
+          <Text style={{ color: COR.tx, fontSize: 26, fontWeight: '500', marginTop: 4 }}>{x.nome}</Text>
+          {[['Performance', 'Consulte sua ficha de passagem e veja como foi a sua prova', 'perf'], ['Resultados', 'Fique por dentro dos resultados do evento', 'res']].map(([t, d, k]) => (
+            <TouchableOpacity key={k} onPress={() => setSub(k)} style={{ flexDirection: 'row', alignItems: 'center', marginTop: 34 }}>
+              <View style={{ flex: 1 }}><Text style={{ color: COR.tx, fontSize: 20, fontWeight: '500' }}>{t}</Text><Text style={{ color: COR.tx, fontSize: 15, marginTop: 6 }}>{d}</Text></View>
+              <Text style={{ color: COR.azulTx, fontSize: 28 }}>›</Text>
+            </TouchableOpacity>
           ))}
         </View>
       )}
@@ -233,41 +253,42 @@ function Evento({ st, user, x, provaMap, lib, dlStat, pointsN, onDl, enviandoDl,
 }
 
 // ---------- 3. Modo de uso ----------
-function Opcao({ st, t, d, onPress }) {
-  return (
-    <TouchableOpacity style={[st.card, { paddingVertical: 36, flexDirection: 'row', alignItems: 'center' }]} onPress={onPress}>
-      <View style={{ flex: 1 }}><Text style={{ color: '#fff', fontSize: 22, fontWeight: '800' }}>{t}</Text><Text style={[st.tipTx, { marginTop: 6, fontSize: 14 }]}>{d}</Text></View>
-      <Text style={{ color: '#fff', fontSize: 28 }}>›</Text>
-    </TouchableOpacity>
-  );
-}
 function Modo({ st, onEscolhe, onVoltar }) {
   return (
-    <View>
-      <Topo st={st} titulo="Como deseja utilizar o aplicativo?" onVoltar={onVoltar} />
-      <Opcao st={st} t="Apenas datalogger" d="Registro de dados GPS para a apuração em segundo plano." onPress={() => onEscolhe('dl')} />
-      <Opcao st={st} t="Planilha digital" d="Sistema de navegação em tempo real, com geração de datalogger GPS para a apuração." onPress={() => onEscolhe('planilha')} />
-    </View>
+    <Passo onVoltar={onVoltar}>
+      <Text style={{ color: COR.tx, fontSize: 24, fontWeight: '500', textAlign: 'center', marginTop: 10, marginBottom: 20 }}>Como deseja utilizar o aplicativo?</Text>
+      <OpcaoClara icone="↗" t="Apenas datalogger" d="Registro de dados GPS para a apuração em segundo plano." onPress={() => onEscolhe('dl')} />
+      <OpcaoClara icone="▤" t="Planilha digital" d="Sistema de navegação em tempo real, com geração de datalogger GPS para a apuração." onPress={() => onEscolhe('planilha')} linha />
+    </Passo>
   );
 }
 
 // ---------- 4. Largada ----------
-function Largada({ st, minhaLarg, onContinua, onVoltar }) {
+function Largada({ st, minhaLarg, largManual, setLargManual, onContinua, onVoltar }) {
+  // Com largada do organizador: só leitura. Sem ela: o competidor digita (teste de percurso aberto para ele).
+  const fmt = (txt) => { const d = String(txt).replace(/\D/g, '').slice(0, 6); return d.length <= 2 ? d : d.length <= 4 ? d.slice(0, 2) + ':' + d.slice(2) : d.slice(0, 2) + ':' + d.slice(2, 4) + ':' + d.slice(4); };
+  const val = largManual || '';
+  const okH = parseHMS(val) != null && parseHMS(val) < 86400 && /^\d{2}:\d{2}(:\d{2})?$/.test(val);
+  const ir = () => {
+    if (minhaLarg || okH) return onContinua();
+    Alert.alert('Hora inválida', 'Digite a hora de largada, por exemplo 13:00.');
+  };
   return (
-    <View>
-      <Topo st={st} titulo="Sua hora de largada" onVoltar={onVoltar} />
-      <View style={st.card}>
-        {minhaLarg ? (
-          <>
-            <Text style={{ color: '#fff', fontSize: 44, fontWeight: '800', textAlign: 'center' }}>{minhaLarg}</Text>
-            <Text style={[st.tipTx, { textAlign: 'center' }]}>Definida pelo organizador. Só ele pode alterar.</Text>
-          </>
-        ) : (
-          <Text style={[st.tipTx, { textAlign: 'center', fontSize: 15 }]}>O organizador ainda não definiu a sua largada. Quando ele definir, o horário aparece aqui sozinho.</Text>
-        )}
-      </View>
-      <TouchableOpacity style={[st.btn, { marginTop: 16 }]} onPress={onContinua}><Text style={st.btnTx}>CONTINUAR</Text></TouchableOpacity>
-    </View>
+    <Passo onVoltar={onVoltar} rodape="CONTINUAR" onRodape={ir}>
+      <Text style={{ color: COR.tx, fontSize: 24, marginTop: 16 }}>Qual sua <Text style={{ fontWeight: '700' }}>hora de largada</Text>?</Text>
+      {minhaLarg ? (
+        <>
+          <Text style={{ color: COR.tx, fontSize: 52, fontWeight: '700', textAlign: 'center', marginTop: 50 }}>{minhaLarg}</Text>
+          <Text style={{ color: COR.tx2, textAlign: 'center', marginTop: 12 }}>Definida pelo organizador. Só ele pode alterar.</Text>
+        </>
+      ) : (
+        <>
+          <TextInput value={val} onChangeText={(t) => setLargManual(fmt(t))} placeholder="13:00" placeholderTextColor="#b0bec5" keyboardType="number-pad" maxLength={8} autoFocus
+            style={{ color: COR.tx, fontSize: 52, fontWeight: '700', textAlign: 'center', marginTop: 50, paddingVertical: 4 }} />
+          <Text style={{ color: COR.tx2, textAlign: 'center', marginTop: 12 }}>O organizador ainda não definiu a sua largada. Esta hora vale só para os seus testes de percurso. Quando ele definir, a dele passa a valer.</Text>
+        </>
+      )}
+    </Passo>
   );
 }
 
@@ -304,35 +325,34 @@ function Config({ st, onContinua, onVoltar }) {
     Alert.alert('Faltam configurações', 'Sem elas o app pode parar de gravar durante a prova. Corrija os itens com ✗.', [{ text: 'Corrigir', style: 'cancel' }, { text: 'Continuar mesmo assim', style: 'destructive', onPress: onContinua }]);
   };
   return (
-    <View>
-      <Topo st={st} titulo="Configurações necessárias" onVoltar={onVoltar} />
-      <Text style={st.tipTx}>Para que o app não seja interrompido e registre o datalogger corretamente, é necessário realizar estas configurações:</Text>
-      <View style={[st.card, { marginTop: 8 }]}>
-        {itens.map(([k, t]) => (
-          <View key={k} style={[st.line, { alignItems: 'center', paddingVertical: 10 }]}>
-            <Text style={{ color: r == null ? '#888' : r[k] ? '#4caf50' : '#ff5252', fontSize: 22, width: 30 }}>{r == null ? '…' : r[k] ? '✓' : '✗'}</Text>
-            <Text style={[st.v, { flex: 1 }]}>{t}</Text>
-            {r && !r[k] ? <TouchableOpacity onPress={corrige[k]}><Text style={{ color: '#4fc3f7', fontWeight: '800' }}>corrigir</Text></TouchableOpacity> : null}
+    <Passo onVoltar={onVoltar} rodape="CONTINUAR" onRodape={ir}>
+      <Text style={{ color: COR.tx, fontSize: 24, fontWeight: '500', marginTop: 16 }}>Configurações necessárias</Text>
+      <Text style={{ color: COR.tx, fontSize: 16, lineHeight: 22, marginTop: 14, marginBottom: 14, textAlign: 'justify' }}>Para que o app não seja interrompido e registre o datalogger corretamente, é necessário realizar as seguintes configurações:</Text>
+      {itens.map(([k, t]) => (
+        <View key={k} style={{ marginBottom: 14 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'flex-start' }}>
+            <Text style={{ color: r == null ? '#888' : r[k] ? COR.verde : '#f9a825', fontSize: 20, width: 30 }}>{r == null ? '…' : r[k] ? '✓' : '⚠'}</Text>
+            <Text style={{ color: COR.tx, fontSize: 16, flex: 1, lineHeight: 22 }}>{t}</Text>
           </View>
-        ))}
-        <View style={[st.line, { alignItems: 'center', paddingVertical: 10 }]}>
-          <Text style={{ color: '#888', fontSize: 22, width: 30 }}>–</Text>
-          <Text style={[st.v, { flex: 1, color: '#aaa' }]}>6. Bluetooth (recomendado, verificação em breve)</Text>
+          {r && !r[k] ? <TouchableOpacity onPress={corrige[k]} style={{ backgroundColor: COR.azul, paddingVertical: 12, alignItems: 'center', marginTop: 8 }}><Text style={{ color: '#fff', fontSize: 15 }}>Como fazer isso?</Text></TouchableOpacity> : null}
         </View>
+      ))}
+      <View style={{ flexDirection: 'row', alignItems: 'flex-start' }}>
+        <Text style={{ color: '#888', fontSize: 20, width: 30 }}>–</Text>
+        <Text style={{ color: COR.tx2, fontSize: 16, flex: 1, lineHeight: 22 }}>6. Bluetooth (recomendado, verificação em breve)</Text>
       </View>
-      <TouchableOpacity style={[st.btn, { marginTop: 14 }]} onPress={ir}><Text style={st.btnTx}>CONTINUAR</Text></TouchableOpacity>
-    </View>
+    </Passo>
   );
 }
 
 // ---------- 6. Tipo de equipamento ----------
 function Equip({ st, onEscolhe, onVoltar }) {
   return (
-    <View>
-      <Topo st={st} titulo="Tipo de equipamento" onVoltar={onVoltar} />
-      <Opcao st={st} t="Navegador (Carro) / Piloto (Moto)" d="Equipamento principal" onPress={() => onEscolhe('principal')} />
-      <Opcao st={st} t="Piloto (Carro)" d="Equipamento secundário, espelho do navegador" onPress={() => onEscolhe('piloto')} />
-    </View>
+    <Passo onVoltar={onVoltar}>
+      <Text style={{ color: COR.tx, fontSize: 24, fontWeight: '500', textAlign: 'center', marginTop: 10, marginBottom: 20 }}>Tipo de equipamento</Text>
+      <OpcaoClara icone="⏱" t="Navegador (Carro)" sub="Piloto (Moto)" d="Equipamento principal" onPress={() => onEscolhe('principal')} />
+      <OpcaoClara icone="◉" t="Piloto (Carro)" d="Equipamento secundário, espelho do navegador" onPress={() => onEscolhe('piloto')} />
+    </Passo>
   );
 }
 
@@ -406,7 +426,7 @@ export function DlTela({ st, last, pointsN, startedAt, onFinalizar, info }) {
 }
 
 // ---------- Fluxo ----------
-export default function Fluxo({ st, user, piloto, provaMap, lib, minhaLarg, largManual, setLargManual, pointsN, dlStat, onEnviarDl, enviandoDl, onEscolher, onAdmin, onPlanilha, onSoDl, onPersonalizar, onPiloto, extra, onZerarDl }) {
+export default function Fluxo({ st, user, piloto, provaMap, lib, minhaLarg, largManual, setLargManual, pointsN, dlStat, onEnviarDl, enviandoDl, onEscolher, onAdmin, onPlanilha, onSoDl, onPersonalizar, onPiloto, extra, onZerarDl, onExportar, gpsCfg, setGpsCfg }) {
   const [tela, setTela] = useState('eventos');
   const [x, setX] = useState(null);
   const [modo, setModo] = useState('planilha');
@@ -414,7 +434,7 @@ export default function Fluxo({ st, user, piloto, provaMap, lib, minhaLarg, larg
     <View>
       {tela === 'eventos' && <Eventos st={st} user={user} onEvento={(e) => { setX(e); onEscolher(e.insc); setTela('evento'); }} onAdmin={onAdmin} />}
       {tela === 'eventos' && extra}
-      {tela === 'evento' && x && <Evento st={st} user={user} x={x} provaMap={provaMap} lib={lib} dlStat={dlStat} pointsN={pointsN} onDl={onEnviarDl} enviandoDl={enviandoDl} onIniciar={() => setTela('modo')} onPersonalizar={onPersonalizar} onVoltar={() => setTela('eventos')} onZerarDl={onZerarDl} />}
+      {tela === 'evento' && x && <Evento st={st} user={user} x={x} provaMap={provaMap} lib={lib} dlStat={dlStat} pointsN={pointsN} onDl={onEnviarDl} enviandoDl={enviandoDl} onIniciar={() => setTela('modo')} onPersonalizar={onPersonalizar} onVoltar={() => setTela('eventos')} onZerarDl={onZerarDl} onExportar={onExportar} gpsCfg={gpsCfg} setGpsCfg={setGpsCfg} />}
       {tela === 'modo' && <Modo st={st} onEscolhe={(m) => { setModo(m); setTela('largada'); }} onVoltar={() => setTela('evento')} />}
       {tela === 'largada' && <Largada st={st} minhaLarg={minhaLarg} largManual={largManual} setLargManual={setLargManual} onContinua={() => setTela('config')} onVoltar={() => setTela('modo')} />}
       {tela === 'config' && <Config st={st} onContinua={() => setTela('equip')} onVoltar={() => setTela('largada')} />}

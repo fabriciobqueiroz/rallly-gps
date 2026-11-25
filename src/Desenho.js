@@ -1,5 +1,6 @@
 // Modelo e desenho de tulipas montadas à mão: peças (cruzamentos, marcos), caneta e texto num quadro de 100 x 100.
 // Cada item vira "primitivas" (linhas, polígonos, círculos, textos) que servem para a tela e para o PDF.
+import { EXTRA } from './Simbolos';
 import Svg, { Circle, Polygon, Polyline, Rect, Text as SvgText } from 'react-native-svg';
 
 const rad = (d) => (d * Math.PI) / 180;
@@ -30,6 +31,11 @@ export const SIMBOLOS = {
   poste: { nome: 'Poste', p: [{ t: 'l', p: [0, -18, 0, 18], w: 3 }, { t: 'l', p: [0, -18, 10, -18], w: 3 }, { t: 'c', x: 12, y: -16, r: 3, f: '#000', w: 1 }] },
 };
 
+// Categoria dos marcos antigos e junção com o banco novo (Simbolos.js).
+const CAT_ANT = { arvore: 'arvore', predio: 'casa', placa: 'placa', semaforo: 'via', igreja: 'casa', ponte: 'agua', muro: 'cerca', pare: 'placa', rotatoria: 'via', lombada: 'via', porteira: 'cerca', entrada: 'via', poste: 'poste' };
+Object.keys(CAT_ANT).forEach((k) => { SIMBOLOS[k].cat = CAT_ANT[k]; });
+Object.assign(SIMBOLOS, EXTRA);
+
 // Ruas -> linhas locais (caixa de -50 a 50): rua de chegada embaixo, ruas laterais e seta na saída.
 function localCruzamento(arms, out) {
   const P = [{ t: 'l', p: [0, 40, 0, 0], w: 6 }, { t: 'c', x: 0, y: 44, r: 5, f: '#000', w: 1 }];
@@ -56,7 +62,13 @@ const seta = (p, w, k) => {
 
 // Expande um item em primitivas no quadro 100 x 100.
 export function expandir(it) {
-  if (it.k === 'pen') return [{ t: 'l', p: it.p, w: it.w || 2.5 }];
+  if (it.k === 'pen') {
+    const w = it.w || 2.5, o = [{ t: 'l', p: it.p, w, d: it.d || '' }];
+    const n = it.p.length;
+    if (n >= 4 && (it.ar === 'f' || it.ar === 'b')) o.push({ t: 'g', p: seta(it.p, w, Math.max(0.8, w / 3)), f: '#000', w: 0 });
+    if (n >= 4 && (it.ar === 'i' || it.ar === 'b')) o.push({ t: 'g', p: seta([it.p[2], it.p[3], it.p[0], it.p[1]], w, Math.max(0.8, w / 3)), f: '#000', w: 0 });
+    return o;
+  }
   if (it.k === 'txt') return [{ t: 't', x: it.x, y: it.y, s: 12 * (it.s || 1), tx: it.tx }];
   const T = tf(it);
   const loc = it.k === 'tpl' ? localCruzamento(it.arms, it.out) : (SIMBOLOS[it.n] || { p: [] }).p;
@@ -75,6 +87,7 @@ export function expandir(it) {
   return out;
 }
 
+const dash = (q) => { const w = Math.max(1, q.w || 2); return q.d === 'd' ? `${w * 3},${w * 2}` : q.d === 'p' ? `${w * 0.1},${w * 2}` : q.d === 'dp' ? `${w * 4},${w * 1.5},${w * 0.1},${w * 1.5}` : q.d === 'l' ? `${w * 6},${w * 3}` : undefined; };
 const pairs = (p) => { const o = []; for (let i = 0; i + 1 < p.length; i += 2) o.push(`${p[i]},${p[i + 1]}`); return o.join(' '); };
 
 // Desenho na tela (react-native-svg). Fundo branco, borda cinza como as tulipas automáticas.
@@ -85,7 +98,7 @@ export function DesenhoSvg({ items, size = 96, fundo = true, children }) {
       {children}
       {(items || []).flatMap((it, i) => expandir(it).map((q, j) => {
         const key = `${i}_${j}`;
-        if (q.t === 'l') return <Polyline key={key} points={pairs(q.p)} fill="none" stroke="#000" strokeWidth={q.w} strokeLinecap="round" strokeLinejoin="round" />;
+        if (q.t === 'l') return <Polyline key={key} points={pairs(q.p)} fill="none" stroke="#000" strokeWidth={q.w} strokeLinecap={q.d ? 'butt' : 'round'} strokeLinejoin="round" strokeDasharray={dash(q)} />;
         if (q.t === 'g') return <Polygon key={key} points={pairs(q.p)} fill={q.f} stroke="#000" strokeWidth={q.w} strokeLinejoin="round" />;
         if (q.t === 'c') return <Circle key={key} cx={q.x} cy={q.y} r={q.r} fill={q.f} stroke="#000" strokeWidth={q.w} />;
         return <SvgText key={key} x={q.x} y={q.y} fontSize={q.s} fontWeight="bold" textAnchor="middle" fill="#000">{q.tx}</SvgText>;
@@ -97,7 +110,7 @@ export function DesenhoSvg({ items, size = 96, fundo = true, children }) {
 // Mesmo desenho como texto SVG (para o PDF).
 export function desenhoSvgStr(items, size = 90) {
   const body = (items || []).flatMap((it) => expandir(it).map((q) => {
-    if (q.t === 'l') return `<polyline points="${pairs(q.p)}" fill="none" stroke="#000" stroke-width="${q.w}" stroke-linecap="round" stroke-linejoin="round"/>`;
+    if (q.t === 'l') return `<polyline points="${pairs(q.p)}" fill="none" stroke="#000" stroke-width="${q.w}" stroke-linecap="round" stroke-linejoin="round"${dash(q) ? ` stroke-dasharray="${dash(q)}"` : ''}/>`;
     if (q.t === 'g') return `<polygon points="${pairs(q.p)}" fill="${q.f}" stroke="#000" stroke-width="${q.w}"/>`;
     if (q.t === 'c') return `<circle cx="${q.x}" cy="${q.y}" r="${q.r}" fill="${q.f}" stroke="#000" stroke-width="${q.w}"/>`;
     return `<text x="${q.x}" y="${q.y}" font-size="${q.s}" font-weight="bold" text-anchor="middle">${String(q.tx).replace(/</g, '&lt;')}</text>`;

@@ -6,7 +6,7 @@ import { StatusBar } from 'expo-status-bar';
 import * as Location from 'expo-location';
 import * as Sharing from 'expo-sharing';
 import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
-import { TASK } from './src/gpsTask';
+import { TASK, setGpsMin } from './src/gpsTask';
 import { loadRoteiro, saveRoteiro, recFile, loadJson, saveJson } from './src/persist';
 import { Roadbook, tulComp } from './src/Tulipa';
 import * as ScreenOrientation from 'expo-screen-orientation';
@@ -19,6 +19,7 @@ import { st } from './src/estilos';
 import Fluxo, { DlTela, EventosAbertos, InfoProva } from './src/Fluxo';
 import { planilhaLiberada, parseHMS, CATS_PADRAO } from './src/OrgExtras';
 import PerfilTela from './src/Perfil';
+import Dataloggers from './src/Dataloggers';
 import { NavTela, NavConfig, PilotoTela, loadNav } from './src/Nav';
 import { compartilharPdf } from './src/pdf';
 import Erro from './src/Erro';
@@ -41,6 +42,9 @@ export default function App() {
   const [stage, setStage] = useState(newStage());
   const [factor, setFactorRaw] = useState(() => { const f = Number(loadJson('wfactor', 1)); return f > 0.5 && f < 1.5 ? f : 1; });
   const setFactor = (f) => { setFactorRaw(f); saveJson('wfactor', f); };
+  const [gpsCfg, setGpsCfgRaw] = useState(() => { const c = { int: 1000, acc: 'max' }; setGpsMin(c.int); return c; });
+  const gpsCfgRef = useRef(gpsCfg);
+  const setGpsCfg = (c) => { gpsCfgRef.current = c; setGpsCfgRaw(c); saveJson('gpscfg', c); setGpsMin(c.int); };
   const [aferUndo, setAferUndo] = useState(null);
   const [posOff, setPosOff] = useState(0); // posição fixada pelo "estou aqui" quando o trecho ainda não começou (m)
   const [kmhTxt, setKmhTxt] = useState('');
@@ -55,6 +59,7 @@ export default function App() {
   const [mastersX, setMastersX] = useState([]);
   const [infoOpen, setInfoOpen] = useState(false);
   const [perfilOpen, setPerfilOpen] = useState(false);
+  const [dlOpen, setDlOpen] = useState(false);
   const [cfgPiloto, setCfgPiloto] = useState(false);
   const [abrirReq, setAbrirReq] = useState(null);
   const [listaReq, setListaReq] = useState(0); // menu "Organizar prova": volta para a lista de provas
@@ -120,8 +125,8 @@ export default function App() {
     }
     try {
       await Location.startLocationUpdatesAsync(TASK, {
-        accuracy: Location.Accuracy.BestForNavigation,
-        timeInterval: 1000,
+        accuracy: ({ max: Location.Accuracy.BestForNavigation, alta: Location.Accuracy.High, eq: Location.Accuracy.Balanced })[gpsCfgRef.current.acc] || Location.Accuracy.BestForNavigation,
+        timeInterval: Math.min(gpsCfgRef.current.int, 1000),
         distanceInterval: 0,
         foregroundService: {
           notificationTitle: 'Rally GPS gravando',
@@ -246,7 +251,7 @@ export default function App() {
     setEnviandoDl(true);
     try {
       await enviarDatalogger({ prova: piloto.prova, numero: piloto.numero, nome: piloto.nome, classe: piloto.classe, points: pts, pcs: stage.pcs, tIni: jan.ini || undefined });
-      saveJson('dlstat', { ...loadJson('dlstat', {}), [piloto.prova.trim().toUpperCase().replace(/[^A-Z0-9]+/g, '') + '_' + piloto.numero.trim().toUpperCase().replace(/[^A-Z0-9]+/g, '')]: { n: pts.length, em: Date.now() } }); setDlTick((x) => x + 1);
+      { const k = piloto.prova.trim().toUpperCase().replace(/[^A-Z0-9]+/g, '') + '_' + piloto.numero.trim().toUpperCase().replace(/[^A-Z0-9]+/g, ''); const passo = Math.max(1, Math.ceil(pts.length / 2500)); saveJson('dltrk_' + k, pts.filter((_, q) => q % passo === 0).map((p) => [p.t, p.lat, p.lon, p.acc ?? null])); saveJson('dlstat', { ...loadJson('dlstat', {}), [k]: { n: pts.length, tot: pts.length, em: Date.now(), ev: piloto.prova, cat: piloto.classe, num: piloto.numero } }); } setDlTick((x) => x + 1);
       Alert.alert('Datalogger enviado', `${pts.length} pontos. O organizador calcula o resultado oficial com ele.`);
     } catch (e) { Alert.alert('Não enviou', 'Confira a internet e tente de novo. ' + String(e?.message || e)); }
     setEnviandoDl(false);
@@ -543,6 +548,7 @@ export default function App() {
               ['Roadbook externo (.nbp)', () => setTab('nbp')],
               ...(ehMaster(user.email, mastersX) ? [['Usuários (master)', () => setTab('usuarios')]] : []),
               ['Ranking', () => setTab('ranking')],
+              ['Dataloggers', () => setDlOpen(true)],
               ['Perfil', () => setPerfilOpen(true)],
               ...(papeis.organizador && papeis.competidor ? [[papel === 'organizador' ? 'Modo competidor' : 'Modo organizador', () => setPapel(papel === 'organizador' ? 'competidor' : 'organizador')]] : []),
               ['Sair', () => Alert.alert('Sair da conta?', user.email, [{ text: 'Cancelar', style: 'cancel' }, { text: 'Sair', onPress: () => { sairConta().catch(() => {}); } }]), '#ff5252'],
@@ -551,13 +557,13 @@ export default function App() {
                 <Text style={{ color: cor || '#f5f5f5', fontSize: 16, fontWeight: '700' }}>{t}</Text>
               </TouchableOpacity>
             ))}
-            <Text style={{ color: '#6b7480', fontSize: 11, textAlign: 'center', paddingBottom: 8 }}>Rally GPS · passo92</Text>
+            <Text style={{ color: '#6b7480', fontSize: 11, textAlign: 'center', paddingBottom: 8 }}>Rally GPS · passo109</Text>
           </View>
         </TouchableOpacity>
       </Modal>
       {tab === 'provas' ? (
         <Fluxo st={st} user={user} piloto={piloto} provaMap={provaMap} lib={libOk} minhaLarg={minhaLarg} largManual={largManual} setLargManual={setLargManual} pointsN={janN} dlStat={loadJson('dlstat', {})} dlTick={dlTick}
-          onEnviarDl={onDatalogger} enviandoDl={enviandoDl} onEscolher={escolher} onPlanilha={onPlanilha} onSoDl={onSoDl} onPiloto={() => setPilotoOpen(true)} onZerarDl={zerarDatalogger} onPersonalizar={() => setCfgOpen(true)}
+          onEnviarDl={onDatalogger} enviandoDl={enviandoDl} onEscolher={escolher} onPlanilha={onPlanilha} onSoDl={onSoDl} onPiloto={() => setPilotoOpen(true)} onZerarDl={zerarDatalogger} onExportar={exportCsv} gpsCfg={gpsCfg} setGpsCfg={setGpsCfg} onPersonalizar={() => setCfgOpen(true)}
           extra={<TrilhasComp st={st} modo="minhas" gps={{ nome: piloto.nome || user.email, uid: user.uid, running, start, getPoints: () => getState().points }} />}
           onAdmin={(x) => { setPapel('organizador'); setP('prova')(x.code); setAbrirReq({ code: x.code, n: Date.now() }); }} />
       ) : tab === 'organizar' ? (
@@ -624,6 +630,17 @@ export default function App() {
       )}
       {navOpen && <InfoProva visible={infoOpen} info={infoProva} onOk={() => setInfoOpen(false)} />}
       <NavConfig st={st} visible={cfgOpen} onClose={() => setCfgOpen(false)} />
+
+      {dlOpen && <Dataloggers
+        lista={(() => {
+          const st0 = loadJson('dlstat', {});
+          const L = Object.keys(st0).map((k) => { const e = st0[k]; const t = loadJson('dltrk_' + k, []); return { key: k, ev: e.ev || k.split('_')[0], cat: e.cat || '', num: e.num || k.split('_')[1], sinc: e.n, tot: e.tot || e.n, em: e.em, pts: t.map((a) => ({ t: a[0], lat: a[1], lon: a[2], acc: a[3] })) }; });
+          const kAt = piloto.prova.trim().toUpperCase().replace(/[^A-Z0-9]+/g, '') + '_' + String(piloto.numero).trim().toUpperCase().replace(/[^A-Z0-9]+/g, '');
+          if (!st0[kAt] && points.length > 10) L.push({ key: 'atual', ev: piloto.prova || 'Gravação atual', cat: piloto.classe || '', num: piloto.numero, sinc: 0, tot: points.length, em: points[points.length - 1].t, pts: points.map((p) => ({ t: p.t, lat: p.lat, lon: p.lon, acc: p.acc })) });
+          return L;
+        })()}
+        onVoltar={() => setDlOpen(false)}
+        onCompartilhar={(d) => { const csv = ['time,lat,lon,acc', ...d.pts.map((p) => `${new Date(p.t).toISOString()},${p.lat},${p.lon},${p.acc ?? ''}`)].join('\n'); Share.share({ message: csv, title: 'datalogger-' + d.ev + '.csv' }); }} />}
       {perfilOpen && <PerfilTela st={st} user={user} papel={papel} onClose={() => setPerfilOpen(false)} onSalvo={(d) => { if (d.nome && !piloto.nome) setPiloto((o) => ({ ...o, nome: d.nome })); }} />}
       {pilotoOpen && <PilotoTela cfg={loadNav()} tul={tulVis} classe={piloto.classe} grupos={grupos} onPersonalizar={() => setCfgPiloto(true)} onClose={() => setPilotoOpen(false)} />}
       <NavConfig st={st} piloto visible={cfgPiloto} onClose={() => setCfgPiloto(false)} />
