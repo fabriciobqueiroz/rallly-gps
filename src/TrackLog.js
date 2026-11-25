@@ -1,6 +1,6 @@
 // Track log: o rastro enviado pelo competidor (datalogger) sobre o percurso levantado pelo organizador.
 import { useEffect, useMemo, useState } from 'react';
-import { ScrollView, Text, TouchableOpacity, View } from 'react-native';
+import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import MapaWeb from './MapaWeb';
 import Tela from './Tela';
 import { haversine } from './store';
@@ -45,7 +45,7 @@ export function calcDl(dl, provaMap, grupos) {
 
 function Tabela({ st, dl, provaMap, grupos }) {
   const r = useMemo(() => calcDl(dl, provaMap, grupos), [dl, provaMap, grupos]);
-  const C = ({ t, w, c, b }) => <Text style={{ width: w, color: c || '#f5f5f5', fontSize: 12, fontWeight: b ? '800' : '400', textAlign: 'center' }}>{t}</Text>;
+  const C = ({ t, w, c, b }) => <Text style={{ width: w, color: c || StyleSheet.flatten(st.tip).color, fontSize: 12, fontWeight: b ? '800' : '400', textAlign: 'center' }}>{t}</Text>;
   return (
     <View style={{ marginTop: 8 }}>
       <Text style={st.v}>#{dl.numero} {dl.nome} · {dl.classe}</Text>
@@ -53,7 +53,7 @@ function Tabela({ st, dl, provaMap, grupos }) {
       <View style={{ flexDirection: 'row', marginTop: 4, borderBottomWidth: 1, borderBottomColor: '#555', paddingBottom: 3 }}><C t="PC" w="8%" b /><C t="Trc" w="8%" b /><C t="KM" w="13%" b /><C t="Ideal" w="19%" b /><C t="Passagem" w="19%" b /><C t="T. Prova" w="19%" b /><C t="Pts" w="14%" b /></View>
       {r.rows.length === 0 && <Text style={st.tipTx}>Nenhum PC identificado no rastro.</Text>}
       {r.rows.map((x) => (
-        <View key={x.n} style={{ flexDirection: 'row', paddingVertical: 3, borderBottomWidth: 1, borderBottomColor: '#262b32' }}>
+        <View key={x.n} style={{ flexDirection: 'row', paddingVertical: 3, borderBottomWidth: 1, borderBottomColor: StyleSheet.flatten(st.card).borderColor || '#dde3e8' }}>
           <C t={x.lab} w="8%" c={x.neu ? '#ba68c8' : undefined} />
           <C t={x.trc ?? '—'} w="8%" />
           <C t={x.km.toFixed(3).replace('.', ',')} w="13%" />
@@ -101,10 +101,10 @@ export function TrackMapa({ st, dl, provaMap, grupos, onClose }) {
   const p = pts[i];
   const Bt = ({ tx, sec }) => <TouchableOpacity style={[st.btn2, { flex: 1 }]} onPress={() => passo(sec)}><Text style={st.btn2Tx}>{tx}</Text></TouchableOpacity>;
   return (
-    <Tela onRequestClose={onClose}>
+    <Tela onRequestClose={onClose} fundo={StyleSheet.flatten(st.root).backgroundColor}>
       <ScrollView style={{ flex: 1 }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 10, paddingVertical: 6, gap: 8 }}>
-          <Text style={{ flex: 1, color: '#f5f5f5', fontWeight: '800' }} numberOfLines={2}>Track log · #{dl.numero} {dl.nome}</Text>
+          <Text style={{ flex: 1, color: StyleSheet.flatten(st.tip).color, fontWeight: '800' }} numberOfLines={2}>Track log · #{dl.numero} {dl.nome}</Text>
           <TouchableOpacity style={st.btn2} onPress={() => setOrig((v) => !v)}><Text style={st.btn2Tx}>{orig ? 'Percurso: SIM' : 'Percurso: NÃO'}</Text></TouchableOpacity>
           <TouchableOpacity style={st.btn2} onPress={onClose}><Text style={st.btn2Tx}>✕</Text></TouchableOpacity>
         </View>
@@ -153,7 +153,7 @@ export function OrgTrackLog({ st, prova, provaMap, grupos, categorias }) {
       <Text style={st.tipTx}>Toque num competidor para ver o rastro dele sobre o percurso levantado.</Text>
       {dls.length === 0 && <Text style={st.tipTx}>Nenhum datalogger enviado ainda.</Text>}
       {dls.map((d) => (
-        <TouchableOpacity key={d.numero} style={[st.line, { paddingVertical: 10, borderTopWidth: 1, borderTopColor: '#262b32' }]} onPress={() => setSel(d)}>
+        <TouchableOpacity key={d.numero} style={[st.line, { paddingVertical: 10, borderTopWidth: 1, borderTopColor: StyleSheet.flatten(st.card).borderColor || '#dde3e8' }]} onPress={() => setSel(d)}>
           <Text style={st.v}>#{d.numero} {d.nome}</Text>
           <Text style={st.k}>{d.classe} · {(d.t || []).length} pts</Text>
         </TouchableOpacity>

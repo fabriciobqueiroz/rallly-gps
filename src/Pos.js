@@ -11,11 +11,12 @@ const p2 = (x) => String(x).padStart(2, '0');
 const relogio = (ms) => { const d = new Date(ms); return `${p2(d.getHours())}:${p2(d.getMinutes())}:${p2(d.getSeconds())}.${p2(Math.floor(d.getMilliseconds() / 10))}`; };
 const milhar = (n) => Math.round(n).toLocaleString('pt-BR');
 
-export function Cab({ titulo, onVoltar, azul }) {
+export function Cab({ titulo, onVoltar, azul, direita }) {
   return (
     <View style={{ backgroundColor: azul ? COR.azul : COR.fundo, paddingTop: 52, paddingBottom: 12, alignItems: 'center', justifyContent: 'center' }}>
       {onVoltar ? <TouchableOpacity onPress={onVoltar} style={{ position: 'absolute', left: 0, bottom: 0, paddingHorizontal: 16, paddingVertical: 10 }}><Text style={{ color: azul ? '#fff' : COR.azulTx, fontSize: 30, lineHeight: 30 }}>‹</Text></TouchableOpacity> : null}
       <Text style={{ color: azul ? '#fff' : COR.tx, fontSize: 18, fontWeight: '500' }}>{titulo}</Text>
+      {direita ? <View style={{ position: 'absolute', right: 0, bottom: 0 }}>{direita}</View> : null}
     </View>
   );
 }
@@ -130,5 +131,16 @@ export function OpcaoClara({ icone, t, d, sub, onPress, linha }) {
       </View>
       <Text style={{ color: COR.tx, fontSize: 30 }}>›</Text>
     </TouchableOpacity>
+  );
+}
+
+// Casca clara (estilo Kraken) para telas que ainda usam os blocos antigos: cabeçalho azul com seta e fundo claro.
+export function Casca({ titulo, onVoltar, children }) {
+  const { height } = useWindowDimensions();
+  return (
+    <View style={{ marginHorizontal: -16, marginTop: -56, marginBottom: -40, minHeight: height, backgroundColor: COR.fundo }}>
+      <Cab titulo={titulo} azul onVoltar={onVoltar} />
+      <View style={{ padding: 14, paddingBottom: 40 }}>{children}</View>
+    </View>
   );
 }

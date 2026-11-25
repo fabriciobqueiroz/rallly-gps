@@ -15,11 +15,13 @@ import { enviarResultado, ouvirRanking, salvarProva, ouvirProva, ouvirInscricao,
 import UsuariosTela from './src/Usuarios';
 import NbpTela from './src/Nbp';
 import Login from './src/Login';
-import { st } from './src/estilos';
+import { st as stBase, stClaro } from './src/estilos';
+import { Casca, Cab } from './src/Pos';
 import Fluxo, { DlTela, EventosAbertos, InfoProva } from './src/Fluxo';
 import { planilhaLiberada, parseHMS, CATS_PADRAO } from './src/OrgExtras';
 import PerfilTela from './src/Perfil';
 import Dataloggers from './src/Dataloggers';
+import { Icone } from './src/Organizador';
 import { NavTela, NavConfig, PilotoTela, loadNav } from './src/Nav';
 import { compartilharPdf } from './src/pdf';
 import Erro from './src/Erro';
@@ -463,6 +465,11 @@ export default function App() {
     return () => clearInterval(id);
   }, []);
   useEffect(() => { if (navOpen) setInfoOpen(true); }, [navOpen]);
+  const claro = (papel === 'competidor' && ['provas', 'abertos', 'ranking', 'nbp', 'usuarios', 'tulipas'].includes(tab)) || (papel === 'organizador' && (tab === 'organizar' || tab === 'trilhas'));
+  const orgClaro = claro && papel === 'organizador';
+  const st = claro ? stClaro : stBase;
+  const titulosC = { abertos: 'Eventos abertos', ranking: 'Ranking', nbp: 'Roadbook externo (.nbp)', usuarios: 'Usuários', tulipas: 'Roadbook' };
+  const corpo = (el) => (orgClaro && tab === 'trilhas' ? <View><Cab titulo="Trilhas" azul onVoltar={() => setTab('organizar')} /><View style={{ padding: 14 }}>{el}</View></View> : claro && !orgClaro && tab !== 'provas' ? <Casca titulo={titulosC[tab] || ''} onVoltar={() => setTab('provas')}>{el}</Casca> : el);
   if (user === undefined) return <View style={[st.root, { justifyContent: 'center' }]}><Text style={[st.sub, { textAlign: 'center' }]}>Carregando…</Text></View>;
   if (!user) return (
     <View style={{ flex: 1 }}>
@@ -501,8 +508,9 @@ export default function App() {
   const finalizarDl = async () => { await stop(); await onDatalogger(); setSoDl(false); };
   return (
     <KeyboardAvoidingView style={{ flex: 1 }} behavior="padding">
-    <ScrollView style={st.root} contentContainerStyle={st.wrap} keyboardShouldPersistTaps="handled">
+    <ScrollView style={[st.root, claro && { backgroundColor: Platform.OS === 'web' && orgClaro ? '#fafafa' : '#f3f6f8' }]} contentContainerStyle={[st.wrap, orgClaro && { padding: 0, paddingTop: 0, paddingBottom: 0 }]} keyboardShouldPersistTaps="handled">
       <StatusBar style="light" />
+      {!claro && (<>
       <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
         <TouchableOpacity onPress={() => setTab(papel === 'organizador' ? 'organizar' : 'provas')}><Text style={{ color: '#ff7a2e', fontSize: 26, fontWeight: '900' }}>Rally GPS</Text></TouchableOpacity>
         <TouchableOpacity onPress={() => setMenuOpen(true)} hitSlop={{ top: 10, bottom: 10, left: 14, right: 10 }} accessibilityLabel="Menu"><Text style={{ color: '#f5f5f5', fontSize: 30, fontWeight: '900', paddingHorizontal: 6 }}>⋮</Text></TouchableOpacity>
@@ -538,36 +546,38 @@ export default function App() {
         <TouchableOpacity style={st.tab} onPress={() => setTab('provas')}><Text style={st.tabTx}>Meus eventos</Text></TouchableOpacity>
       </View>
       )}
+      </>)}
       <Modal visible={menuOpen} transparent animationType="fade" onRequestClose={() => setMenuOpen(false)}>
-        <TouchableOpacity activeOpacity={1} style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.45)' }} onPress={() => setMenuOpen(false)}>
-          <View style={{ position: 'absolute', top: 54, right: 12, width: 230, backgroundColor: '#1b212a', borderWidth: 1, borderColor: '#262b32', borderRadius: 12, paddingVertical: 6 }}>
+        <TouchableOpacity activeOpacity={1} style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.12)' }} onPress={() => setMenuOpen(false)}>
+          <View style={{ position: 'absolute', top: 44, right: 10, width: 262, backgroundColor: '#fff', paddingVertical: 6, elevation: 10, shadowColor: '#000', shadowOpacity: 0.3, shadowRadius: 8, shadowOffset: { width: 0, height: 3 } }}>
             {[
-              ...(papel === 'organizador' ? [['Organizar prova', () => { setListaReq((n) => n + 1); setTab('organizar'); }], ['Organizar trilha', () => setTab('trilhas')]] : []),
-              ['Meus eventos', () => setTab('provas')],
-              ['Eventos abertos', () => setTab('abertos')],
-              ['Roadbook externo (.nbp)', () => setTab('nbp')],
-              ...(ehMaster(user.email, mastersX) ? [['Usuários (master)', () => setTab('usuarios')]] : []),
-              ['Ranking', () => setTab('ranking')],
-              ['Dataloggers', () => setDlOpen(true)],
-              ['Perfil', () => setPerfilOpen(true)],
-              ...(papeis.organizador && papeis.competidor ? [[papel === 'organizador' ? 'Modo competidor' : 'Modo organizador', () => setPapel(papel === 'organizador' ? 'competidor' : 'organizador')]] : []),
-              ['Sair', () => Alert.alert('Sair da conta?', user.email, [{ text: 'Cancelar', style: 'cancel' }, { text: 'Sair', onPress: () => { sairConta().catch(() => {}); } }]), '#ff5252'],
-            ].map(([t, f, cor]) => (
-              <TouchableOpacity key={t} onPress={() => { setMenuOpen(false); setTimeout(f, 50); }} style={{ paddingVertical: 12, paddingHorizontal: 16 }}>
-                <Text style={{ color: cor || '#f5f5f5', fontSize: 16, fontWeight: '700' }}>{t}</Text>
+              ...(papel === 'organizador' ? [['pl', 'Organizar prova', () => { setListaReq((n) => n + 1); setTab('organizar'); }], ['cat', 'Organizar trilha', () => setTab('trilhas')]] : []),
+              ['geral', 'Meus eventos', () => setTab('provas')],
+              ['tr', 'Eventos abertos', () => setTab('abertos')],
+              ['dl', 'Dataloggers', () => setDlOpen(true)],
+              ['res', 'Ranking', () => setTab('ranking')],
+              ['insc', 'Perfil', () => setPerfilOpen(true)],
+              ['pl', 'Roadbook externo (.nbp)', () => setTab('nbp')],
+              ...(ehMaster(user.email, mastersX) ? [['insc', 'Usuários (master)', () => setTab('usuarios')]] : []),
+              ...(papeis.organizador && papeis.competidor ? [['cat', papel === 'organizador' ? 'Modo competidor' : 'Modo organizador', () => setPapel(papel === 'organizador' ? 'competidor' : 'organizador')]] : []),
+              ['sair', 'Sair', () => Alert.alert('Sair da conta?', user.email, [{ text: 'Cancelar', style: 'cancel' }, { text: 'Sair', onPress: () => { sairConta().catch(() => {}); } }])],
+            ].map(([ic, t, fn]) => (
+              <TouchableOpacity key={t} onPress={() => { setMenuOpen(false); setTimeout(fn, 50); }} style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 12, paddingHorizontal: 18 }}>
+                <Icone n={ic} cor="#444" tam={20} />
+                <Text style={{ color: '#1c1c1c', fontSize: 15, fontWeight: '600', marginLeft: 16, flex: 1 }}>{t}</Text>
               </TouchableOpacity>
             ))}
-            <Text style={{ color: '#6b7480', fontSize: 11, textAlign: 'center', paddingBottom: 8 }}>Rally GPS · passo109</Text>
+            <Text style={{ color: '#9aa5ae', fontSize: 11, textAlign: 'center', paddingVertical: 4 }}>Rally GPS · passo115</Text>
           </View>
         </TouchableOpacity>
       </Modal>
-      {tab === 'provas' ? (
-        <Fluxo st={st} user={user} piloto={piloto} provaMap={provaMap} lib={libOk} minhaLarg={minhaLarg} largManual={largManual} setLargManual={setLargManual} pointsN={janN} dlStat={loadJson('dlstat', {})} dlTick={dlTick}
+      {corpo(tab === 'provas' ? (
+        <Fluxo onMenu={() => setMenuOpen(true)} gps={{ ola: `Olá, ${(piloto.nome || user.email.split('@')[0]).split(' ')[0]} · Competidor · ${running ? '● Gravando' : pendEnv > 0 ? `○ ${pendEnv} pontos não enviados` : '○ Parado'}`, txt: running ? gpsTxt : 'GPS desligado', cor: running ? gpsColor : '#6b7480', on: running, toggle: running ? stop : start, rem: remLarg != null && remLarg > 0 ? fmtDur(remLarg) : null }} st={st} user={user} piloto={piloto} provaMap={provaMap} lib={libOk} minhaLarg={minhaLarg} largManual={largManual} setLargManual={setLargManual} pointsN={janN} dlStat={loadJson('dlstat', {})} dlTick={dlTick}
           onEnviarDl={onDatalogger} enviandoDl={enviandoDl} onEscolher={escolher} onPlanilha={onPlanilha} onSoDl={onSoDl} onPiloto={() => setPilotoOpen(true)} onZerarDl={zerarDatalogger} onExportar={exportCsv} gpsCfg={gpsCfg} setGpsCfg={setGpsCfg} onPersonalizar={() => setCfgOpen(true)}
           extra={<TrilhasComp st={st} modo="minhas" gps={{ nome: piloto.nome || user.email, uid: user.uid, running, start, getPoints: () => getState().points }} />}
           onAdmin={(x) => { setPapel('organizador'); setP('prova')(x.code); setAbrirReq({ code: x.code, n: Date.now() }); }} />
       ) : tab === 'organizar' ? (
-        <Organizador st={st} listaReq={listaReq} erroProva={erroProva} onTab={setTab} onProva={(c, force) => { if (force) { forcaZero.current = true; setProvaVer((v) => v + 1); } setP('prova')(c); }} prova={piloto.prova} provaMap={provaMap} last={last} onOrg={setOrgInfo} abrirReq={abrirReq} />
+        <Organizador onMenu={() => setMenuOpen(true)} st={st} listaReq={listaReq} erroProva={erroProva} onTab={setTab} onProva={(c, force) => { if (force) { forcaZero.current = true; setProvaVer((v) => v + 1); } setP('prova')(c); }} prova={piloto.prova} provaMap={provaMap} last={last} onOrg={setOrgInfo} abrirReq={abrirReq} />
       ) : tab === 'tulipas' ? (
         <View style={st.card}>
           <Text style={st.tip}>Prova {piloto.prova.trim() || '—'}</Text>
@@ -620,7 +630,7 @@ export default function App() {
             <Text style={[st.tipTx, { marginTop: 8 }]}>Pontos: 1 por segundo de diferença em cada PC (menos é melhor).</Text>
           </View>
         </View>
-      ) : null}
+      ) : null)}
       {soDl && <DlTela st={st} last={last} pointsN={points.length} startedAt={startedAt} onFinalizar={finalizarDl} info={infoProva} />}
       {navOpen && (
         <Erro onClose={() => setNavOpen(false)}><NavTela cfg={loadNav()} stage={stage} rs={rs} last={last} globalDist={rs || stage.idx >= 0 ? globalDist : Math.max(0, odoAtual() - odoBase)}
@@ -649,6 +659,7 @@ export default function App() {
   );
 }
 
+const st = stBase;
 const Big = ({ label, value, unit }) => (
   <View style={st.big}>
     <Text style={st.bigL}>{label}</Text>

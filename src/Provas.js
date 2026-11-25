@@ -1,7 +1,8 @@
 // Lista "Minhas provas": criar (com nome), abrir, renomear e apagar (com dupla confirmação).
 import { useEffect, useState } from 'react';
 import Tela from './Tela';
-import { Alert, KeyboardAvoidingView, ScrollView, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { Alert, KeyboardAvoidingView, Platform, ScrollView, Text, TextInput, TouchableOpacity, View, useWindowDimensions } from 'react-native';
+import { COR, Cab } from './Pos';
 import { DateTimePickerAndroid } from './pickers';
 import { File } from 'expo-file-system';
 import { apagarProvaNuvem, criarProva, ouvirMinhasProvas, salvarProva } from './firebase';
@@ -19,7 +20,7 @@ export function limparProvaLocal(code) {
 }
 const km3 = (m) => ((m || 0) / 1000).toFixed(3).replace('.', ',');
 
-export default function ListaProvas({ st, org, onAbrir, onSairOrg, onApagou }) {
+export default function ListaProvas({ onTab, onMenu, st, org, onAbrir, onSairOrg, onApagou }) {
   const [idx, setIdx] = useState(() => loadJson('lev_index', []));
   const [novo, setNovo] = useState('');
   const [cidade, setCidade] = useState('');
@@ -37,7 +38,7 @@ export default function ListaProvas({ st, org, onAbrir, onSairOrg, onApagou }) {
 
   const salva = (l) => { setIdx(l); saveJson('lev_index', l); };
   // A lista vem da nuvem (provas criadas na conta); o que o celular guarda (marcas, km) complementa.
-  const lista = nuvem.map((n) => { const l = idx.find((x) => x.code === n.code) || {}; return { ...l, code: n.code, nome: n.nome || l.nome || '' }; });
+  const lista = nuvem.map((n) => { const l = idx.find((x) => x.code === n.code) || {}; return { ...l, code: n.code, nome: n.nome || l.nome || '', data: n.data, cidade: n.cidade }; });
 
   // Provas antigas só tinham o nome no celular: copia para a nuvem para o site e os outros aparelhos verem.
   useEffect(() => {
@@ -85,60 +86,88 @@ export default function ListaProvas({ st, org, onAbrir, onSairOrg, onApagou }) {
     setRenom(null);
   };
 
+  const [busca, setBusca] = useState('');
+  const { height } = useWindowDimensions();
+  const web = Platform.OS === 'web';
+  const filtradas = lista.filter((it) => !busca.trim() || (it.nome + ' ' + it.code + ' ' + (it.cidade || '')).toLowerCase().includes(busca.trim().toLowerCase()));
+  const opcoes = (it) => Alert.alert(it.nome || it.code, 'O que fazer com este evento?', [
+    { text: 'Renomear', onPress: () => { setRenom(it.code); setNomeEd(it.nome || ''); } },
+    { text: 'Apagar', style: 'destructive', onPress: () => pedeApagar(it) },
+    { text: 'Cancelar', style: 'cancel' },
+  ]);
+  const CAMPO = { color: COR.tx, fontSize: 16, borderBottomWidth: 1, borderBottomColor: '#b8c4cc', paddingVertical: 8, marginBottom: 14 };
   return (
-    <View>
-      <View style={st.card}>
-        <Text style={st.tip}>Minhas provas</Text>
-        {lista.length === 0 && <Text style={st.tipTx}>Nenhuma prova ainda. Crie a primeira abaixo.</Text>}
-        {lista.map((it) => (
-          <View key={it.code} style={{ borderTopWidth: 2, borderTopColor: '#444', paddingVertical: 8, marginTop: 6 }}>
-            <Text style={st.v}>{it.nome || '(sem nome)'}</Text>
-            <Text style={st.tipTx}>Código {it.code} · {it.marcas || 0} marca(s) · {km3(it.km)} km</Text>
+    <View style={{ minHeight: Math.max(height, 640), backgroundColor: web ? '#fafafa' : COR.fundo }}>
+      <View style={{ backgroundColor: web ? '#31b9d3' : '#6cc4ec', paddingTop: web ? 0 : 46 }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', height: web ? 46 : undefined, paddingHorizontal: 16, justifyContent: 'space-between' }}>
+          <View style={{ flex: 1 }}><Text style={{ color: '#fff', fontSize: web ? 22 : 26, fontWeight: '900' }}>Rally GPS</Text></View>
+          {web ? <Text style={{ color: '#fff', fontSize: 20, fontWeight: '500' }}>Eventos</Text> : null}
+          <View style={{ flex: 1, flexDirection: 'row', justifyContent: 'flex-end', alignItems: 'center' }}>
+            {web ? <Text style={{ color: '#fff', fontSize: 11, marginRight: 10 }}>Versão: {VERSAO}</Text> : null}
+            {onMenu ? <TouchableOpacity onPress={onMenu} hitSlop={{ top: 10, bottom: 10, left: 14, right: 6 }}><Text style={{ color: '#fff', fontSize: 28, fontWeight: '900', paddingHorizontal: 6 }}>⋮</Text></TouchableOpacity> : null}
+          </View>
+        </View>
+        <View style={{ flexDirection: 'row', marginTop: web ? 4 : 10 }}>
+          <View style={{ flex: 1, alignItems: 'center', paddingVertical: 13, borderBottomWidth: 3, borderBottomColor: '#fff' }}><Text style={{ color: '#fff', fontSize: 15, fontWeight: '700' }}>Eventos</Text></View>
+          <TouchableOpacity onPress={() => onTab && onTab('trilhas')} style={{ flex: 1, alignItems: 'center', paddingVertical: 13, borderBottomWidth: 3, borderBottomColor: 'transparent' }}><Text style={{ color: 'rgba(255,255,255,0.65)', fontSize: 15 }}>Trilhas</Text></TouchableOpacity>
+        </View>
+      </View>
+      <View style={{ padding: 16, paddingBottom: 100, width: '100%', maxWidth: web ? 484 : undefined, alignSelf: 'center' }}>
+        <Text style={{ color: COR.tx, fontSize: 19, fontWeight: '600' }}>Selecionar Evento <Text style={{ color: COR.azulTx }}>({lista.length})</Text></Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center', marginVertical: 12 }}>
+          <TextInput style={{ flex: 1, backgroundColor: '#fff', borderWidth: 1, borderColor: web ? '#333' : '#cfd8dc', borderRadius: web ? 8 : 4, paddingHorizontal: 12, paddingVertical: web ? 12 : 8, color: COR.tx }} value={busca} onChangeText={setBusca} placeholder="🔍  Buscar por nome, estado ou MM/AAAA" placeholderTextColor="#9aa5ae" />
+          <TouchableOpacity onPress={() => setNuvem((n) => [...n])} style={{ paddingHorizontal: 14 }}><Text style={{ color: COR.azulTx, fontSize: 22 }}>↻</Text></TouchableOpacity>
+        </View>
+        {filtradas.length === 0 && <Text style={{ color: COR.tx2 }}>{lista.length ? 'Nenhum evento encontrado.' : 'Nenhum evento ainda. Toque em + para criar o primeiro.'}</Text>}
+        {filtradas.map((it) => (
+          <View key={it.code} style={{ backgroundColor: '#fff', borderRadius: 6, padding: 14, marginBottom: 10, elevation: 2, shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 4, shadowOffset: { width: 0, height: 1 } }}>
             {renom === it.code ? (
               <View>
-                <TextInput style={st.field} value={nomeEd} onChangeText={setNomeEd} placeholder="Nome da prova" placeholderTextColor="#666" />
-                <View style={[st.row, { marginTop: 6, marginBottom: 0 }]}>
-                  <TouchableOpacity style={st.btn2} onPress={() => renomear(it)}><Text style={st.btn2Tx}>Salvar nome</Text></TouchableOpacity>
-                  <TouchableOpacity style={st.btn2} onPress={() => setRenom(null)}><Text style={st.btn2Tx}>Cancelar</Text></TouchableOpacity>
+                <TextInput style={CAMPO} value={nomeEd} onChangeText={setNomeEd} placeholder="Nome do evento" placeholderTextColor="#9aa5ae" />
+                <View style={{ flexDirection: 'row' }}>
+                  <TouchableOpacity onPress={() => renomear(it)} style={{ paddingVertical: 8, paddingRight: 24 }}><Text style={{ color: COR.azulTx, fontWeight: '700' }}>SALVAR</Text></TouchableOpacity>
+                  <TouchableOpacity onPress={() => setRenom(null)} style={{ paddingVertical: 8 }}><Text style={{ color: COR.tx2, fontWeight: '700' }}>CANCELAR</Text></TouchableOpacity>
                 </View>
               </View>
             ) : (
-              <View style={[st.row, { marginTop: 6, marginBottom: 0 }]}>
-                <TouchableOpacity style={st.btn2} onPress={() => abrir(it)}><Text style={st.btn2Tx}>Abrir</Text></TouchableOpacity>
-                <TouchableOpacity style={st.btn2} onPress={() => { setRenom(it.code); setNomeEd(it.nome || ''); }}><Text style={st.btn2Tx}>Renomear</Text></TouchableOpacity>
-                <TouchableOpacity style={st.btn2} onPress={() => pedeApagar(it)}><Text style={[st.btn2Tx, { color: '#ff5252' }]}>Apagar</Text></TouchableOpacity>
-              </View>
+              <TouchableOpacity activeOpacity={0.8} onPress={() => abrir(it)} onLongPress={() => opcoes(it)} style={{ flexDirection: 'row', alignItems: 'center' }}>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ color: COR.tx, fontSize: 17, fontWeight: '500' }}>{it.nome || '(sem nome)'}</Text>
+                  <Text style={{ color: COR.tx2, fontSize: 13, marginTop: 3 }}>{[it.data, it.cidade].filter(Boolean).join(' - ') || 'Código ' + it.code}</Text>
+                  <Text style={{ color: COR.tx2, fontSize: 12, marginTop: 2 }}>Código {it.code} · {it.marcas || 0} marca(s) · {km3(it.km)} km</Text>
+                </View>
+                <TouchableOpacity onPress={() => opcoes(it)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 6 }} style={{ paddingHorizontal: 8 }}><Text style={{ color: COR.tx2, fontSize: 22, fontWeight: '900' }}>⋮</Text></TouchableOpacity>
+                <Text style={{ color: COR.tx2, fontSize: 24 }}>›</Text>
+              </TouchableOpacity>
             )}
           </View>
         ))}
-      </View>
-      {apagando && (
-        <View style={[st.card, { borderColor: '#ff5252', borderWidth: 1 }]}>
-          <Text style={[st.tip, { color: '#ff5252' }]}>Apagar "{apagando.nome || apagando.code}"?</Text>
-          <Text style={st.tipTx}>Não dá para desfazer. Para confirmar, digite o nome da prova (ou o código, se não tiver nome).</Text>
-          <TextInput style={st.field} value={conf} onChangeText={setConf} placeholder={apagando.nome || apagando.code} placeholderTextColor="#666" />
-          <View style={[st.row, { marginTop: 8, marginBottom: 0 }]}>
-            <TouchableOpacity style={st.btn2} onPress={() => setApagando(null)}><Text style={st.btn2Tx}>Cancelar</Text></TouchableOpacity>
-            <TouchableOpacity style={[st.btn2, { borderColor: '#ff5252' }]} onPress={() => { if (conf.trim().toLowerCase() !== String(apagando.nome || apagando.code).trim().toLowerCase()) return Alert.alert('Nome diferente', 'Digite exatamente o nome da prova para apagar.'); apagar(); }}><Text style={[st.btn2Tx, { color: '#ff5252' }]}>Sim, apagar</Text></TouchableOpacity>
+        {apagando && (
+          <View style={{ backgroundColor: '#fff', borderRadius: 6, padding: 14, marginTop: 6, borderWidth: 1, borderColor: COR.verm }}>
+            <Text style={{ color: COR.verm, fontWeight: '700', fontSize: 16 }}>Apagar "{apagando.nome || apagando.code}"?</Text>
+            <Text style={{ color: COR.tx2, marginVertical: 6 }}>Não dá para desfazer. Para confirmar, digite o nome do evento (ou o código, se não tiver nome).</Text>
+            <TextInput style={CAMPO} value={conf} onChangeText={setConf} placeholder={apagando.nome || apagando.code} placeholderTextColor="#9aa5ae" />
+            <View style={{ flexDirection: 'row' }}>
+              <TouchableOpacity onPress={() => setApagando(null)} style={{ paddingVertical: 8, paddingRight: 24 }}><Text style={{ color: COR.tx2, fontWeight: '700' }}>CANCELAR</Text></TouchableOpacity>
+              <TouchableOpacity onPress={() => { if (conf.trim().toLowerCase() !== String(apagando.nome || apagando.code).trim().toLowerCase()) return Alert.alert('Nome diferente', 'Digite exatamente o nome ou o código do evento.'); apagar(); }} style={{ paddingVertical: 8 }}><Text style={{ color: COR.verm, fontWeight: '700' }}>APAGAR DEFINITIVAMENTE</Text></TouchableOpacity>
+            </View>
           </View>
-        </View>
-      )}
-      <View style={st.card}>
-        <TouchableOpacity style={[st.btn, { marginBottom: 0 }]} onPress={() => setForm(true)}><Text style={st.btnTx}>+ NOVA PROVA</Text></TouchableOpacity>
-        <Text style={st.tipTx}>O código (4 números) é gerado sozinho. Os competidores veem a prova em "Provas" quando você inscreve o e-mail deles.</Text>
+        )}
       </View>
-      <Tela visible={form} onRequestClose={() => setForm(false)}>
-        <KeyboardAvoidingView style={{ flex: 1, backgroundColor: '#0c1014' }} behavior="padding">
-          <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ padding: 16, paddingTop: 12 }}>
-            <Text style={[st.tip, { fontSize: 20 }]}>Nova prova</Text>
-            <TextInput style={st.field} value={novo} onChangeText={setNovo} placeholder="Nome da prova" placeholderTextColor="#666" />
-            <TextInput style={st.field} value={cidade} onChangeText={setCidade} placeholder="Cidade - UF" placeholderTextColor="#666" />
-            <TouchableOpacity style={[st.field, { justifyContent: 'center' }]} onPress={escolherData}>
-              <Text style={{ color: dataTx ? '#fff' : '#666', fontSize: 16 }}>{dataTx ? `📅  ${dataTx}` : '📅  Escolher a data no calendário'}</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={[st.btn, { marginTop: 14 }]} onPress={criar} disabled={busy}><Text style={st.btnTx}>{busy ? 'Criando…' : 'Criar prova'}</Text></TouchableOpacity>
-            <TouchableOpacity style={st.btn2} onPress={() => setForm(false)}><Text style={st.btn2Tx}>Cancelar</Text></TouchableOpacity>
+      <TouchableOpacity onPress={() => setForm(true)} style={{ position: web ? 'fixed' : 'absolute', right: 20, bottom: 24, width: 58, height: 58, borderRadius: 29, backgroundColor: COR.azul, alignItems: 'center', justifyContent: 'center', elevation: 6, shadowColor: '#000', shadowOpacity: 0.3, shadowRadius: 6, shadowOffset: { width: 0, height: 3 } }}><Text style={{ color: '#fff', fontSize: 32, lineHeight: 34 }}>+</Text></TouchableOpacity>
+      <Tela visible={form} onRequestClose={() => setForm(false)} fundo={COR.fundo}>
+        <KeyboardAvoidingView style={{ flex: 1, backgroundColor: COR.fundo }} behavior="padding">
+          <Cab titulo="Novo evento" azul onVoltar={() => setForm(false)} />
+          <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ padding: 18 }}>
+            <Text style={{ color: COR.azulTx, fontSize: 13 }}>Nome do evento</Text>
+            <TextInput style={CAMPO} value={novo} onChangeText={setNovo} placeholderTextColor="#9aa5ae" />
+            <Text style={{ color: COR.azulTx, fontSize: 13 }}>Cidade - UF</Text>
+            <TextInput style={CAMPO} value={cidade} onChangeText={setCidade} placeholderTextColor="#9aa5ae" />
+            <Text style={{ color: COR.azulTx, fontSize: 13 }}>Data do evento</Text>
+            <TouchableOpacity style={[CAMPO, { justifyContent: 'center' }]} onPress={escolherData}><Text style={{ color: dataTx ? COR.tx : '#9aa5ae', fontSize: 16 }}>{dataTx ? `📅  ${dataTx}` : '📅  Escolher a data no calendário'}</Text></TouchableOpacity>
+            <Text style={{ color: COR.tx2, fontSize: 12 }}>O código (4 números) é gerado sozinho. Os competidores veem o evento quando você inscreve o e-mail deles.</Text>
           </ScrollView>
+          <TouchableOpacity onPress={criar} disabled={busy} style={{ backgroundColor: COR.azul, paddingVertical: 18, alignItems: 'center' }}><Text style={{ color: '#fff', fontWeight: '700', fontSize: 16 }}>{busy ? 'CRIANDO…' : 'CRIAR EVENTO'}</Text></TouchableOpacity>
         </KeyboardAvoidingView>
       </Tela>
     </View>

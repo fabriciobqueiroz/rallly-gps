@@ -20,6 +20,8 @@ import { Platform } from 'react-native';
 import ListaProvas, { slugProva } from './Provas';
 import { CATS_PADRAO, OrgCategorias, OrgInscricoes, OrgVisaoGeral, OrgCriterios, OrgResultados } from './OrgExtras';
 import { compartilharPdf } from './pdf';
+import Planilhas from './OrgPlanilhas';
+import { st as stDark } from './estilos';
 
 const num = (v, d = 0) => { const n = parseFloat(String(v).replace(',', '.')); return isNaN(n) ? d : n; };
 // Média de cada categoria = média do Graduado (base) + diferença da categoria (dvs[g], em km/h).
@@ -100,7 +102,7 @@ function OrgRankingLive({ st, prova }) {
       {rows.length === 0 && <Text style={st.tipTx}>Nenhum resultado enviado ainda.</Text>}
       {classes.map((c) => (
         <View key={c} style={{ marginTop: 8 }}>
-          <Text style={{ color: '#fff', fontWeight: '800' }}>{c}</Text>
+          <Text style={{ color: '#222a31', fontWeight: '800' }}>{c}</Text>
           {rows.filter((r) => r.classe === c).map((r, i) => (
             <View key={r.numero + (r.oficial ? 'o' : '')} style={st.line}>
               <Text style={st.k}>{i + 1}º  #{r.numero} {r.nome} · {r.npcs} PC{r.oficial ? ' · oficial' : ''}</Text>
@@ -126,11 +128,11 @@ const ICONES = {
   sair: 'M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4 M16 17l5-5-5-5 M21 12H9',
   volta: 'M15 18l-6-6 6-6',
 };
-function Icone({ n, cor, tam = 22 }) {
+export function Icone({ n, cor, tam = 22 }) {
   return <Svg width={tam} height={tam} viewBox="0 0 24 24" fill="none" stroke={cor} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"><Path d={ICONES[n]} /></Svg>;
 }
 
-export default function Organizador({ st, prova, provaMap: pmRaw, last, onOrg, onProva, onTab, abrirReq, listaReq, erroProva }) {
+export default function Organizador({ onMenu, st, prova, provaMap: pmRaw, last, onOrg, onProva, onTab, abrirReq, listaReq, erroProva }) {
   // Os dados só valem se são DESTA prova: ao criar/abrir outra, o mapa da anterior ainda existe por um instante e não pode ser carregado.
   const provaMap = pmRaw && pmRaw.code === String(prova || '').trim().toUpperCase().replace(/[^A-Z0-9]+/g, '') ? pmRaw : PM_VAZIO;
   const [org, setOrg] = useState(() => loadJson('org', null));
@@ -139,7 +141,7 @@ export default function Organizador({ st, prova, provaMap: pmRaw, last, onOrg, o
   const [legs, setLegs] = useState([]);
   const [busy, setBusy] = useState('');
   const [inscritos, setInscritos] = useState([]);
-  const [sec, setSec] = useState(Platform.OS === 'web' ? 'planilha' : 'levantar');
+  const [sec, setSec] = useState('geral');
   const [aberta, setAberta] = useState(false);
   const [menuAb, setMenuAb] = useState(false);
   const [pcl, setPcl] = useState([]);
@@ -217,7 +219,7 @@ export default function Organizador({ st, prova, provaMap: pmRaw, last, onOrg, o
     setWps(w); setRota(r); setRefs(rf || []); setPcl(pc || []);
     setLegs(r.legs.map((_, i) => novoLeg(dvs, bi, (nIdx.get ? nIdx.get(i) : nIdx.has(i) ? 60 : 0) || 0)));
     setTrs((tn || []).map((t, i) => (t.t === 'D' ? { t: 'D', bs: '30', v: mk(30), min: String(t.min || 15), d0: t.d0, zr: t.zr != null ? !!t.zr : !!zrAnt[i] } : { t: 'V', bs: String(t.v).replace(',', '.'), v: mk(String(t.v).replace(',', '.')), min: '15', d0: t.d0, zr: t.zr != null ? !!t.zr : !!zrAnt[i] })));
-    setSec('planilha');
+    setSec('geral');
   };
   const updT = (i, patch) => setTrs((o) => o.map((l, j) => (j === i ? { ...l, ...patch } : l)));
   const onVT = (i, v) => setTrs((o) => o.map((l, j) => (j !== i ? l : { ...l, bs: v, v: mk(v) })));
@@ -232,7 +234,7 @@ export default function Organizador({ st, prova, provaMap: pmRaw, last, onOrg, o
       saveJson('org', o); setOrg(o); onOrg && onOrg(o);
       carregado.current = 0; setLevPub(null); setEdTul({}); setExtras([]); setCheia(true);
       setWps([]); setRota({ coords: [], legs: [], tul: [] }); setLegs([]); setTrs([]); setRefs([]); setPcl([]); setManual(false); setInscritos([]);
-      setSec(Platform.OS === 'web' ? 'planilha' : 'levantar'); setAberta(true);
+      setSec('geral'); setAberta(true);
     } catch (e) { Alert.alert('Sem conexão', String(e?.message || e)); }
   };
   useEffect(() => { if (listaReq) setAberta(false); }, [listaReq]);
@@ -291,7 +293,7 @@ export default function Organizador({ st, prova, provaMap: pmRaw, last, onOrg, o
     catch (e) { Alert.alert('Não gerou o PDF', String(e?.message || e)); }
   };
 
-  if (!logado || !aberta) return <ListaProvas st={st} org={org} onAbrir={abrirProva} onSairOrg={sair} onApagou={(c) => { if (prova.trim().toUpperCase() === String(c).trim().toUpperCase()) onProva && onProva('', true); }} />;
+  if (!logado || !aberta) return <ListaProvas onTab={onTab} onMenu={onMenu} st={st} org={org} onAbrir={abrirProva} onSairOrg={sair} onApagou={(c) => { if (prova.trim().toUpperCase() === String(c).trim().toUpperCase()) onProva && onProva('', true); }} />;
 
   const total = rota.legs.reduce((a, b) => a + b, 0);
   const planilha = trs.length
@@ -301,7 +303,7 @@ export default function Organizador({ st, prova, provaMap: pmRaw, last, onOrg, o
   const editaMapa = Platform.OS === 'web'; // no celular o traçado vem do levantamento: o mapa aqui é só para ver
   const mapaVis = mapaAb == null ? wps.length < 2 : mapaAb;
   const me = last ? [last.lat, last.lon] : null;
-  const chip = (on) => [st.chip, { paddingHorizontal: 14, paddingVertical: 6 }, on && { backgroundColor: '#ff7a2e' }];
+  const chip = (on) => [st.chip, { paddingHorizontal: 14, paddingVertical: 6 }, on && { backgroundColor: '#00a3c4' }];
   const cats = provaMap.categorias;
   const web = Platform.OS === 'web';
   const MENU = [
@@ -310,7 +312,7 @@ export default function Organizador({ st, prova, provaMap: pmRaw, last, onOrg, o
     { id: 'insc', nome: 'Inscrições', ic: '👥', secs: [['inscricoes', 'Inscrições']] },
     { id: 'dl', nome: 'Dataloggers', ic: '📈', secs: [['tracklog', 'Track log']] },
     { id: 'res', nome: 'Resultados', ic: '🏆', secs: [['resultados', 'Resultado oficial'], ['ranking', 'Ranking ao vivo']] },
-    { id: 'pl', nome: 'Planilhas', ic: '🗺', secs: web ? [['planilha', 'Abrir planilha'], ['levantar', 'Levantar no carro']] : [['levantar', 'Levantar no carro'], ['planilha', 'Planilha']] },
+    { id: 'pl', nome: 'Planilhas', ic: '🗺', secs: web ? [['planilhas', 'Planilhas'], ['planilha', 'Abrir planilha'], ['levantar', 'Levantar no carro']] : [['planilhas', 'Planilhas'], ['levantar', 'Levantar no carro'], ['planilha', 'Editar trechos']] },
     { id: 'tr', nome: 'Transmissão', ic: '📡', secs: [['transmissao', 'Transmissão'], ['aovivo', 'Ao vivo']] },
   ];
   const irSec = (k) => { if (k === 'planilha') setCheia(true); setSec(k); };
@@ -373,51 +375,55 @@ export default function Organizador({ st, prova, provaMap: pmRaw, last, onOrg, o
   const nomeProva = (loadJson('lev_index', []).find((x) => x.code === org.prova) || {}).nome || '';
   return (
     <View>
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 8 }}>
-        <TouchableOpacity onPress={() => setMenuAb((o) => !o)} style={{ paddingHorizontal: 12, paddingVertical: 6, backgroundColor: '#262b32', borderRadius: 8 }}><Text style={{ color: '#fff', fontSize: 20 }}>☰</Text></TouchableOpacity>
+      <View style={{ backgroundColor: '#6cc4ec', paddingTop: web ? 14 : 46, paddingBottom: 12, paddingHorizontal: 8, flexDirection: 'row', alignItems: 'center' }}>
+        <TouchableOpacity onPress={() => setMenuAb((o) => !o)} style={{ paddingHorizontal: 12, paddingVertical: 4 }}><Text style={{ color: '#fff', fontSize: 26 }}>☰</Text></TouchableOpacity>
         <View style={{ flex: 1 }}>
-          <Text style={[st.v, { fontSize: 16 }]} numberOfLines={1}>{menuAb ? (nomeProva || 'Evento') : grupoAtual.nome}</Text>
-          <Text style={st.tipTx} numberOfLines={1}>{nomeProva || 'Prova'} · código {org.prova}</Text>
+          <Text style={{ color: '#fff', fontSize: 19 }} numberOfLines={1}>{grupoAtual.nome}</Text>
+          <Text style={{ color: '#e6f6fd', fontSize: 12 }} numberOfLines={1}>{nomeProva || 'Prova'} · código {org.prova}</Text>
         </View>
       </View>
       <Modal visible={menuAb} transparent animationType="fade" onRequestClose={() => setMenuAb(false)}>
         <View style={{ flex: 1, flexDirection: 'row' }}>
-          <View style={{ width: '78%', maxWidth: 340, backgroundColor: '#151a22', paddingTop: 48, paddingHorizontal: 12, paddingBottom: 20 }}>
-            <Text style={{ color: '#ff7a2e', fontSize: 26, fontWeight: '800' }}>Rally GPS</Text>
-            <Text style={{ color: '#fff', fontSize: 17, fontWeight: '600', marginTop: 14 }} numberOfLines={2}>{nomeProva || 'Evento'}</Text>
-            <TouchableOpacity style={{ flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 14, paddingHorizontal: 8, marginTop: 8 }} onPress={() => { setMenuAb(false); setAberta(false); }}>
-              <Icone n="volta" cor="#b0b8c4" />
-              <Text style={{ color: '#b0b8c4', fontSize: 16 }}>Eventos</Text>
+          <View style={{ width: '78%', maxWidth: 340, backgroundColor: '#6cc4ec', paddingTop: 48, paddingHorizontal: 10, paddingBottom: 20 }}>
+            <Text style={{ color: '#fff', fontSize: 28, fontWeight: '900', paddingHorizontal: 8 }}>Rally GPS</Text>
+            <Text style={{ color: '#fff', fontSize: 16, marginTop: 10, paddingHorizontal: 8 }} numberOfLines={2}>{nomeProva || 'Evento'}</Text>
+            <View style={{ height: 1, backgroundColor: 'rgba(255,255,255,0.4)', marginVertical: 12 }} />
+            <TouchableOpacity style={{ flexDirection: 'row', alignItems: 'center', gap: 14, paddingVertical: 13, paddingHorizontal: 8 }} onPress={() => { setMenuAb(false); setAberta(false); }}>
+              <Icone n="volta" cor="#fff" />
+              <Text style={{ color: '#fff', fontSize: 16 }}>Eventos</Text>
             </TouchableOpacity>
             {MENU.map((g) => {
               const on = g.id === grupoAtual.id;
               return (
-                <TouchableOpacity key={g.id} style={{ flexDirection: 'row', alignItems: 'center', gap: 14, paddingVertical: 13, paddingHorizontal: 10, borderRadius: 10, marginBottom: 2, backgroundColor: on ? '#ff7a2e' : 'transparent' }} onPress={() => { irSec(g.secs[0][0]); setMenuAb(false); }}>
-                  <Icone n={g.id} cor={on ? '#0c1014' : '#ff7a2e'} />
-                  <Text style={{ color: on ? '#0c1014' : '#d0d6de', fontSize: 17, fontWeight: on ? '700' : '500' }}>{g.nome}</Text>
+                <TouchableOpacity key={g.id} style={{ flexDirection: 'row', alignItems: 'center', gap: 14, paddingVertical: 13, paddingHorizontal: 8, backgroundColor: on ? 'rgba(255,255,255,0.3)' : 'transparent' }} onPress={() => { setMenuAb(false); irSec(g.secs[0][0]); }}>
+                  <Icone n={g.id} cor="#fff" />
+                  <Text style={{ color: '#fff', fontSize: 16, fontWeight: on ? '700' : '400' }}>{g.nome}</Text>
                 </TouchableOpacity>
               );
             })}
             <View style={{ flex: 1 }} />
-            <TouchableOpacity style={{ flexDirection: 'row', alignItems: 'center', gap: 14, paddingVertical: 12, paddingHorizontal: 10 }} onPress={() => { setMenuAb(false); sair(); }}>
-              <Icone n="sair" cor="#b0b8c4" />
-              <Text style={{ color: '#b0b8c4', fontSize: 16 }}>Sair do modo organizador</Text>
+            <TouchableOpacity style={{ flexDirection: 'row', alignItems: 'center', gap: 14, paddingVertical: 12, paddingHorizontal: 8 }} onPress={() => { setMenuAb(false); sair(); }}>
+              <Icone n="sair" cor="#fff" />
+              <Text style={{ color: '#fff', fontSize: 16 }}>Sair</Text>
             </TouchableOpacity>
-            <Text style={{ color: '#6b7480', fontSize: 12, paddingHorizontal: 10 }}>Rally GPS · {VERSAO}</Text>
+            <Text style={{ color: '#e6f6fd', fontSize: 12, paddingHorizontal: 8 }}>Rally GPS · {VERSAO}</Text>
           </View>
-          <TouchableOpacity activeOpacity={1} style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.6)' }} onPress={() => setMenuAb(false)} />
+          <TouchableOpacity activeOpacity={1} style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)' }} onPress={() => setMenuAb(false)} />
         </View>
       </Modal>
+      <View style={{ padding: web && cheia && sec === 'planilha' ? 0 : 12 }}>
       {!menuAb && grupoAtual.secs.length > 1 && (
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 10 }}>
-          {grupoAtual.secs.map(([k, n]) => <TouchableOpacity key={k} style={chip(sec === k)} onPress={() => irSec(k)}><Text style={[st.btn2Tx, sec === k && { color: '#0c1014' }]}>{n}</Text></TouchableOpacity>)}
+          {grupoAtual.secs.map(([k, n]) => <TouchableOpacity key={k} style={chip(sec === k)} onPress={() => irSec(k)}><Text style={[st.btn2Tx, sec === k && { color: '#ffffff' }]}>{n}</Text></TouchableOpacity>)}
         </View>
       )}
       {!menuAb && (
       <View>
-      {sec === 'levantar' && <Levantamento key={org.prova + '_' + (Platform.OS === 'web' ? (provaMap.lev ? provaMap.lev.em || 1 : 0) : '')} st={st} prova={org.prova} last={last} onAplicar={aplicarLevantamento} levNuvem={provaMap.lev} trailNuvem={provaMap.lev && provaMap.lev.trail && provaMap.lev.trail.length >= 4 ? Array.from({ length: provaMap.lev.trail.length >> 1 }, (_, i) => [provaMap.lev.trail[2 * i], provaMap.lev.trail[2 * i + 1]]) : provaMap.coords} />}
-      {sec === 'aovivo' && <PainelAoVivo st={st} kind="prova" id={org.prova} rota={provaMap.rota ? pairs(provaMap.rota) : rota.coords} />}
-      {sec === 'transmissao' && <PainelTransmissao st={st} prova={org.prova} lib={provaMap.lib || {}} />}
+      {sec === 'planilhas' && <Planilhas code={org.prova} nome={nomeProva} grupos={grupos} pub={provaMap.pub} levEm={provaMap.lev ? provaMap.lev.salvoEm : 0} aviso={erroProva ? 'Erro ao ler a nuvem: ' + erroProva : ''}
+        onCriar={() => irSec(web ? 'planilha' : 'levantar')} onEditar={() => irSec(web ? 'planilha' : 'planilha')} onBaixar={() => { carregado.current = 0; onProva && onProva(prova, true); }} onSimular={() => { setSec('planilha'); setSimOpen(true); }} onTracklogs={() => irSec('tracklog')} />}
+      {sec === 'levantar' && <View style={{ backgroundColor: '#0c1014', borderRadius: 10, padding: 10 }}><Levantamento key={org.prova + '_' + (Platform.OS === 'web' ? (provaMap.lev ? provaMap.lev.em || 1 : 0) : '')} st={stDark} prova={org.prova} last={last} onAplicar={aplicarLevantamento} levNuvem={provaMap.lev} trailNuvem={provaMap.lev && provaMap.lev.trail && provaMap.lev.trail.length >= 4 ? Array.from({ length: provaMap.lev.trail.length >> 1 }, (_, i) => [provaMap.lev.trail[2 * i], provaMap.lev.trail[2 * i + 1]]) : provaMap.coords} /></View>}
+      {sec === 'aovivo' && <View style={{ backgroundColor: '#0c1014', borderRadius: 10, padding: 10 }}><PainelAoVivo st={stDark} kind="prova" id={org.prova} rota={provaMap.rota ? pairs(provaMap.rota) : rota.coords} /></View>}
+      {sec === 'transmissao' && <View style={{ backgroundColor: '#0c1014', borderRadius: 10, padding: 10 }}><PainelTransmissao st={stDark} prova={org.prova} lib={provaMap.lib || {}} /></View>}
       {sec === 'ranking' && <OrgRankingLive st={st} prova={org.prova} />}
       {sec === 'geral' && <OrgVisaoGeral st={st} prova={org.prova} lib={provaMap.lib || {}} />}
       {sec === 'categorias' && <View><OrgCategorias st={st} prova={org.prova} categorias={cats} /><OrgCriterios st={st} prova={org.prova} lib={provaMap.lib || {}} categorias={cats} /></View>}
@@ -457,12 +463,12 @@ export default function Organizador({ st, prova, provaMap: pmRaw, last, onOrg, o
               {grupos.map((g, gi) => <Text key={gi} numberOfLines={1} style={[st.v, { flex: 1, textAlign: 'center', fontSize: 9 }]}>{g.nome.slice(0, 6)}</Text>)}
             </View>
             {planilha.map((r) => (
-              <View key={r.n} style={{ flexDirection: 'row', paddingVertical: 4, borderBottomWidth: 1, borderBottomColor: '#262b32' }}>
-                <Text style={{ width: '14%', textAlign: 'center', color: '#f5f5f5', fontSize: 12 }}>{r.n}</Text>
-                <Text style={{ width: '10%', textAlign: 'center', color: '#f5f5f5', fontSize: 12 }}>{r.d ? 'D' : 'V'}</Text>
-                <Text style={{ width: '22%', textAlign: 'center', color: '#f5f5f5', fontSize: 12 }}>{r.km.toFixed(3).replace('.', ',')}</Text>
-                {r.d ? <Text style={{ flex: grupos.length, textAlign: 'center', color: '#a8a8a8', fontSize: 12 }}>{r.min} min (sem pontos)</Text>
-                  : grupos.map((g, gi) => <Text key={gi} style={{ flex: 1, textAlign: 'center', color: '#f5f5f5', fontSize: 12 }}>{r.v[gi] ?? '—'}</Text>)}
+              <View key={r.n} style={{ flexDirection: 'row', paddingVertical: 4, borderBottomWidth: 1, borderBottomColor: '#dde3e8' }}>
+                <Text style={{ width: '14%', textAlign: 'center', color: '#222a31', fontSize: 12 }}>{r.n}</Text>
+                <Text style={{ width: '10%', textAlign: 'center', color: '#222a31', fontSize: 12 }}>{r.d ? 'D' : 'V'}</Text>
+                <Text style={{ width: '22%', textAlign: 'center', color: '#222a31', fontSize: 12 }}>{r.km.toFixed(3).replace('.', ',')}</Text>
+                {r.d ? <Text style={{ flex: grupos.length, textAlign: 'center', color: '#6b7480', fontSize: 12 }}>{r.min} min (sem pontos)</Text>
+                  : grupos.map((g, gi) => <Text key={gi} style={{ flex: 1, textAlign: 'center', color: '#222a31', fontSize: 12 }}>{r.v[gi] ?? '—'}</Text>)}
               </View>
             ))}
             {neutros.map((x) => <Text key={'n' + x.i} style={[st.tipTx, { color: '#ba68c8' }]}>Neutro no km {x.km.toFixed(3).replace('.', ',')}: {x.nt} s parado</Text>)}
@@ -480,7 +486,7 @@ export default function Organizador({ st, prova, provaMap: pmRaw, last, onOrg, o
         </View>
       )}
       {mapaVis && <MapaWeb wps={wps} coords={rota.coords} editable={editaMapa && !manual} onTap={(la, lo) => { if (editaMapa) setWps((w) => [...w, [la, lo]]); }} me={me} height={380} />}
-      <Simulacao st={st} visible={simOpen} onClose={() => setSimOpen(false)} coords={rota.coords} tul={tulT} trs={trsNum} trechos={trechos} inscritos={inscritos} totalM={rota.legs.reduce((a, b) => a + b, 0) * 1000} grupos={grupos} cats={cats && cats.length ? cats.map((c) => c.nome) : CATS_PADRAO.map((c) => c.nome)} />
+      <Simulacao st={stDark} visible={simOpen} onClose={() => setSimOpen(false)} coords={rota.coords} tul={tulT} trs={trsNum} trechos={trechos} inscritos={inscritos} totalM={rota.legs.reduce((a, b) => a + b, 0) * 1000} grupos={grupos} cats={cats && cats.length ? cats.map((c) => c.nome) : CATS_PADRAO.map((c) => c.nome)} />
       {busy ? <Text style={st.tipTx}>{busy}</Text> : null}
       <View style={st.card}>
         {mapaVis && editaMapa && <View style={st.row}>
@@ -490,13 +496,13 @@ export default function Organizador({ st, prova, provaMap: pmRaw, last, onOrg, o
         {trs.length > 0 && trs.map((l, i) => {
           const fim = i + 1 < trs.length ? trs[i + 1].d0 : total * 1000;
           return (
-            <View key={'t' + i} style={{ borderTopWidth: 1, borderTopColor: '#262b32', paddingVertical: 8 }}>
+            <View key={'t' + i} style={{ borderTopWidth: 1, borderTopColor: '#dde3e8', paddingVertical: 8 }}>
               <Text style={st.v}>Trecho {i + 1} · {((fim - (l.d0 || 0)) / 1000).toFixed(3)} km</Text>
               <View style={[st.row, { marginTop: 6, marginBottom: 6 }]}>
-                <TouchableOpacity style={chip(l.t === 'V')} onPress={() => updT(i, { t: 'V' })}><Text style={[st.btn2Tx, l.t === 'V' && { color: '#0c1014' }]}>V média</Text></TouchableOpacity>
-                <TouchableOpacity style={chip(l.t === 'D')} onPress={() => updT(i, { t: 'D' })}><Text style={[st.btn2Tx, l.t === 'D' && { color: '#0c1014' }]}>D deslocamento</Text></TouchableOpacity>
+                <TouchableOpacity style={chip(l.t === 'V')} onPress={() => updT(i, { t: 'V' })}><Text style={[st.btn2Tx, l.t === 'V' && { color: '#ffffff' }]}>V média</Text></TouchableOpacity>
+                <TouchableOpacity style={chip(l.t === 'D')} onPress={() => updT(i, { t: 'D' })}><Text style={[st.btn2Tx, l.t === 'D' && { color: '#ffffff' }]}>D deslocamento</Text></TouchableOpacity>
               </View>
-              {i > 0 && <TouchableOpacity style={[chip(!!l.zr), { marginBottom: 6 }]} onPress={() => updT(i, { zr: !l.zr })}><Text style={[st.btn2Tx, l.zr && { color: '#0c1014' }]}>{l.zr ? '✓ Zera o hodômetro neste trecho' : 'Zerar hodômetro neste trecho'}</Text></TouchableOpacity>}
+              {i > 0 && <TouchableOpacity style={[chip(!!l.zr), { marginBottom: 6 }]} onPress={() => updT(i, { zr: !l.zr })}><Text style={[st.btn2Tx, l.zr && { color: '#ffffff' }]}>{l.zr ? '✓ Zera o hodômetro neste trecho' : 'Zerar hodômetro neste trecho'}</Text></TouchableOpacity>}
               {l.t === 'V' ? (
                 <View>
                   <View style={st.line}>
@@ -518,15 +524,15 @@ export default function Organizador({ st, prova, provaMap: pmRaw, last, onOrg, o
         {refs.map((r, i) => (
           <View key={'rf' + i} style={st.line}>
             <Text style={st.k}>Ponto {r.n} · km {Number(r.km || 0).toFixed(3)}</Text>
-            <TouchableOpacity style={chip(!!r.afer)} onPress={() => setRefs((o) => o.map((x, j) => (j === i ? { ...x, afer: !x.afer } : x)))}><Text style={[st.btn2Tx, r.afer && { color: '#0c1014' }]}>{r.afer ? '✓ AFER' : 'AFER'}</Text></TouchableOpacity>
+            <TouchableOpacity style={chip(!!r.afer)} onPress={() => setRefs((o) => o.map((x, j) => (j === i ? { ...x, afer: !x.afer } : x)))}><Text style={[st.btn2Tx, r.afer && { color: '#ffffff' }]}>{r.afer ? '✓ AFER' : 'AFER'}</Text></TouchableOpacity>
           </View>
         ))}
         {trs.length === 0 && legs.map((l, i) => (
-          <View key={i} style={{ borderTopWidth: 1, borderTopColor: '#262b32', paddingVertical: 8 }}>
+          <View key={i} style={{ borderTopWidth: 1, borderTopColor: '#dde3e8', paddingVertical: 8 }}>
             <Text style={st.v}>Trecho {i + 1} · {(rota.legs[i] ?? 0).toFixed(3)} km</Text>
             <View style={[st.row, { marginTop: 6, marginBottom: 6 }]}>
-              <TouchableOpacity style={chip(l.t === 'V')} onPress={() => upd(i, { t: 'V' })}><Text style={[st.btn2Tx, l.t === 'V' && { color: '#0c1014' }]}>V média</Text></TouchableOpacity>
-              <TouchableOpacity style={chip(l.t === 'D')} onPress={() => upd(i, { t: 'D' })}><Text style={[st.btn2Tx, l.t === 'D' && { color: '#0c1014' }]}>D deslocamento</Text></TouchableOpacity>
+              <TouchableOpacity style={chip(l.t === 'V')} onPress={() => upd(i, { t: 'V' })}><Text style={[st.btn2Tx, l.t === 'V' && { color: '#ffffff' }]}>V média</Text></TouchableOpacity>
+              <TouchableOpacity style={chip(l.t === 'D')} onPress={() => upd(i, { t: 'D' })}><Text style={[st.btn2Tx, l.t === 'D' && { color: '#ffffff' }]}>D deslocamento</Text></TouchableOpacity>
             </View>
             {l.t === 'V' ? (
               <View>
@@ -563,6 +569,7 @@ export default function Organizador({ st, prova, provaMap: pmRaw, last, onOrg, o
       ))}
       </View>
       )}
+      </View>
     </View>
   );
 }

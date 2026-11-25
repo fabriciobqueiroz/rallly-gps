@@ -1,6 +1,6 @@
 // Fluxo do competidor: eventos → evento → modo de uso → largada → configurações → equipamento → prova.
 import { useEffect, useState } from 'react';
-import { Alert, AppState, Linking, Modal, ScrollView, Text, TextInput, TouchableOpacity, View, useWindowDimensions } from 'react-native';
+import { StyleSheet, Alert, AppState, Linking, Modal, ScrollView, Text, TextInput, TouchableOpacity, View, useWindowDimensions } from 'react-native';
 import { COR, Cab, OpcaoClara, Passo, Performance, ResultadosEvento } from './Pos';
 import { MeuTrackLog } from './TrackLog';
 import * as Location from 'expo-location';
@@ -97,7 +97,7 @@ function Disponiveis({ st, user, excluir, dias }) {
         const stt = p && p.status;
         return (
           <View key={v.prova} style={[st.card, { marginBottom: 8, borderLeftWidth: 5, borderLeftColor: '#9aa3ad' }]}>
-            <Text style={{ color: '#fff', fontSize: 18, fontWeight: '800' }}>{v.nome || 'Prova ' + v.prova}</Text>
+            <Text style={{ color: StyleSheet.flatten(st.tip).color, fontSize: 18, fontWeight: '800' }}>{v.nome || 'Prova ' + v.prova}</Text>
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 4 }}><Text style={st.tipTx}>{v.cidade || '—'}</Text><Text style={st.tipTx}>{v.data || ''}</Text></View>
             {stt === 'pedido' && <Text style={{ color: '#ffb300', fontWeight: '700', marginTop: 4 }}>Pedido enviado · aguardando o organizador</Text>}
             {stt === 'recusado' && <Text style={{ color: '#ff5252', fontWeight: '700', marginTop: 4 }}>Pedido recusado pelo organizador</Text>}
@@ -115,7 +115,8 @@ function Disponiveis({ st, user, excluir, dias }) {
 }
 
 // ---------- 1. Escolha o evento ----------
-function Eventos({ st, user, onEvento, onAdmin }) {
+function Eventos({ st, user, onEvento, onAdmin, onMenu, gps }) {
+  const { height: altura } = useWindowDimensions();
   const c0 = loadJson('evcache', { insc: [], donos: [], provas: {} });
   const [insc, setInsc] = useState(c0.insc);
   const [donos, setDonos] = useState(c0.donos);
@@ -160,9 +161,27 @@ function Eventos({ st, user, onEvento, onAdmin }) {
   );
   const Sec = ({ t, a, tag, hero }) => (a.length ? <View style={{ marginTop: 6 }}><Text style={{ color: COR.tx, fontSize: 17, fontWeight: '500', marginBottom: 8, marginTop: 6 }}>{t}</Text>{a.map((x, i) => <Cartao key={x.kind + x.code + (x.insc?.numero || '')} x={x} tag={tag} hero={hero && i === 0} />)}</View> : null);
   return (
-    <View style={{ marginHorizontal: -16, marginTop: -56, minHeight: 700, backgroundColor: '#d3eef5' }}>
-      <Cab titulo="Escolha o evento" azul />
+    <View style={{ marginHorizontal: -16, marginTop: -56, minHeight: Math.max(altura, 700), backgroundColor: '#4fcbe2' }}>
+      <View style={{ backgroundColor: '#18bfd8', paddingTop: 46, paddingBottom: 16, paddingHorizontal: 18 }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+          <Text style={{ color: '#fff', fontSize: 26, fontWeight: '900' }}>Rally GPS</Text>
+          {onMenu ? <TouchableOpacity onPress={onMenu} hitSlop={{ top: 10, bottom: 10, left: 16, right: 8 }}><Text style={{ color: '#fff', fontSize: 30, fontWeight: '900', paddingHorizontal: 6 }}>⋮</Text></TouchableOpacity> : null}
+        </View>
+        {gps && gps.ola ? <Text style={{ color: '#eafafd', fontSize: 14, marginTop: 4 }}>{gps.ola}</Text> : null}
+        <Text style={{ color: '#fff', fontSize: 18, marginTop: 12 }}>Escolha o evento</Text>
+      </View>
       <View style={{ padding: 16, paddingBottom: 30 }}>
+        {gps ? (
+          <View style={{ backgroundColor: '#fff', borderRadius: 8, padding: 12, marginBottom: 12, flexDirection: 'row', alignItems: 'center', elevation: 2, shadowColor: '#000', shadowOpacity: 0.12, shadowRadius: 4, shadowOffset: { width: 0, height: 1 } }}>
+            <View style={{ flex: 1 }}>
+              <Text style={{ color: gps.cor, fontSize: 15, fontWeight: '600' }}>{gps.txt}</Text>
+              {gps.rem ? <Text style={{ color: COR.azulTx, fontSize: 13, marginTop: 2 }}>Largada em {gps.rem}</Text> : null}
+            </View>
+            <TouchableOpacity onPress={gps.toggle} style={{ backgroundColor: gps.on ? '#90a4ae' : COR.azul, borderRadius: 4, paddingHorizontal: 14, paddingVertical: 9 }}>
+              <Text style={{ color: '#fff', fontWeight: '700', fontSize: 13 }}>{gps.on ? 'DESLIGAR GPS' : 'LIGAR GPS'}</Text>
+            </TouchableOpacity>
+          </View>
+        ) : null}
         {erro ? <Text style={{ color: '#b26a00', marginBottom: 8 }}>{erro}</Text> : null}
         <Sec t="Hoje" a={sHoje} tag hero /><Sec t="Amanhã" a={sAman} tag />
         <Sec t="Admin" a={resto(adm)} /><Sec t="Eventos inscritos" a={resto(comp)} />
@@ -426,13 +445,13 @@ export function DlTela({ st, last, pointsN, startedAt, onFinalizar, info }) {
 }
 
 // ---------- Fluxo ----------
-export default function Fluxo({ st, user, piloto, provaMap, lib, minhaLarg, largManual, setLargManual, pointsN, dlStat, onEnviarDl, enviandoDl, onEscolher, onAdmin, onPlanilha, onSoDl, onPersonalizar, onPiloto, extra, onZerarDl, onExportar, gpsCfg, setGpsCfg }) {
+export default function Fluxo({ onMenu, gps, st, user, piloto, provaMap, lib, minhaLarg, largManual, setLargManual, pointsN, dlStat, onEnviarDl, enviandoDl, onEscolher, onAdmin, onPlanilha, onSoDl, onPersonalizar, onPiloto, extra, onZerarDl, onExportar, gpsCfg, setGpsCfg }) {
   const [tela, setTela] = useState('eventos');
   const [x, setX] = useState(null);
   const [modo, setModo] = useState('planilha');
   return (
     <View>
-      {tela === 'eventos' && <Eventos st={st} user={user} onEvento={(e) => { setX(e); onEscolher(e.insc); setTela('evento'); }} onAdmin={onAdmin} />}
+      {tela === 'eventos' && <Eventos onMenu={onMenu} gps={gps} st={st} user={user} onEvento={(e) => { setX(e); onEscolher(e.insc); setTela('evento'); }} onAdmin={onAdmin} />}
       {tela === 'eventos' && extra}
       {tela === 'evento' && x && <Evento st={st} user={user} x={x} provaMap={provaMap} lib={lib} dlStat={dlStat} pointsN={pointsN} onDl={onEnviarDl} enviandoDl={enviandoDl} onIniciar={() => setTela('modo')} onPersonalizar={onPersonalizar} onVoltar={() => setTela('eventos')} onZerarDl={onZerarDl} onExportar={onExportar} gpsCfg={gpsCfg} setGpsCfg={setGpsCfg} />}
       {tela === 'modo' && <Modo st={st} onEscolhe={(m) => { setModo(m); setTela('largada'); }} onVoltar={() => setTela('evento')} />}

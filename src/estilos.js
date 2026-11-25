@@ -1,6 +1,6 @@
 import { StyleSheet } from 'react-native';
 
-export const st = StyleSheet.create({
+const base = {
   root: { flex: 1, backgroundColor: '#0c1014' },
   wrap: { padding: 16, paddingTop: 56, paddingBottom: 40 },
   h1: { color: '#f5f5f5', fontSize: 24, fontWeight: '800' },
@@ -29,4 +29,19 @@ export const st = StyleSheet.create({
   field: { color: '#f5f5f5', borderWidth: 1, borderColor: '#262b32', borderRadius: 8, padding: 10, marginTop: 8 },
   tip: { color: '#f5f5f5', fontWeight: '800', marginBottom: 6 },
   tipTx: { color: '#a8a8a8', lineHeight: 22 },
+};
+export const st = StyleSheet.create(base);
+
+// Versão clara (estilo Kraken) dos mesmos estilos: troca as cores escuras e laranja pelas claras e azuis.
+const TROCA = { '#0c1014': '#f3f6f8', '#151a20': '#ffffff', '#262b32': '#dde3e8', '#f5f5f5': '#222a31', '#a8a8a8': '#6b7480', '#ff7a2e': '#00a3c4' };
+const claro = {};
+Object.keys(base).forEach((k) => {
+  const o = {};
+  Object.keys(base[k]).forEach((p) => { const v = base[k][p]; o[p] = typeof v === 'string' && TROCA[v] ? TROCA[v] : v; });
+  claro[k] = o;
 });
+claro.btn = { ...claro.btn, backgroundColor: '#00b3d6' };
+claro.btnTx = { ...claro.btnTx, color: '#ffffff' };
+claro.tabOn = { backgroundColor: '#00a3c4' };
+claro.card = { ...claro.card, borderWidth: 0, elevation: 2, shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 4, shadowOffset: { width: 0, height: 1 } };
+export const stClaro = StyleSheet.create(claro);

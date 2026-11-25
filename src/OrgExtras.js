@@ -30,8 +30,8 @@ export function planilhaLiberada(lib, now = Date.now()) {
 }
 
 const Chip = ({ st, on, onPress, children, small }) => (
-  <TouchableOpacity style={[st.chip, { paddingHorizontal: small ? 10 : 14, paddingVertical: small ? 4 : 6 }, on && { backgroundColor: '#ff7a2e' }]} onPress={onPress}>
-    <Text style={[st.btn2Tx, on && { color: '#0c1014' }]}>{children}</Text>
+  <TouchableOpacity style={[st.chip, { paddingHorizontal: small ? 10 : 14, paddingVertical: small ? 4 : 6 }, on && { backgroundColor: '#00a3c4' }]} onPress={onPress}>
+    <Text style={[st.btn2Tx, on && { color: '#ffffff' }]}>{children}</Text>
   </TouchableOpacity>
 );
 const Wrap = ({ children }) => <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 6 }}>{children}</View>;
@@ -42,7 +42,7 @@ function CatRow({ st, c, base, onDv, onRemove }) {
   const [tx, setTx] = useState(c.dv ? fmtDv(c.dv) : '');
   const commit = () => { const n = parseFloat(String(tx).replace(',', '.').replace('+', '')); const v = isNaN(n) ? 0 : Math.round(n * 10) / 10; setTx(v ? fmtDv(v) : ''); if (v !== (c.dv || 0)) onDv(v); };
   return (
-    <View style={{ borderTopWidth: 1, borderTopColor: '#262b32', paddingVertical: 8 }}>
+    <View style={{ borderTopWidth: 1, borderTopColor: '#dde3e8', paddingVertical: 8 }}>
       <View style={st.line}>
         <View style={{ flex: 1 }}>
           <Text style={st.v}>{c.nome}</Text>
@@ -102,7 +102,7 @@ function PedidoLinha({ st, prova, p, cats, inscritos }) {
     } catch (e) { Alert.alert('Não aprovou', String(e?.message || e)); }
   };
   return (
-    <View style={{ borderBottomWidth: 1, borderBottomColor: '#262b32', paddingVertical: 8 }}>
+    <View style={{ borderBottomWidth: 1, borderBottomColor: '#dde3e8', paddingVertical: 8 }}>
       <Text style={st.v}>{p.piloto}{p.navegador ? ` / ${p.navegador}` : ''}</Text>
       <Text style={st.tipTx}>{p.email}{p.equipe ? ` · ${p.equipe}` : ''}</Text>
       <Wrap>{cats.map((c) => <Chip key={c} st={st} small on={cl === c} onPress={() => setCl(c)}>{c}</Chip>)}</Wrap>
@@ -218,7 +218,7 @@ export function OrgInscricoes({ st, prova, inscritos, categorias }) {
               <TouchableOpacity onPress={() => sortearCat(c)}><Text style={{ color: '#fff', fontWeight: '700' }}>sortear</Text></TouchableOpacity>
             </View>
             {porCat(c).map((p) => (
-              <View key={p.numero} style={{ borderBottomWidth: 1, borderBottomColor: '#262b32', paddingVertical: 8 }}>
+              <View key={p.numero} style={{ borderBottomWidth: 1, borderBottomColor: '#dde3e8', paddingVertical: 8 }}>
                 <View style={st.line}>
                   <Text style={st.v}>#{p.numero} {p.piloto}{p.navegador ? ` / ${p.navegador}` : ''}</Text>
                   <TouchableOpacity onPress={() => removerInscricao(prova, p.numero, p.email).catch(() => {})}><Text style={{ color: '#ff5252', fontWeight: '700' }}>remover</Text></TouchableOpacity>
@@ -329,7 +329,7 @@ export function OrgVisaoGeral({ st, prova, lib }) {
             {v ? <TouchableOpacity onPress={() => set('')} style={{ marginTop: 8, padding: 10 }}><Text style={{ color: '#ff5252', fontWeight: '800' }}>✕</Text></TouchableOpacity> : null}
           </View>
         ))}
-        <Text style={[st.tipTx, { color: semPeriodo ? '#a8a8a8' : ok ? '#4caf50' : '#ffb300' }]}>{semPeriodo ? 'Sem período de liberação definido' : ok ? 'Liberada agora' : 'Fora do período agora'}</Text>
+        <Text style={[st.tipTx, { color: semPeriodo ? '#6b7480' : ok ? '#4caf50' : '#ffb300' }]}>{semPeriodo ? 'Sem período de liberação definido' : ok ? 'Liberada agora' : 'Fora do período agora'}</Text>
         <TouchableOpacity style={[st.btn2, { marginVertical: 8 }]} onPress={() => salvar({ ini: ini.trim(), fim: fim.trim() })}><Text style={st.btn2Tx}>Salvar período</Text></TouchableOpacity>
         <View style={st.line}>
           <Text style={[st.k, { flex: 1 }]}>Liberar resultado geral no app{'\n'}<Text style={{ fontSize: 12 }}>Só habilite após a premiação.</Text></Text>
@@ -359,11 +359,11 @@ export function OrgCriterios({ st, prova, lib, categorias }) {
       <Text style={st.tip}>Critérios de pontuação</Text>
       <Text style={st.tipTx}>Atrasado ou adiantado pontua igual. Não passar no PC, ou passar fora de ±10 min do ideal, vale a pontuação máxima (600 pontos no segundo, 6.000 no décimo). Escolha o sistema de cada categoria.</Text>
       {cats.map((c) => (
-        <View key={c} style={{ borderTopWidth: 1, borderTopColor: '#262b32', paddingVertical: 8 }}>
+        <View key={c} style={{ borderTopWidth: 1, borderTopColor: '#dde3e8', paddingVertical: 8 }}>
           <Text style={st.v}>{c}</Text>
           <View style={st.row}>
             {[['s', '1 ponto por segundo'], ['d', '1 ponto por décimo (CBA)']].map(([k, t]) => (
-              <TouchableOpacity key={k} style={[st.btn2, escDe(c) === k && { backgroundColor: '#ff7a2e' }]} onPress={() => salvar({ escalas: { [c]: k } })}><Text style={[st.btn2Tx, escDe(c) === k && { color: '#0c1014' }]}>{t}</Text></TouchableOpacity>
+              <TouchableOpacity key={k} style={[st.btn2, escDe(c) === k && { backgroundColor: '#00a3c4' }]} onPress={() => salvar({ escalas: { [c]: k } })}><Text style={[st.btn2Tx, escDe(c) === k && { color: '#ffffff' }]}>{t}</Text></TouchableOpacity>
             ))}
           </View>
         </View>
