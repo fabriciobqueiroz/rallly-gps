@@ -1,0 +1,114 @@
+rules_version = '2';
+// Cole em Firebase > Firestore Database > Regras > Publicar (somente DEPOIS de instalar o app novo).
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function logado() { return request.auth != null; }
+    function meuEmail() { return request.auth.token.email.lower(); }
+    function dono(prova) {
+      return logado() && exists(/databases/$(database)/documents/provas/$(prova))
+        && get(/databases/$(database)/documents/provas/$(prova)).data.donoUid == request.auth.uid;
+    }
+    function inscrito(prova) {
+      return logado() && exists(/databases/$(database)/documents/acessos/$(prova + '__' + meuEmail()));
+    }
+
+    // Espelho do navegador para o piloto: só a própria conta lê e escreve.
+    match /espelho/{uid} {
+      allow read, write: if logado() && request.auth.uid == uid;
+    }
+
+    // Master: só a conta abaixo lê a lista de cadastrados (não lê provas, resultados nem escreve em nada dos outros).
+    function master() {
+      return logado() && (request.auth.token.email in ['fabriciobqueiroz@gmail.com']
+        || (exists(/databases/$(database)/documents/config/masters) && request.auth.token.email in get(/databases/$(database)/documents/config/masters).data.emails));
+    }
+    // Lista de masters extras: todos leem (o app precisa saber se mostra o menu); só master altera.
+    match /config/{id} {
+      allow read: if logado();
+      allow write: if master() && id == 'masters';
+    }
+    match /usuarios/{uid} {
+      allow read: if logado() && (request.auth.uid == uid || master());
+      allow write: if logado() && request.auth.uid == uid;
+    }
+
+    // Prova: só o dono (organizador que criou) escreve; lê o dono e quem foi inscrito.
+    match /provas/{prova} {
+      allow create: if logado() && request.resource.data.donoUid == request.auth.uid;
+      allow update, delete: if dono(prova);
+      allow read: if logado() && (resource == null || resource.data.donoUid == request.auth.uid || inscrito(prova));
+    }
+
+    // Inscrições: o organizador gerencia; o competidor lê as do seu e-mail.
+    match /inscricoes/{id} {
+      allow create, update, delete: if dono(request.resource != null ? request.resource.data.prova : resource.data.prova);
+      allow read: if logado() && (resource.data.email == meuEmail() || dono(resource.data.prova));
+    }
+    match /acessos/{id} {
+      allow create, update, delete: if dono(request.resource != null ? request.resource.data.prova : resource.data.prova);
+      allow read: if logado() && (resource.data.email == meuEmail() || dono(resource.data.prova));
+    }
+
+    // Resultados e dataloggers: o competidor inscrito grava o seu; o dono lê tudo e grava o oficial.
+    match /resultados/{id} {
+      allow read: if logado() && (inscrito(resource.data.prova) || dono(resource.data.prova));
+      allow create, update: if logado() && (dono(request.resource.data.prova) || (inscrito(request.resource.data.prova) && request.resource.data.uid == request.auth.uid));
+      allow delete: if dono(resource.data.prova);
+    }
+    match /dataloggers/{id} {
+      allow read: if logado() && (dono(resource.data.prova) || (resource.data.uid == request.auth.uid && get(/databases/$(database)/documents/provas/$(resource.data.prova)).data.get('lib', {}).get('track', false) == true));
+      allow create, update: if logado() && inscrito(request.resource.data.prova) && request.resource.data.uid == request.auth.uid;
+      allow delete: if dono(resource.data.prova);
+    }
+
+    // ---------- Eventos disponíveis ----------
+    // Vitrine pública (só nome/cidade/data/categorias): o organizador abre e fecha; qualquer conta logada lê.
+    match /vitrine/{id} {
+      allow read: if logado();
+      allow create, update, delete: if dono(request.resource != null ? request.resource.data.prova : resource.data.prova);
+    }
+    // Pedido de inscrição: o competidor cria (status pedido) e cancela; o organizador aprova ou recusa.
+    match /pedidos/{id} {
+      allow read: if logado() && (resource.data.uid == request.auth.uid || dono(resource.data.prova));
+      allow create: if logado() && request.resource.data.uid == request.auth.uid && request.resource.data.status == 'pedido';
+      allow update: if logado() && dono(resource.data.prova);
+      allow delete: if logado() && (resource.data.uid == request.auth.uid || dono(resource.data.prova));
+    }
+
+    // ---------- Trilhas ----------
+    function donoT(t) {
+      return logado() && exists(/databases/$(database)/documents/trilhas/$(t))
+        && get(/databases/$(database)/documents/trilhas/$(t)).data.donoUid == request.auth.uid;
+    }
+    match /trilhas/{t} {
+      allow create: if logado() && request.resource.data.donoUid == request.auth.uid;
+      allow update, delete: if donoT(t);
+      allow read: if logado();
+    }
+    // Pedido de vaga: o participante cria (status pedido), confirma presença (só se aprovado) ou cancela; o organizador decide.
+    match /trilhaInsc/{id} {
+      allow read: if logado() && (resource.data.uid == request.auth.uid || donoT(resource.data.trilha));
+      allow create: if logado() && request.resource.data.uid == request.auth.uid && request.resource.data.status == 'pedido';
+      allow update: if logado() && (donoT(resource.data.trilha)
+        || (resource.data.uid == request.auth.uid
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'em'])
+            && (request.resource.data.status == 'cancelado'
+                || (request.resource.data.status == 'confirmado' && resource.data.status in ['aprovado', 'confirmado']))));
+      allow delete: if logado() && (resource.data.uid == request.auth.uid || donoT(resource.data.trilha));
+    }
+    // Percurso gravado: o dono do percurso grava e escolhe publicar; o organizador lê todos; os outros só os públicos.
+    match /trilhaTracks/{id} {
+      allow read: if logado() && (resource.data.uid == request.auth.uid || donoT(resource.data.trilha) || resource.data.publico == true);
+      allow create, update: if logado() && request.resource.data.uid == request.auth.uid;
+      allow delete: if logado() && (resource.data.uid == request.auth.uid || donoT(resource.data.trilha));
+    }
+    // Posição ao vivo: cada um escreve a própria; só o organizador (da prova ou da trilha) lê as dos outros.
+    match /aoVivo/{id} {
+      allow read: if logado() && (resource.data.uid == request.auth.uid
+        || (resource.data.kind == 'prova' && dono(resource.data.id))
+        || (resource.data.kind == 'trilha' && donoT(resource.data.id)));
+      allow create, update: if logado() && request.resource.data.uid == request.auth.uid;
+      allow delete: if logado() && resource.data.uid == request.auth.uid;
+    }
+  }
+}
