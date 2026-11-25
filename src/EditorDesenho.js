@@ -184,6 +184,11 @@ export default function EditorDesenho({ visible, inicial, foto, sat, hdg = 0, km
             </TouchableOpacity>
           ))}
         </View>
+        {aba !== 'des' && items.length > 0 && (
+          <View pointerEvents="none" style={{ position: 'absolute', right: 10, top: 104, zIndex: 20, backgroundColor: '#fff', borderWidth: 1, borderColor: '#cfd6dc', borderRadius: 6, padding: 3, elevation: 6 }}>
+            <DesenhoSvg items={items} size={96} />
+          </View>
+        )}
         {conf && (
           <View style={{ padding: 10, backgroundColor: '#f3f6f8', flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center' }}>
             <Text style={{ color: CZ, marginRight: 8 }}>Fundo para decalcar:</Text>

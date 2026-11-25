@@ -40,7 +40,7 @@ function Linha({ e, num, atual, sel, grupos, onKm, onTul, onSel, refEl }) {
   const alt = Math.max(nTm * GAL, 96);
   const ehPc = e.t === 'P' && !(e.nt > 0 && e.pn == null) && !e.cont;
   const ehN = e.t === 'P' && e.nt > 0 && !e.cont;
-  const temTul = e.t === 'T' || (ehN && !!((e.dw && e.dw.length) || Array.isArray(e.b)));
+  const temTul = e.t === 'T' || !!(e.dw && e.dw.length) || (ehN && !!((e.dw && e.dw.length) || Array.isArray(e.b)));
   const obs = linhasObs(e);
   const bg = atual ? '#ffee00' : sel ? CIANO : ehN ? '#e1bee7' : obs.length ? '#aadaff' : CREME;
   const brd = e.t === 'P' && !e.cont ? '3px solid #e53935' : BORDA;
