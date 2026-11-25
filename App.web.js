@@ -1,5 +1,5 @@
 // Versão para o navegador do computador: só o modo organizador (planilha, inscrições, resultados, track log).
-import { useEffect, useRef, useState } from 'react';
+import { Component, useEffect, useRef, useState } from 'react';
 import { Alert, Modal, ScrollView, Text, TouchableOpacity, View } from 'react-native';
 import { Cab } from './src/Pos';
 import Login from './src/Login';
@@ -50,7 +50,7 @@ function AppOrg() {
   const escolher = (p) => { setProva(p); saveJson('piloto', { ...loadJson('piloto', {}), prova: p }); };
   const caixa = { width: '100%' };
   if (user === undefined) return <View style={[stDark.root, { justifyContent: 'center' }]}><Text style={[stDark.sub, { textAlign: 'center' }]}>Carregando…</Text></View>;
-  if (!user) return <Login st={stDark} soOrganizador onEntrou={() => {}} />;
+  if (!user) return <View style={{ flex: 1 }}><Login st={stDark} soOrganizador onEntrou={() => {}} /><Text style={{ position: 'absolute', bottom: 6, left: 0, right: 0, textAlign: 'center', color: '#6b7480', fontSize: 11 }}>{VERSAO}</Text></View>;
   return (
     <ScrollView style={[st.root, { backgroundColor: '#fafafa' }]} contentContainerStyle={[st.wrap, caixa, { padding: 0, paddingTop: 0, paddingBottom: 0 }]} keyboardShouldPersistTaps="handled">
       {mod === 'trilhas' ? (
@@ -74,10 +74,28 @@ function AppOrg() {
   );
 }
 
+// Se algo quebrar depois do login, mostra o erro na tela (em vez de tela branca) para dar para corrigir.
+class Falha extends Component {
+  constructor(p) { super(p); this.state = { erro: null }; }
+  static getDerivedStateFromError(erro) { return { erro }; }
+  render() {
+    if (!this.state.erro) return this.props.children;
+    const e = this.state.erro;
+    return (
+      <View style={{ flex: 1, padding: 20, backgroundColor: '#fff' }}>
+        <Text style={{ fontSize: 18, fontWeight: '700', color: '#c0392b' }}>Algo deu errado ({VERSAO})</Text>
+        <Text selectable style={{ marginTop: 10, color: '#222' }}>{String((e && e.message) || e)}</Text>
+        <Text selectable style={{ marginTop: 10, color: '#666', fontSize: 11 }}>{String((e && e.stack) || '').slice(0, 900)}</Text>
+        <TouchableOpacity onPress={() => { try { window.location.reload(); } catch {} }} style={{ marginTop: 16, backgroundColor: '#31b9d3', padding: 12, borderRadius: 6, alignSelf: 'flex-start' }}><Text style={{ color: '#fff', fontWeight: '700' }}>Recarregar</Text></TouchableOpacity>
+      </View>
+    );
+  }
+}
+
 // ?overlay=CODIGO abre só o overlay da transmissão (fundo transparente, para a Fonte de Navegador do OBS).
 export default function App() {
   let q = null;
   try { q = new URLSearchParams(window.location.search); } catch {}
   if (q && q.get('overlay')) return <OverlayRoot code={q.get('overlay')} delay={Number(q.get('delay')) || 0} car={q.get('car') || ''} teste={!!q.get('teste')} />;
-  return <AppOrg />;
+  return <Falha><AppOrg /></Falha>;
 }
