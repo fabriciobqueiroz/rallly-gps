@@ -1,4 +1,5 @@
 // Lista "Minhas provas": criar (com nome), abrir, renomear e apagar (com dupla confirmação).
+import { VERSAO } from './versao';
 import { useEffect, useState } from 'react';
 import Tela from './Tela';
 import { Alert, KeyboardAvoidingView, Platform, ScrollView, Text, TextInput, TouchableOpacity, View, useWindowDimensions } from 'react-native';
