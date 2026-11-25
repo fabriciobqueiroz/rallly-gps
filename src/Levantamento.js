@@ -121,7 +121,7 @@ function NtEdit({ st, nt, on }) {
   );
 }
 
-export default function Levantamento({ st, prova, last, onAplicar, onProva, levNuvem, trailNuvem }) {
+export default function Levantamento({ st, prova, last, onAplicar, onProva, levNuvem, trailNuvem, autoAplicar }) {
   const slug0 = String(prova).trim().toUpperCase().replace(/[^A-Z0-9]+/g, '');
   const chave = 'lev_' + slug0;
   const chaveW = 'levw_' + slug0;
@@ -382,9 +382,9 @@ export default function Levantamento({ st, prova, last, onAplicar, onProva, levN
     confirmar();
   };
   const temDesenho = (m) => (m.arms && m.arms.length) || (m.dw && m.dw.length);
-  const confirmar = () => {
+  const confirmar = (silencioso) => {
     let prev = 0, pcN = 0, pcNum = 0, refN = 0, trI = 0;
-    const trsL = trAtual(lev);
+    const trsL = trAtual(lev).map((t) => (t.t === 'V' && !(parseFloat(String(t.v).replace(',', '.')) > 0) ? { ...t, v: '30' } : t));
     const trsOut = [{ ...trsL[0], d0: 0 }];
     const tul = [], wps = [], ntMap = new Map(), refs = [], pontosKm = [], pcl = [];
     const tulipaDe = (m, p) => (temDesenho(m) ? entradaDe(m, p) : { t: 'T', d: m.km, p, ty: 'turn', mo: '', b: [180], i: 0, o: -1, ex: 0, nm: m.nm || m.nota || '', man: true });
@@ -408,9 +408,16 @@ export default function Levantamento({ st, prova, last, onAplicar, onProva, levN
       if (comTulipa(m)) prev = d;
     });
     const legs = pontosKm.slice(1).map((k, i) => Math.round((k - pontosKm[i]) * 1000) / 1000);
-    onAplicar({ wps, rota: { coords: trail, legs, tul }, nIdx: ntMap, refs, pcl, trs: trsOut, lev: { em: lev.em || Date.now(), marks: lev.marks.map((m) => ({ ...m, foto: null })), trechos: trAtual(lev), trail: trail.flatMap((c) => [Math.round(c[0] * 1e5) / 1e5, Math.round(c[1] * 1e5) / 1e5]) } });
-    Alert.alert('Aplicado', 'Percurso, tulipas e trechos foram para a aba Planilha. Ajuste as médias e publique.');
+    onAplicar({ wps, rota: { coords: trail, legs, tul }, nIdx: ntMap, refs, pcl, trs: trsOut, lev: { em: lev.em || Date.now(), marks: lev.marks.map((m) => ({ ...m, foto: null })), trechos: trAtual(lev), trail: trail.flatMap((c) => [Math.round(c[0] * 1e5) / 1e5, Math.round(c[1] * 1e5) / 1e5]) }, auto: !!silencioso });
+    if (!silencioso) Alert.alert('Aplicado', 'Percurso, tulipas e trechos foram para a aba Planilha. Ajuste as médias e publique.');
   };
+
+  // No navegador: ao abrir a planilha de uma prova levantada no celular, aplica o levantamento sozinho (médias que faltam entram como 30).
+  const autoFeito = useRef(false);
+  useEffect(() => {
+    if (autoAplicar && fechado && !autoFeito.current && trail.length > 1) { autoFeito.current = true; const t = setTimeout(() => confirmar(true), 400); return () => { clearTimeout(t); autoFeito.current = false; }; }
+    return undefined;
+  }, [autoAplicar, fechado, trail.length]);
 
   // Depois da chegada: toque no traçado para inserir tulipa, PC ou neutro (a numeração se refaz sozinha pela ordem no percurso).
   const candDe = (bi) => {

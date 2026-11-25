@@ -161,6 +161,7 @@ export default function Organizador({ onMenu, st, prova, provaMap: pmRaw, last, 
   const dvs = grupos.map((g) => g.dv || 0);
   const mk = (base) => vs(base, dvs, bi);
   const carregado = useRef(0);
+  const levAutoKey = useRef('');
   const logado = org && org.prova === prova.trim().toUpperCase();
 
   useEffect(() => {
@@ -213,13 +214,13 @@ export default function Organizador({ onMenu, st, prova, provaMap: pmRaw, last, 
   }, [dvs.join(','), bi, ng]);
 
   // Percurso vindo do levantamento dirigindo: usa o rastro e as tulipas marcadas, sem recalcular pelo OSRM.
-  const aplicarLevantamento = ({ wps: w, rota: r, nIdx, refs: rf, pcl: pc, trs: tn, lev: lv }) => {
+  const aplicarLevantamento = ({ wps: w, rota: r, nIdx, refs: rf, pcl: pc, trs: tn, lev: lv, auto }) => {
     setManual(true); setLevPub(lv || null);
     const zrAnt = trs.map((x) => !!x.zr);
     setWps(w); setRota(r); setRefs(rf || []); setPcl(pc || []);
     setLegs(r.legs.map((_, i) => novoLeg(dvs, bi, (nIdx.get ? nIdx.get(i) : nIdx.has(i) ? 60 : 0) || 0)));
     setTrs((tn || []).map((t, i) => (t.t === 'D' ? { t: 'D', bs: '30', v: mk(30), min: String(t.min || 15), d0: t.d0, zr: t.zr != null ? !!t.zr : !!zrAnt[i] } : { t: 'V', bs: String(t.v).replace(',', '.'), v: mk(String(t.v).replace(',', '.')), min: '15', d0: t.d0, zr: t.zr != null ? !!t.zr : !!zrAnt[i] })));
-    setSec('geral');
+    if (!auto) setSec('geral');
   };
   const updT = (i, patch) => setTrs((o) => o.map((l, j) => (j === i ? { ...l, ...patch } : l)));
   const onVT = (i, v) => setTrs((o) => o.map((l, j) => (j !== i ? l : { ...l, bs: v, v: mk(v) })));
@@ -430,8 +431,15 @@ export default function Organizador({ onMenu, st, prova, provaMap: pmRaw, last, 
       {sec === 'inscricoes' && <OrgInscricoes key={org.prova} st={st} prova={org.prova} inscritos={inscritos} categorias={cats} />}
       {sec === 'tracklog' && <OrgTrackLog st={st} prova={org.prova} provaMap={provaMap} grupos={grupos} />}
       {sec === 'resultados' && <OrgResultados st={st} prova={org.prova} provaMap={provaMap} grupos={grupos} inscritos={inscritos} categorias={cats} />}
+      {sec === 'planilha' && web && cheia && !wps.length && !provaMap.wps.length && provaMap.lev && (provaMap.lev.marks || []).some((m) => m.k === 'C') && levAutoKey.current !== org.prova + '_' + (provaMap.lev.em || 1) && (
+        <View style={{ display: 'none' }}>
+          <Levantamento key={'auto_' + org.prova} st={stDark} prova={org.prova} last={last} autoAplicar levNuvem={provaMap.lev}
+            trailNuvem={provaMap.lev.trail && provaMap.lev.trail.length >= 4 ? Array.from({ length: provaMap.lev.trail.length >> 1 }, (_, i) => [provaMap.lev.trail[2 * i], provaMap.lev.trail[2 * i + 1]]) : provaMap.coords}
+            onAplicar={(d) => { levAutoKey.current = org.prova + '_' + (provaMap.lev.em || 1); aplicarLevantamento(d); }} />
+        </View>
+      )}
       {sec === 'planilha' && (web && cheia ? (
-        <EditorDividido st={st} nome={nomeProva || org.prova} tul={tulT} coords={rota.coords} wps={wps} totalM={total * 1000} nTrechos={planilha.length} grupos={grupos} editable={editaMapa && !manual} busy={busy}
+        <EditorDividido st={st} nome={nomeProva || org.prova} tul={tulT} coords={rota.coords.length ? rota.coords : (provaMap.lev && provaMap.lev.trail && provaMap.lev.trail.length >= 4 ? Array.from({ length: provaMap.lev.trail.length >> 1 }, (_, i) => [provaMap.lev.trail[2 * i], provaMap.lev.trail[2 * i + 1]]) : rota.coords)} wps={wps} totalM={total * 1000} nTrechos={planilha.length} grupos={grupos} editable={editaMapa && !manual} busy={busy}
           onTap={(la, lo) => { if (editaMapa && !manual) setWps((w) => [...w, [la, lo]]); }}
           onDesfazer={() => setWps((w) => w.slice(0, -1))} onLimpar={() => { setWps([]); setLegs([]); }}
           trs={trs} bi={bi} manual={manual} totalSec={null}
