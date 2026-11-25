@@ -20,7 +20,7 @@ export function limparProvaLocal(code) {
 }
 const km3 = (m) => ((m || 0) / 1000).toFixed(3).replace('.', ',');
 
-export default function ListaProvas({ onMenu, st, org, onAbrir, onSairOrg, onApagou }) {
+export default function ListaProvas({ onTab, onMenu, st, org, onAbrir, onSairOrg, onApagou }) {
   const [idx, setIdx] = useState(() => loadJson('lev_index', []));
   const [novo, setNovo] = useState('');
   const [cidade, setCidade] = useState('');
@@ -97,18 +97,25 @@ export default function ListaProvas({ onMenu, st, org, onAbrir, onSairOrg, onApa
   ]);
   const CAMPO = { color: COR.tx, fontSize: 16, borderBottomWidth: 1, borderBottomColor: '#b8c4cc', paddingVertical: 8, marginBottom: 14 };
   return (
-    <View style={{ minHeight: Math.max(height, 640), backgroundColor: COR.fundo }}>
-      <View style={{ backgroundColor: '#6cc4ec', paddingTop: web ? 16 : 46, paddingHorizontal: 16 }}>
-        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-          <Text style={{ color: '#fff', fontSize: 26, fontWeight: '900' }}>Rally GPS</Text>
-          {onMenu ? <TouchableOpacity onPress={onMenu} hitSlop={{ top: 10, bottom: 10, left: 14, right: 6 }}><Text style={{ color: '#fff', fontSize: 28, fontWeight: '900', paddingHorizontal: 6 }}>⋮</Text></TouchableOpacity> : null}
+    <View style={{ minHeight: Math.max(height, 640), backgroundColor: web ? '#fafafa' : COR.fundo }}>
+      <View style={{ backgroundColor: web ? '#31b9d3' : '#6cc4ec', paddingTop: web ? 0 : 46 }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', height: web ? 46 : undefined, paddingHorizontal: 16, justifyContent: 'space-between' }}>
+          <View style={{ flex: 1 }}><Text style={{ color: '#fff', fontSize: web ? 22 : 26, fontWeight: '900' }}>Rally GPS</Text></View>
+          {web ? <Text style={{ color: '#fff', fontSize: 20, fontWeight: '500' }}>Eventos</Text> : null}
+          <View style={{ flex: 1, flexDirection: 'row', justifyContent: 'flex-end', alignItems: 'center' }}>
+            {web ? <Text style={{ color: '#fff', fontSize: 11, marginRight: 10 }}>Versão: {VERSAO}</Text> : null}
+            {onMenu ? <TouchableOpacity onPress={onMenu} hitSlop={{ top: 10, bottom: 10, left: 14, right: 6 }}><Text style={{ color: '#fff', fontSize: 28, fontWeight: '900', paddingHorizontal: 6 }}>⋮</Text></TouchableOpacity> : null}
+          </View>
         </View>
-        <View style={{ marginTop: 10, alignSelf: 'flex-start', borderBottomWidth: 3, borderBottomColor: '#fff', paddingBottom: 8, paddingHorizontal: 4 }}><Text style={{ color: '#fff', fontSize: 15, fontWeight: '700' }}>Eventos</Text></View>
+        <View style={{ flexDirection: 'row', marginTop: web ? 4 : 10 }}>
+          <View style={{ flex: 1, alignItems: 'center', paddingVertical: 13, borderBottomWidth: 3, borderBottomColor: '#fff' }}><Text style={{ color: '#fff', fontSize: 15, fontWeight: '700' }}>Eventos</Text></View>
+          <TouchableOpacity onPress={() => onTab && onTab('trilhas')} style={{ flex: 1, alignItems: 'center', paddingVertical: 13, borderBottomWidth: 3, borderBottomColor: 'transparent' }}><Text style={{ color: 'rgba(255,255,255,0.65)', fontSize: 15 }}>Trilhas</Text></TouchableOpacity>
+        </View>
       </View>
-      <View style={{ padding: 16, paddingBottom: 100 }}>
+      <View style={{ padding: 16, paddingBottom: 100, width: '100%', maxWidth: web ? 484 : undefined, alignSelf: 'center' }}>
         <Text style={{ color: COR.tx, fontSize: 19, fontWeight: '600' }}>Selecionar Evento <Text style={{ color: COR.azulTx }}>({lista.length})</Text></Text>
         <View style={{ flexDirection: 'row', alignItems: 'center', marginVertical: 12 }}>
-          <TextInput style={{ flex: 1, backgroundColor: '#fff', borderWidth: 1, borderColor: '#cfd8dc', borderRadius: 4, paddingHorizontal: 12, paddingVertical: 8, color: COR.tx }} value={busca} onChangeText={setBusca} placeholder="🔍  Buscar por nome, estado…" placeholderTextColor="#9aa5ae" />
+          <TextInput style={{ flex: 1, backgroundColor: '#fff', borderWidth: 1, borderColor: web ? '#333' : '#cfd8dc', borderRadius: web ? 8 : 4, paddingHorizontal: 12, paddingVertical: web ? 12 : 8, color: COR.tx }} value={busca} onChangeText={setBusca} placeholder="🔍  Buscar por nome, estado ou MM/AAAA" placeholderTextColor="#9aa5ae" />
           <TouchableOpacity onPress={() => setNuvem((n) => [...n])} style={{ paddingHorizontal: 14 }}><Text style={{ color: COR.azulTx, fontSize: 22 }}>↻</Text></TouchableOpacity>
         </View>
         {filtradas.length === 0 && <Text style={{ color: COR.tx2 }}>{lista.length ? 'Nenhum evento encontrado.' : 'Nenhum evento ainda. Toque em + para criar o primeiro.'}</Text>}

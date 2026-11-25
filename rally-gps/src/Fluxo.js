@@ -116,6 +116,7 @@ function Disponiveis({ st, user, excluir, dias }) {
 
 // ---------- 1. Escolha o evento ----------
 function Eventos({ st, user, onEvento, onAdmin, onMenu, gps }) {
+  const { height: altura } = useWindowDimensions();
   const c0 = loadJson('evcache', { insc: [], donos: [], provas: {} });
   const [insc, setInsc] = useState(c0.insc);
   const [donos, setDonos] = useState(c0.donos);
@@ -160,8 +161,15 @@ function Eventos({ st, user, onEvento, onAdmin, onMenu, gps }) {
   );
   const Sec = ({ t, a, tag, hero }) => (a.length ? <View style={{ marginTop: 6 }}><Text style={{ color: COR.tx, fontSize: 17, fontWeight: '500', marginBottom: 8, marginTop: 6 }}>{t}</Text>{a.map((x, i) => <Cartao key={x.kind + x.code + (x.insc?.numero || '')} x={x} tag={tag} hero={hero && i === 0} />)}</View> : null);
   return (
-    <View style={{ marginHorizontal: -16, marginTop: -56, minHeight: 700, backgroundColor: '#d3eef5' }}>
-      <Cab titulo="Escolha o evento" azul direita={onMenu ? <TouchableOpacity onPress={onMenu} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} style={{ paddingHorizontal: 18, paddingVertical: 8 }}><Text style={{ color: '#fff', fontSize: 28, lineHeight: 28, fontWeight: '900' }}>⋮</Text></TouchableOpacity> : null} />
+    <View style={{ marginHorizontal: -16, marginTop: -56, minHeight: Math.max(altura, 700), backgroundColor: '#4fcbe2' }}>
+      <View style={{ backgroundColor: '#18bfd8', paddingTop: 46, paddingBottom: 16, paddingHorizontal: 18 }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+          <Text style={{ color: '#fff', fontSize: 26, fontWeight: '900' }}>Rally GPS</Text>
+          {onMenu ? <TouchableOpacity onPress={onMenu} hitSlop={{ top: 10, bottom: 10, left: 16, right: 8 }}><Text style={{ color: '#fff', fontSize: 30, fontWeight: '900', paddingHorizontal: 6 }}>⋮</Text></TouchableOpacity> : null}
+        </View>
+        {gps && gps.ola ? <Text style={{ color: '#eafafd', fontSize: 14, marginTop: 4 }}>{gps.ola}</Text> : null}
+        <Text style={{ color: '#fff', fontSize: 18, marginTop: 12 }}>Escolha o evento</Text>
+      </View>
       <View style={{ padding: 16, paddingBottom: 30 }}>
         {gps ? (
           <View style={{ backgroundColor: '#fff', borderRadius: 8, padding: 12, marginBottom: 12, flexDirection: 'row', alignItems: 'center', elevation: 2, shadowColor: '#000', shadowOpacity: 0.12, shadowRadius: 4, shadowOffset: { width: 0, height: 1 } }}>

@@ -128,7 +128,7 @@ const ICONES = {
   sair: 'M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4 M16 17l5-5-5-5 M21 12H9',
   volta: 'M15 18l-6-6 6-6',
 };
-function Icone({ n, cor, tam = 22 }) {
+export function Icone({ n, cor, tam = 22 }) {
   return <Svg width={tam} height={tam} viewBox="0 0 24 24" fill="none" stroke={cor} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"><Path d={ICONES[n]} /></Svg>;
 }
 
@@ -293,7 +293,7 @@ export default function Organizador({ onMenu, st, prova, provaMap: pmRaw, last, 
     catch (e) { Alert.alert('Não gerou o PDF', String(e?.message || e)); }
   };
 
-  if (!logado || !aberta) return <ListaProvas onMenu={onMenu} st={st} org={org} onAbrir={abrirProva} onSairOrg={sair} onApagou={(c) => { if (prova.trim().toUpperCase() === String(c).trim().toUpperCase()) onProva && onProva('', true); }} />;
+  if (!logado || !aberta) return <ListaProvas onTab={onTab} onMenu={onMenu} st={st} org={org} onAbrir={abrirProva} onSairOrg={sair} onApagou={(c) => { if (prova.trim().toUpperCase() === String(c).trim().toUpperCase()) onProva && onProva('', true); }} />;
 
   const total = rota.legs.reduce((a, b) => a + b, 0);
   const planilha = trs.length
