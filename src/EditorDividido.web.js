@@ -432,7 +432,7 @@ export default function EditorDividido({ st, nome, tul, coords, wps, totalM, gru
         <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
           <div style={{ flex: 1, position: 'relative', minHeight: 0 }}>
             <div style={{ position: 'absolute', inset: 0 }}>
-              <MapaWeb wps={wps} coords={coords} marks={marksP} sat editable={coords.length > 1 || (editable && modoPc)} onTap={tapMapa} onMark={(id) => { setSel(id); setFocI(id); rolarPara(id); }} foc={foc} focn={focn} me={eu} ctr={ctr} height="100%" mb={0} />
+              <MapaWeb kr wps={wps} coords={coords} marks={marksP} sat editable={coords.length > 1 || (editable && modoPc)} onTap={tapMapa} onMark={(id) => { setSel(id); setFocI(id); rolarPara(id); }} foc={foc} focn={focn} me={eu} ctr={ctr} height="100%" mb={0} />
             </div>
             <div title="Localizar (precisa do GPS do computador)" onClick={localizar} style={{ position: 'absolute', right: 10, top: 110, width: 40, height: 40, borderRadius: 20, background: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', zIndex: 800, boxShadow: '0 1px 4px rgba(0,0,0,.4)', fontSize: 22 }}>◎</div>
             {ponto && <div style={{ position: 'absolute', left: 50, top: 10, background: '#ff1744', color: '#fff', borderRadius: 6, padding: '6px 12px', fontSize: 14, zIndex: 800, display: 'flex', gap: 10, alignItems: 'center' }}>Ponto no km {(ponto.d / 1000).toFixed(3)}: toque em REF, TRC ou PC <span style={{ cursor: 'pointer', fontWeight: 700 }} onClick={() => setPonto(null)}>✕</span></div>}
@@ -440,7 +440,7 @@ export default function EditorDividido({ st, nome, tul, coords, wps, totalM, gru
           </div>
           <div style={{ height: 56, display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', flexShrink: 0 }}>
             {BTN('#ffee00', 'REF', () => { if (ponto) { setNovoD(ponto.d); setDlg(-1); setPonto(null); return; } if (!totalM) return avisar('Marque o percurso primeiro (botão PC e cliques no mapa).'); setNovoD(Math.round(atualKm * 1000)); setDlg(-1); })}
-            {BTN('#00d56b', 'TRC', () => {
+            {BTN('#6fd9b4', 'TRC', () => {
               if (ponto) {
                 const d = ponto.d;
                 const m = onNovoTrecho(d);
@@ -455,8 +455,8 @@ export default function EditorDividido({ st, nome, tul, coords, wps, totalM, gru
               if (m) return m === 'Cancelado.' ? null : avisar(m);
               setSel(i); setTimeout(() => abrirRef(i), 60);
             })}
-            {BTN('#ef5350', 'PC', () => { if (ponto && onAddPcEm) { const r = onAddPcEm(ponto.lat, ponto.lon, ponto.d); if (r) return avisar(r); setPonto(null); return avisar('PC criado no km ' + (ponto.d / 1000).toFixed(3) + '.'); } if (!editable) return avisar(manual ? 'Percurso congelado: no menu ⋮ use "Voltar ao percurso automático" para marcar PCs.' : 'Não dá para editar o percurso agora.'); setModoPc((x) => !x); }, modoPc ? { outline: '4px solid #fff', outlineOffset: -4 } : null)}
-            {BTN('#ff6d00', 'REG', () => avisar('REG ainda não está disponível.'), { opacity: 0.45 })}
+            {BTN('#f26f6f', 'PC', () => { if (ponto && onAddPcEm) { const r = onAddPcEm(ponto.lat, ponto.lon, ponto.d); if (r) return avisar(r); setPonto(null); return avisar('PC criado no km ' + (ponto.d / 1000).toFixed(3) + '.'); } if (!editable) return avisar(manual ? 'Percurso congelado: no menu ⋮ use "Voltar ao percurso automático" para marcar PCs.' : 'Não dá para editar o percurso agora.'); setModoPc((x) => !x); }, modoPc ? { outline: '4px solid #fff', outlineOffset: -4 } : null)}
+            {BTN('#f5a623', 'REG', () => avisar('REG ainda não está disponível.'))}
           </div>
         </div>
       </div>

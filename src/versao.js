@@ -1,1 +1,1 @@
-export const VERSAO = 'passo123';
+export const VERSAO = 'passo124';
