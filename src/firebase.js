@@ -134,9 +134,20 @@ export async function inscrever({ prova, provaNome, numero, piloto, navegador, e
   if (em) await setDoc(doc(db, 'acessos', `${slug(prova)}__${em}`), { prova: slug(prova), email: em, numero: String(numero) });
 }
 export const removerInscricao = async (prova, numero, email) => {
-  await deleteDoc(doc(db, 'inscricoes', `${slug(prova)}_${slug(numero)}`));
   const em = String(email || '').trim().toLowerCase();
-  if (em) await deleteDoc(doc(db, 'acessos', `${slug(prova)}__${em}`));
+  const ref = doc(db, 'inscricoes', `${slug(prova)}_${slug(numero)}`);
+  // Só apaga a inscrição se ela for mesmo desse e-mail (evita apagar a de outro competidor com o mesmo número).
+  let apaga = true;
+  try { const d = await getDoc(ref); if (d.exists() && em && String(d.data().email || '').toLowerCase() !== em) apaga = false; } catch (e) { /* segue */ }
+  if (apaga) await deleteDoc(ref);
+  if (em) {
+    await deleteDoc(doc(db, 'acessos', `${slug(prova)}__${em}`)).catch(() => {});
+    // O pedido de vaga também sai, para o competidor poder pedir de novo.
+    try {
+      const q = await getDocs(query(collection(db, 'pedidos'), where('prova', '==', slug(prova)), where('email', '==', em)));
+      await Promise.all(q.docs.map((d) => deleteDoc(d.ref).catch(() => {})));
+    } catch (e) { /* segue */ }
+  }
 };
 // Competidor: as inscrições feitas no e-mail dele (nas provas de qualquer organizador).
 export function ouvirMinhasInscricoes(email, onData, onError) {
@@ -286,6 +297,8 @@ export const ouvirVitrineProva = (prova, onData, onError) => onSnapshot(doc(db, 
 export async function pedirVagaProva(prova, { provaNome, piloto, navegador, equipe, classe, numero }) {
   const u = auth.currentUser;
   if (!u) throw new Error('Entre na sua conta primeiro.');
+  // Pedido antigo (aprovado/recusado) é apagado antes, para poder pedir de novo.
+  await deleteDoc(doc(db, 'pedidos', `${slug(prova)}_${u.uid}`)).catch(() => {});
   await setDoc(doc(db, 'pedidos', `${slug(prova)}_${u.uid}`), {
     prova: slug(prova), provaNome: provaNome || '', uid: u.uid, email: (u.email || '').toLowerCase(), piloto: piloto || '', navegador: navegador || '',
     equipe: equipe || '', classe: classe || '', numero: String(numero || ''), status: 'pedido', em: Date.now(),

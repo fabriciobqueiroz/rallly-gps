@@ -96,6 +96,8 @@ function PedidoLinha({ st, prova, p, cats, inscritos }) {
   const aprovar = async () => {
     if (!String(num).trim()) return Alert.alert('Número', 'Informe o número do carro.');
     if (inscritos.some((i) => String(i.numero) === String(num).trim())) return Alert.alert('Número já usado', 'Escolha outro número.');
+    const ok = cl === p.classe || (typeof window !== 'undefined' && typeof window.confirm === 'function' ? window.confirm(`O competidor pediu ${p.classe || 'nenhuma categoria'}. Aprovar como ${cl}?`) : await new Promise((res) => Alert.alert('Categoria diferente do pedido', `O competidor pediu ${p.classe || 'nenhuma categoria'}. Aprovar como ${cl}?`, [{ text: 'Voltar', style: 'cancel', onPress: () => res(false) }, { text: 'Aprovar como ' + cl, onPress: () => res(true) }])));
+    if (!ok) return;
     try {
       await inscrever({ prova, provaNome: p.provaNome, numero: String(num).trim(), piloto: p.piloto, navegador: p.navegador, equipe: p.equipe, classe: cl, email: p.email });
       await decidirPedido(prova, p.uid, { status: 'aprovado', numero: String(num).trim(), classe: cl });
@@ -105,6 +107,7 @@ function PedidoLinha({ st, prova, p, cats, inscritos }) {
     <View style={{ borderBottomWidth: 1, borderBottomColor: '#dde3e8', paddingVertical: 8 }}>
       <Text style={st.v}>{p.piloto}{p.navegador ? ` / ${p.navegador}` : ''}</Text>
       <Text style={st.tipTx}>{p.email}{p.equipe ? ` · ${p.equipe}` : ''}</Text>
+      <Text style={st.tipTx}>Pediu: <Text style={{ fontWeight: '800' }}>{p.classe || '(sem categoria)'}</Text>{p.numero ? ` · nº desejado ${p.numero}` : ''} · será inscrito como: <Text style={{ fontWeight: '800' }}>{cl}</Text></Text>
       <Wrap>{cats.map((c) => <Chip key={c} st={st} small on={cl === c} onPress={() => setCl(c)}>{c}</Chip>)}</Wrap>
       <View style={[st.row, { alignItems: 'center', marginTop: 6 }]}>
         <TextInput style={[st.field, { width: 90, marginBottom: 0 }]} value={String(num)} onChangeText={setNum} placeholder="Nº" placeholderTextColor="#666" keyboardType="number-pad" />

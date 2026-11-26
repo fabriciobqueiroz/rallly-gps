@@ -77,7 +77,7 @@ service cloud.firestore {
     match /pedidos/{id} {
       allow read: if logado() && (resource.data.uid == request.auth.uid || dono(resource.data.prova));
       allow create: if logado() && request.resource.data.uid == request.auth.uid && request.resource.data.status == 'pedido';
-      allow update: if logado() && dono(resource.data.prova);
+      allow update: if logado() && (dono(resource.data.prova) || (resource.data.uid == request.auth.uid && request.resource.data.uid == request.auth.uid && request.resource.data.status == 'pedido'));
       allow delete: if logado() && (resource.data.uid == request.auth.uid || dono(resource.data.prova));
     }
 

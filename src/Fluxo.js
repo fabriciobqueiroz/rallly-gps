@@ -33,11 +33,12 @@ function Topo({ st, titulo, onVoltar }) {
 // ---------- Eventos disponíveis: pedir vaga ----------
 function PedirVaga({ st, user, v, onFim }) {
   const cats = v.categorias || [];
-  const [f, setF] = useState({ piloto: '', navegador: '', equipe: '', classe: cats[0] || '', numero: '' });
+  const [f, setF] = useState({ piloto: '', navegador: '', equipe: '', classe: '', numero: '' });
   const [env, setEnv] = useState(false);
   useEffect(() => { lerPerfil(user.uid).then((d) => { const p = d.perfil || {}; setF((x) => ({ ...x, piloto: x.piloto || p.nome || '', equipe: x.equipe || p.equipe || '' })); }).catch(() => {}); }, [user.uid]);
   const enviar = async () => {
     if (!f.piloto.trim()) return Alert.alert('Falta preencher', 'Informe o nome do piloto.');
+    if (cats.length > 0 && !f.classe) return Alert.alert('Escolha a categoria', 'Toque na categoria em que você quer se inscrever.');
     setEnv(true);
     try { await pedirVagaProva(v.prova, { provaNome: v.nome, ...f, piloto: f.piloto.trim() }); onFim(); }
     catch (e) { Alert.alert('Não enviou', String(e?.message || e)); setEnv(false); }
@@ -48,6 +49,7 @@ function PedirVaga({ st, user, v, onFim }) {
       <TextInput style={st.field} value={f.navegador} onChangeText={(t) => setF({ ...f, navegador: t })} placeholder="Navegador (opcional)" placeholderTextColor="#666" />
       <TextInput style={st.field} value={f.equipe} onChangeText={(t) => setF({ ...f, equipe: t })} placeholder="Equipe (opcional)" placeholderTextColor="#666" />
       <TextInput style={st.field} value={f.numero} onChangeText={(t) => setF({ ...f, numero: t })} placeholder="Número desejado (opcional)" placeholderTextColor="#666" keyboardType="number-pad" />
+      {cats.length > 0 && <Text style={st.tipTx}>Categoria em que você quer se inscrever{f.classe ? `: ${f.classe}` : ' (escolha uma)'}</Text>}
       {cats.length > 0 && (
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 8 }}>
           {cats.map((c) => <TouchableOpacity key={c} style={[st.chip, f.classe === c && { backgroundColor: '#ff7a2e' }]} onPress={() => setF({ ...f, classe: c })}><Text style={[st.btn2Tx, f.classe === c && { color: '#0c1014' }]}>{c}</Text></TouchableOpacity>)}
@@ -93,7 +95,9 @@ function Disponiveis({ st, user, excluir, dias }) {
     <View style={{ marginTop: 10 }}>
       <Text style={[st.tip, { marginBottom: 6 }]}>Provas</Text>
       {lista.map((v) => {
-        const p = pedidos[v.prova];
+        const p0 = pedidos[v.prova];
+        const temInsc = insc.some((i) => slug(i.prova) === slug(v.prova));
+        const p = p0 && p0.status === 'aprovado' && !temInsc ? null : p0; // aprovado mas sem inscrição (removida pelo organizador): pode pedir de novo
         const stt = p && p.status;
         return (
           <View key={v.prova} style={[st.card, { marginBottom: 8, borderLeftWidth: 5, borderLeftColor: '#9aa3ad' }]}>
