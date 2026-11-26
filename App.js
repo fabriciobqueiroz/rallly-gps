@@ -573,7 +573,7 @@ export default function App() {
                 <Text style={{ color: '#1c1c1c', fontSize: 15, fontWeight: '600', marginLeft: 16, flex: 1 }}>{t}</Text>
               </TouchableOpacity>
             ))}
-            <Text style={{ color: '#9aa5ae', fontSize: 11, textAlign: 'center', paddingVertical: 4 }}>Rally GPS · passo137</Text>
+            <Text style={{ color: '#9aa5ae', fontSize: 11, textAlign: 'center', paddingVertical: 4 }}>Rally GPS · passo138</Text>
           </View>
         </TouchableOpacity>
       </Modal>

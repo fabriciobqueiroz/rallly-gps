@@ -242,7 +242,8 @@ function direcaoNoPonto(coords, wp) {
 export function oficialDeTrilha(points, wps, trechos, classe, grupos, t0, pcl = [], coords = []) {
   const cum = cumulative(points);
   const pcs = [];
-  let tIni = t0;
+  let tIni = t0; // de onde procurar a próxima passagem
+  let tAnc = t0; // horário ideal acumulado: largada do competidor + tempos ideais dos trechos (zera depois de neutro)
   for (let i = 0; i < trechos.length; i++) {
     const wp = wps[i + 1];
     if (!wp) break;
@@ -257,14 +258,17 @@ export function oficialDeTrilha(points, wps, trechos, classe, grupos, t0, pcl = 
     const v = tr.kmh / 3.6;
     const idealTime = tr.tipo === 'D' ? tr.min * 60 : v > 0 ? (tr.km * 1000) / v : null;
     if (tc == null) {
-      pcs.push({ n: i + 1, tipo: tr.tipo, trecho: i + 1, miss: true, sent, neu: tr.nt > 0, diff: null, idealTime, t0: tIni });
-      // Não passou: os PCs seguintes são medidos a partir do horário ideal do PC perdido.
-      if (idealTime != null) tIni = tIni + idealTime * 1000 + (tr.nt > 0 ? tr.nt * 1000 : 0);
+      pcs.push({ n: i + 1, tipo: tr.tipo, trecho: i + 1, miss: true, sent, neu: tr.nt > 0, diff: null, idealTime, t0: tAnc });
+      // Não passou: os PCs seguintes seguem o horário ideal do PC perdido.
+      if (idealTime != null) { tAnc = tAnc + idealTime * 1000 + (tr.nt > 0 ? tr.nt * 1000 : 0); tIni = tAnc; }
       continue;
     }
     const elapsed = (tc - tIni) / 1000;
     const dist = distAt(points, cum, tc) - distAt(points, cum, tIni);
-    pcs.push({ n: i + 1, tipo: tr.tipo, trecho: i + 1, elapsed, dist, avgKmh: elapsed > 0 ? (dist / elapsed) * 3.6 : 0, diff: tr.nt > 0 ? null : idealTime != null ? elapsed - idealTime : null, idealTime, neu: tr.nt > 0, t0: tIni, t: tc });
+    // O horário ideal de cada PC é absoluto: largada deste competidor + tempo ideal acumulado até o PC. O erro é passagem − ideal.
+    const idealAbs = idealTime != null ? tAnc + idealTime * 1000 : null;
+    pcs.push({ n: i + 1, tipo: tr.tipo, trecho: i + 1, elapsed, dist, avgKmh: elapsed > 0 ? (dist / elapsed) * 3.6 : 0, diff: tr.nt > 0 ? null : idealAbs != null ? (tc - idealAbs) / 1000 : null, idealTime, neu: tr.nt > 0, t0: tAnc, t: tc });
+    tAnc = tr.nt > 0 ? tc + tr.nt * 1000 : idealAbs != null ? idealAbs : tc;
     tIni = tr.nt > 0 ? tc + tr.nt * 1000 : tc;
   }
   return pcs;
