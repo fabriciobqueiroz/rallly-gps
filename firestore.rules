@@ -12,6 +12,12 @@ service cloud.firestore {
       return logado() && exists(/databases/$(database)/documents/acessos/$(prova + '__' + meuEmail()));
     }
 
+    // Inscrito também pela inscrição do número (id = prova_numero) com o e-mail da conta: cobre quem não tem o acesso gravado.
+    function inscritoNum(id) {
+      return logado() && exists(/databases/$(database)/documents/inscricoes/$(id))
+        && get(/databases/$(database)/documents/inscricoes/$(id)).data.get('email', '').lower() == meuEmail();
+    }
+
     // Espelho do navegador para o piloto: só a própria conta lê e escreve.
     match /espelho/{uid} {
       allow read, write: if logado() && request.auth.uid == uid;
@@ -52,12 +58,12 @@ service cloud.firestore {
     // Resultados e dataloggers: o competidor inscrito grava o seu; o dono lê tudo e grava o oficial.
     match /resultados/{id} {
       allow read: if logado() && (inscrito(resource.data.prova) || dono(resource.data.prova));
-      allow create, update: if logado() && (dono(request.resource.data.prova) || (inscrito(request.resource.data.prova) && request.resource.data.uid == request.auth.uid));
+      allow create, update: if logado() && (dono(request.resource.data.prova) || ((inscrito(request.resource.data.prova) || inscritoNum(id)) && request.resource.data.uid == request.auth.uid));
       allow delete: if dono(resource.data.prova);
     }
     match /dataloggers/{id} {
       allow read: if logado() && (dono(resource.data.prova) || (resource.data.uid == request.auth.uid && get(/databases/$(database)/documents/provas/$(resource.data.prova)).data.get('lib', {}).get('track', false) == true));
-      allow create, update: if logado() && inscrito(request.resource.data.prova) && request.resource.data.uid == request.auth.uid;
+      allow create, update: if logado() && (inscrito(request.resource.data.prova) || inscritoNum(id)) && request.resource.data.uid == request.auth.uid;
       allow delete: if dono(resource.data.prova);
     }
 

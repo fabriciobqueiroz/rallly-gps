@@ -98,8 +98,11 @@ export function Entrada({ e, st, destaque, faltam, classe, grupos, org }) {
                 <Text style={{ color: '#fff', fontWeight: '800' }}>NEUTRO · PARE {mmss(e.nt)}</Text>
               </View>
             ) : (
-              <View style={{ backgroundColor: e.t === 'C' ? '#c0392b' : '#37474f', borderRadius: 10, padding: 8 }}>
-                <Text style={{ color: '#fff', fontWeight: '800' }}>{e.t === 'P' ? (e.nt > 0 && e.pn == null ? 'NEUTRO' : `PC ${e.pn ?? e.n}`) : LABEL[e.t]}</Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                {(e.t === 'L' || e.t === 'C') && e.dw && e.dw.length ? <Tulipa e={e} size={destaque ? 100 : 76} /> : null}
+                <View style={{ flex: 1, backgroundColor: e.t === 'C' ? '#c0392b' : '#37474f', borderRadius: 10, padding: 8 }}>
+                  <Text style={{ color: '#fff', fontWeight: '800' }}>{e.t === 'P' ? (e.nt > 0 && e.pn == null ? 'NEUTRO' : `PC ${e.pn ?? e.n}`) : LABEL[e.t]}</Text>
+                </View>
               </View>
             )}
             {e.nt > 0 && !soNeutro && (

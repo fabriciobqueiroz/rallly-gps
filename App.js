@@ -255,7 +255,7 @@ export default function App() {
       await enviarDatalogger({ prova: piloto.prova, numero: piloto.numero, nome: piloto.nome, classe: piloto.classe, points: pts, pcs: stage.pcs, tIni: jan.ini || undefined });
       { const k = piloto.prova.trim().toUpperCase().replace(/[^A-Z0-9]+/g, '') + '_' + piloto.numero.trim().toUpperCase().replace(/[^A-Z0-9]+/g, ''); const passo = Math.max(1, Math.ceil(pts.length / 2500)); saveJson('dltrk_' + k, pts.filter((_, q) => q % passo === 0).map((p) => [p.t, p.lat, p.lon, p.acc ?? null])); saveJson('dlstat', { ...loadJson('dlstat', {}), [k]: { n: pts.length, tot: pts.length, em: Date.now(), ev: piloto.prova, cat: piloto.classe, num: piloto.numero } }); } setDlTick((x) => x + 1);
       Alert.alert('Datalogger enviado', `${pts.length} pontos. O organizador calcula o resultado oficial com ele.`);
-    } catch (e) { Alert.alert('Não enviou', 'Confira a internet e tente de novo. ' + String(e?.message || e)); }
+    } catch (e) { const m = String(e?.message || e); Alert.alert('Não enviou', /permission/i.test(m) ? 'Esta conta não está liberada para enviar nesta prova. Entre com o mesmo e-mail da inscrição (' + (piloto.email || user?.email || '?') + ') ou peça ao organizador para conferir a inscrição.\n\n' + m : 'Seus pontos continuam guardados. Confira a internet e tente de novo. ' + m); }
     setEnviandoDl(false);
   };
   const onEnviar = async () => {
@@ -345,6 +345,12 @@ export default function App() {
     const j = loadJson(kJan(), {});
     if (j.ini !== stage.t0) saveJson(kJan(), { ini: stage.t0 });
   }, [stage.active, stage.idx, stage.t0, piloto.prova]);
+  // Na chegada: carimba o fim da prova (se ainda não) e envia o datalogger já, com a internet do celular.
+  const enviarDlChegada = async () => {
+    const j = loadJson(kJan(), {});
+    if (j.fim == null) saveJson(kJan(), { ...j, fim: Date.now() });
+    await onDatalogger();
+  };
   const encerrarProva = () => {
     const j = loadJson(kJan(), {});
     saveJson(kJan(), { ...j, fim: Date.now() });
@@ -567,7 +573,7 @@ export default function App() {
                 <Text style={{ color: '#1c1c1c', fontSize: 15, fontWeight: '600', marginLeft: 16, flex: 1 }}>{t}</Text>
               </TouchableOpacity>
             ))}
-            <Text style={{ color: '#9aa5ae', fontSize: 11, textAlign: 'center', paddingVertical: 4 }}>Rally GPS · passo131</Text>
+            <Text style={{ color: '#9aa5ae', fontSize: 11, textAlign: 'center', paddingVertical: 4 }}>Rally GPS · passo132</Text>
           </View>
         </TouchableOpacity>
       </Modal>
@@ -636,7 +642,7 @@ export default function App() {
         <Erro onClose={() => setNavOpen(false)}><NavTela cfg={loadNav()} stage={stage} rs={rs} last={last} globalDist={rs || stage.idx >= 0 ? globalDist : Math.max(0, odoAtual() - odoBase)}
           odoM={odoAtual() - odoBase} tul={tulVis} rot={rot} trs={provaMap.trs} fim={fimProva} cont={remLarg} classe={piloto.classe} grupos={grupos}
           aviso={fimProva ? 'FIM DA PROVA' : remLarg != null && remLarg > 0 ? `Largada em ${fmtDur(remLarg)}` : neutroRest != null ? `NEUTRO · PARE · ${fmtDur(neutroRest)}` : null}
-          onAdj={adjAll} onIniciarAgora={onStage} onEncerrar={encerrarProva} onZerar={() => setOdoBase(odoAtual())} factor={factor} aferRef={aferRef} onAfer={onAfer} podeDesfazer={!!aferUndo} onDesfazer={desfazerAfer} onW={ajustarW} onEstouAqui={estouAqui} onClose={() => setNavOpen(false)} /></Erro>
+          onAdj={adjAll} onIniciarAgora={onStage} onEncerrar={encerrarProva} onEnviarDl={enviarDlChegada} enviandoDl={enviandoDl} onZerar={() => setOdoBase(odoAtual())} factor={factor} aferRef={aferRef} onAfer={onAfer} podeDesfazer={!!aferUndo} onDesfazer={desfazerAfer} onW={ajustarW} onEstouAqui={estouAqui} onClose={() => setNavOpen(false)} /></Erro>
       )}
       {navOpen && <InfoProva visible={infoOpen} info={infoProva} onOk={() => setInfoOpen(false)} />}
       <NavConfig st={st} visible={cfgOpen} onClose={() => setCfgOpen(false)} />

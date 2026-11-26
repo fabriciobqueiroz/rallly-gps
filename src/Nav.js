@@ -68,7 +68,7 @@ function montarRb(tul, iA, rb) {
   for (let k = 1; k <= rb.prox; k++) if (tul[iA + k]) out.push({ e: tul[iA + k], pct: rb.pProx[k - 1] ?? 40, key: 'p' + k });
   return out;
 }
-export function NavTela({ cfg, stage, rs, last, globalDist, odoM, tul, rot, trs, fim, classe, grupos, aviso, cont, onAdj, onPc, onZerar, onClose, onIniciarAgora, onEncerrar, factor, aferRef, onAfer, podeDesfazer, onDesfazer, onW, onEstouAqui }) {
+export function NavTela({ cfg, stage, rs, last, globalDist, odoM, tul, rot, trs, fim, classe, grupos, aviso, cont, onAdj, onPc, onZerar, onClose, onIniciarAgora, onEncerrar, onEnviarDl, enviandoDl, factor, aferRef, onAfer, podeDesfazer, onDesfazer, onW, onEstouAqui }) {
   useKeepAwake();
   const { width } = useWindowDimensions();
   const [t, setT] = useState(Date.now());
@@ -216,6 +216,11 @@ export function NavTela({ cfg, stage, rs, last, globalDist, odoM, tul, rot, trs,
             </View>
           ) : null}
         </View>
+        {fim && onEnviarDl ? (
+          <TouchableOpacity disabled={enviandoDl} style={{ position: 'absolute', left: 12, right: 12, bottom: 96, backgroundColor: '#1e8e5a', borderRadius: 12, paddingVertical: 18, alignItems: 'center', elevation: 6, opacity: enviandoDl ? 0.6 : 1 }} onPress={onEnviarDl}>
+            <Text style={{ color: '#fff', fontWeight: '900', fontSize: 20 }}>{enviandoDl ? 'ENVIANDO…' : 'ENVIAR DATALOGGER'}</Text>
+          </TouchableOpacity>
+        ) : null}
         {fim && onEncerrar ? (
           <TouchableOpacity style={{ position: 'absolute', left: 12, right: 12, bottom: 24, backgroundColor: '#c0392b', borderRadius: 12, paddingVertical: 18, alignItems: 'center', elevation: 6 }} onPress={() => confirma('Encerrar a prova', 'Confirma que você terminou a prova? O T.NAV para e você volta à tela da prova.', onEncerrar)}>
             <Text style={{ color: '#fff', fontWeight: '900', fontSize: 20 }}>ENCERRAR PROVA</Text>
