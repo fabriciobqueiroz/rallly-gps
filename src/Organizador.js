@@ -164,6 +164,7 @@ export default function Organizador({ onMenu, st, prova, provaMap: pmRaw, last, 
   const carregado = useRef(0);
   const levAutoKey = useRef('');
   const [tentAuto, setTentAuto] = useState(0);
+  const [recarga, setRecarga] = useState(0); // força reler a planilha publicada ao reabrir a mesma prova
   const logado = org && org.prova === prova.trim().toUpperCase();
 
   useEffect(() => {
@@ -184,7 +185,7 @@ export default function Organizador({ onMenu, st, prova, provaMap: pmRaw, last, 
       }));
       setTrs((provaMap.trs || []).map((t) => { const bs = String(t.bs ?? (t.v || [])[bi] ?? (t.v || [])[0] ?? 30); const v = Array.isArray(t.v) && t.v.length === ng ? t.v.map(String) : mk(bs); return { t: t.t, bs, v, min: String(t.min), d0: t.d0, zr: !!t.zr, fx: !!t.fx }; }));
     }
-  }, [logado, provaMap]);
+  }, [logado, provaMap, recarga]);
 
   // Segurança: se a planilha abriu e continua vazia, apesar de haver levantamento fechado na nuvem, tenta aplicar de novo (até 3 vezes).
   useEffect(() => {
@@ -245,6 +246,7 @@ export default function Organizador({ onMenu, st, prova, provaMap: pmRaw, last, 
       saveJson('org', o); setOrg(o); onOrg && onOrg(o);
       carregado.current = 0; levAutoKey.current = ''; setTentAuto(0); setLevPub(null); setEdTul({}); setExtras([]); setCheia(true);
       setWps([]); setRota({ coords: [], legs: [], tul: [] }); setLegs([]); setTrs([]); setRefs([]); setPcl([]); setManual(false); setInscritos([]);
+      setTimeout(() => setRecarga((n) => n + 1), 50); // depois das limpezas, para a leitura da planilha publicada não ser apagada por elas
       setSec('geral'); setAberta(true);
     } catch (e) { Alert.alert('Sem conexão', String(e?.message || e)); }
   };
