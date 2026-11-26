@@ -2,7 +2,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { loadJson, saveJson } from './persist';
 import { DateTimePickerAndroid } from './pickers';
-import { Alert, Switch, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { Alert, StyleSheet, Switch, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { abrirVitrine, atualizarInscricao, decidirPedido, enviarResultado, inscrever, ouvirDataloggers, ouvirPedidosProva, ouvirProva, ouvirRanking, ouvirVitrineProva, removerInscricao, salvarProva } from './firebase';
 import { compartilharResultadosPdf } from './pdf';
 import { cumulative, oficialDeTrilha, pcsDoLogger, rank } from './rally';
@@ -294,17 +294,18 @@ export function OrgVisaoGeral({ st, prova, lib }) {
     salvarProva(prova, { nome: nome.trim().slice(0, 60), cidade: cidade.trim(), uf: uf.trim().toUpperCase().slice(0, 2), data: dataBR(d), dataFim: dataBR(f), dataTs: d.getTime() })
       .then(() => Alert.alert('Salvo', 'Dados do evento atualizados.')).catch(erro);
   };
+  const corTx = (StyleSheet.flatten(st.tip) || {}).color || '#fff';
   const campo = (rot, v, set, extra) => (
     <View style={[{ flex: 1 }, extra]}>
       <Text style={st.tipTx}>{rot}</Text>
-      <TextInput style={st.input} value={v} onChangeText={set} placeholderTextColor="#666" />
+      <TextInput style={[st.input, { color: corTx, textAlign: 'left' }]} value={v} onChangeText={set} placeholderTextColor="#888" />
     </View>
   );
   const dataBtn = (rot, v, set) => (
     <View style={{ flex: 1 }}>
       <Text style={st.tipTx}>{rot}</Text>
       <TouchableOpacity style={[st.field, { justifyContent: 'center' }]} onPress={() => escolheData(v, set)}>
-        <Text style={{ color: v ? '#fff' : '#666', fontSize: 16 }}>{v ? `📅  ${v}` : '📅  escolher'}</Text>
+        <Text style={{ color: v ? corTx : '#888', fontSize: 16 }}>{v ? `📅  ${v}` : '📅  escolher'}</Text>
       </TouchableOpacity>
       <Text style={st.tipTx}>{diaSemana(v)}</Text>
     </View>
@@ -324,7 +325,7 @@ export function OrgVisaoGeral({ st, prova, lib }) {
         {[['Início', ini, setIni], ['Fim', fim, setFim]].map(([nm, v, set]) => (
           <View key={nm} style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
             <TouchableOpacity style={[st.field, { flex: 1, justifyContent: 'center' }]} onPress={() => escolherDT(v, set)}>
-              <Text style={{ color: v ? '#fff' : '#666', fontSize: 16 }}>{v ? `📅  ${nm}: ${fmtBR(v)}` : `📅  ${nm}: escolher data e hora`}</Text>
+              <Text style={{ color: v ? corTx : '#888', fontSize: 16 }}>{v ? `📅  ${nm}: ${fmtBR(v)}` : `📅  ${nm}: escolher data e hora`}</Text>
             </TouchableOpacity>
             {v ? <TouchableOpacity onPress={() => set('')} style={{ marginTop: 8, padding: 10 }}><Text style={{ color: '#ff5252', fontWeight: '800' }}>✕</Text></TouchableOpacity> : null}
           </View>
