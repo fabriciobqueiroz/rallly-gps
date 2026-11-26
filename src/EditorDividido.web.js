@@ -89,7 +89,7 @@ function Linha({ e, num, atual, sel, grupos, onKm, onTul, onSel, refEl }) {
         {txtN ? <div style={{ fontWeight: 800, fontSize: 20 }}>{txtN}</div> : null}
         {obs.map((o, i) => <div key={i} style={{ fontWeight: o.n === false ? 500 : 800, fontSize: 15, ...(o.i ? { background: '#111', color: '#fff', padding: '1px 8px', width: '100%', boxSizing: 'border-box' } : null) }}>{o.t}</div>)}
         {e.cu > 0 ? <div style={{ fontSize: 22, marginTop: 4 }}>{'☠'.repeat(e.cu)}</div> : null}
-        {ehPc && !obs.length ? <div style={{ fontSize: 13, color: '#555' }}>Raio: 15 m</div> : null}
+        {ehPc ? <div style={{ fontSize: 13, color: '#555', textAlign: 'left', width: '100%', marginTop: 4 }}><div>Raio: {e.raio || 15} m</div><div>Passagem: {e.pass || 1}ª{e.tpc === 'I' ? ' · Inválido' : e.tpc === 'P' ? ' · Passagem' : ''}</div></div> : null}
       </div>
     </div>
   );
@@ -104,7 +104,7 @@ const BT = (bg, cor, extra) => ({ width: '100%', boxSizing: 'border-box', border
 function Referencia({ e, n, grupos, bi, manual, tr, atualKm, onFechar, onSalvar, onNav, onNovoTrecho, onSalvarTr, onLimparTr, onExcluir, onEstouAqui, onMostrar, onAddPc }) {
   const ng = Math.max(1, grupos.length);
   const novo = !!e.novo;
-  const [km, setKm] = useState(km3(novo ? Math.round(atualKm * 1000) : e.d));
+  const [km, setKm] = useState(km3(e.d));
   const [shift, setShift] = useState(false);
   const [obs, setObs] = useState(() => { const a = linhasObs(e); return Array.from({ length: 4 }, (_, k) => a[k] ? { t: a[k].t, n: a[k].n !== false, i: !!a[k].i } : { t: '', n: true, i: false }); });
   const [cu, setCu] = useState(e.cu || 0);
@@ -281,7 +281,71 @@ function Referencia({ e, n, grupos, bi, manual, tr, atualKm, onFechar, onSalvar,
   );
 }
 
-export default function EditorDividido({ st, nome, tul, coords, wps, totalM, grupos, bi, trs, manual, editable, busy, onTap, onDesfazer, onLimpar, onNovoTrecho, onSalvarRef, onSalvarDw, onExcluirRef, onSalvarTr, onLimparTr, onAddPc, onAddPcEm, onAuto, trAqui, onPublicar, onSimular, onPdf, onAtualizar, onLista, onVoltar }) {
+// Painel do PC no padrão do Kraken: Estou aqui / Mostrar no mapa / Editar odômetro / Deletar referência / Editar PC.
+function PcPainel({ e, n, atualKm, onFechar, onEstouAqui, onMostrar, onMoverKm, onDeletar, onSalvarPc, onMoverPc }) {
+  const [v, setV] = useState('menu');
+  const [novoKm, setNovoKm] = useState(km3(e.d));
+  const [hdg, setHdg] = useState(String(Math.round(e.hdg || 0)));
+  const [raio, setRaio] = useState(String(e.raio || 15));
+  const [obsT, setObsT] = useState(e.nm || '');
+  const [tpc, setTpc] = useState(e.tpc || 'V');
+  const [pass, setPass] = useState(e.pass || 1);
+  const [msg, setMsg] = useState('');
+  const CX = { background: '#fff', borderRadius: 4, width: 360, maxWidth: '94vw', boxShadow: '0 4px 24px rgba(0,0,0,.35)', fontFamily: FONTE, overflow: 'hidden' };
+  const BTN2 = (cor, txt, on, dis) => <button disabled={dis} onClick={on} style={{ display: 'block', width: 'calc(100% - 36px)', margin: '0 18px 12px', border: 0, borderRadius: 3, padding: '12px 8px', background: cor, color: '#fff', fontWeight: 700, fontSize: 14, fontFamily: FONTE, cursor: dis ? 'default' : 'pointer', opacity: dis ? 0.5 : 1 }}>{txt}</button>;
+  const Cab2 = ({ t, volta }) => (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 16, padding: '14px 18px' }}>
+      <span style={{ cursor: 'pointer', fontSize: 22, color: '#6b6f78' }} onClick={volta}>←</span>
+      <span style={{ fontSize: 18, color: '#6b6f78' }}>{t}</span>
+    </div>
+  );
+  const CAMPO = { width: '100%', boxSizing: 'border-box', border: '1px solid #c9ced6', borderRadius: 3, padding: '12px 10px', fontSize: 16, fontFamily: FONTE, color: '#444' };
+  const radio = (rot, on, set) => <label style={{ display: 'flex', alignItems: 'center', gap: 10, margin: '10px 0', color: '#8a8f98', fontSize: 15, cursor: 'pointer' }}><input type="radio" checked={on} onChange={set} />{rot}</label>;
+  return (
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.45)', zIndex: 60, display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={onFechar}>
+      <div style={CX} onClick={(ev) => ev.stopPropagation()}>
+        {v === 'menu' && (<>
+          <Cab2 t={`PC: ${n}`} volta={onFechar} />
+          <div style={{ textAlign: 'center', color: '#8a8f98', fontSize: 14 }}>Odômetro da planilha</div>
+          <div style={{ textAlign: 'center', color: '#8a8f98', fontSize: 24, margin: '4px 0 14px' }}>{km3(e.d)}</div>
+          <div style={{ textAlign: 'center', color: '#8a8f98', fontSize: 14 }}>Odômetro atual</div>
+          <div style={{ textAlign: 'center', color: '#8a8f98', fontSize: 24, margin: '4px 0 16px' }}>{atualKm.toFixed(3)}</div>
+          {BTN2('#8fd0f0', 'ESTOU AQUI', () => { onEstouAqui(); onFechar(); })}
+          {BTN2('#b9bec6', 'MOSTRAR NO MAPA', () => { onMostrar(); onFechar(); })}
+          {BTN2('#f5b800', 'EDITAR ODÔMETRO', () => setV('odo'))}
+          {BTN2('#4d8fd1', 'EDITAR PC', () => setV('edit'))}
+          {BTN2('#ec6a6a', 'DELETAR REFERÊNCIA', () => { if (window.confirm('Deletar o PC ' + n + '?')) { const r = onDeletar(); if (r) setMsg(r); else onFechar(); } })}
+          {msg ? <div style={{ color: '#e53935', fontSize: 12, padding: '0 18px 12px' }}>{msg}</div> : null}
+        </>)}
+        {v === 'odo' && (<>
+          <Cab2 t="Editar odômetro" volta={() => setV('menu')} />
+          <div style={{ textAlign: 'center', color: '#8a8f98', fontSize: 14 }}>Odômetro da planilha</div>
+          <div style={{ textAlign: 'center', color: '#8a8f98', fontSize: 24, margin: '4px 0 14px' }}>{km3(e.d)}</div>
+          <div style={{ textAlign: 'center', color: '#8a8f98', fontSize: 14, marginBottom: 6 }}>Novo odômetro</div>
+          <div style={{ padding: '0 18px 12px' }}><input autoFocus style={{ ...CAMPO, textAlign: 'center', fontWeight: 700, fontSize: 22, background: '#f1f2f4' }} value={novoKm} onChange={(ev) => setNovoKm(ev.target.value)} /></div>
+          {BTN2('#8fd0f0', 'OK', () => { const x = parseFloat(String(novoKm).replace(',', '.')); if (Number.isNaN(x)) return setMsg('Número inválido.'); const r = onMoverKm(Math.round(x * 1000)); if (r) setMsg(r); else onFechar(); })}
+          {msg ? <div style={{ color: '#e53935', fontSize: 12, padding: '0 18px 12px' }}>{msg}</div> : null}
+        </>)}
+        {v === 'edit' && (<>
+          <Cab2 t={`Editar PC ${n}`} volta={() => setV('menu')} />
+          <div style={{ display: 'flex', gap: 10, padding: '0 18px' }}>
+            <div style={{ flex: 1 }}><div style={{ ...ROT, color: '#2fb6d3' }}>Direção</div><input style={CAMPO} value={hdg} onChange={(ev) => setHdg(ev.target.value)} /></div>
+            <div style={{ flex: 1 }}><div style={{ ...ROT, color: '#2fb6d3' }}>Raio (m)</div><input style={CAMPO} value={raio} onChange={(ev) => setRaio(ev.target.value)} /></div>
+          </div>
+          <div style={{ padding: '12px 18px 0' }}><input style={CAMPO} placeholder="Observações" maxLength={50} value={obsT} onChange={(ev) => setObsT(ev.target.value)} /><div style={{ textAlign: 'right', fontSize: 11, color: '#999', marginTop: 4 }}>{obsT.length}/50</div></div>
+          <div style={{ display: 'flex', gap: 10, padding: '4px 18px 0' }}>
+            <div style={{ flex: 1 }}><div style={{ color: '#8a8f98', fontSize: 14, marginBottom: 4 }}>Tipo do PC</div>{radio('Válido', tpc === 'V', () => setTpc('V'))}{radio('Inválido', tpc === 'I', () => setTpc('I'))}{radio('Passagem', tpc === 'P', () => setTpc('P'))}</div>
+            <div style={{ flex: 1 }}><div style={{ color: '#8a8f98', fontSize: 14, marginBottom: 4 }}>Nº da Passagem</div>{[1, 2, 3, 4].map((k) => <span key={k}>{radio(`${k}ª`, pass === k, () => setPass(k))}</span>)}</div>
+          </div>
+          <div style={{ textAlign: 'center', color: '#8a8f98', margin: '6px 0 14px', cursor: 'pointer', fontSize: 15 }} onClick={() => { onMoverPc(); onFechar(); }}>✥ Mover PC</div>
+          {BTN2('#8fd0f0', 'EDITAR PC', () => { const h = parseFloat(String(hdg).replace(',', '.')), r = parseFloat(String(raio).replace(',', '.')); onSalvarPc({ hdg: Number.isNaN(h) ? undefined : ((Math.round(h) % 360) + 360) % 360, raio: Number.isNaN(r) || r <= 0 ? undefined : Math.min(200, Math.round(r)), nm: obsT.trim() || undefined, ob: obsT.trim() ? [{ t: obsT.trim(), n: true, i: false }] : undefined, tpc: tpc === 'V' ? undefined : tpc, pass: pass === 1 ? undefined : pass }); onFechar(); })}
+        </>)}
+      </div>
+    </div>
+  );
+}
+
+export default function EditorDividido({ st, nome, tul, coords, wps, totalM, grupos, bi, trs, manual, editable, busy, onTap, onDesfazer, onLimpar, onNovoTrecho, onSalvarRef, onSalvarDw, onExcluirRef, onSalvarTr, onLimparTr, onAddPc, onAddPcEm, onMoverPcPara, onExcluirPc, onSalvarPc, onAuto, trAqui, onPublicar, onSimular, onPdf, onAtualizar, onLista, onVoltar }) {
   const [frac, setFrac] = useState(0.5);
   const [sel, setSel] = useState(-1);
   const [tulEd, setTulEd] = useState(null);
@@ -294,6 +358,8 @@ export default function EditorDividido({ st, nome, tul, coords, wps, totalM, gru
   const [novoD, setNovoD] = useState(null);
   const [ponto, setPonto] = useState(null); // ponto escolhido no rastro: { d (m), lat, lon }
   const [abrirEm, setAbrirEm] = useState(null);
+  const [moverPc, setMoverPc] = useState(null); // PC que será movido para o próximo ponto clicado no rastro
+  const [menuPt, setMenuPt] = useState(false);
   const [aviso, setAviso] = useState('');
   const [eu, setEu] = useState(null);
   const [ctr, setCtr] = useState(0);
@@ -333,7 +399,19 @@ export default function EditorDividido({ st, nome, tul, coords, wps, totalM, gru
     if (!melhor || melhor.dist > 40) return avisar('Clique em cima da linha do rastro para escolher o ponto.');
     const A = coords[melhor.i - 1], B = coords[melhor.i];
     const ate = cum[melhor.i - 1] + melhor.t * (cum[melhor.i] - cum[melhor.i - 1]);
-    setPonto({ d: Math.round((ate / (cum[cum.length - 1] || 1)) * totalM), lat: A[0] + (B[0] - A[0]) * melhor.t, lon: A[1] + (B[1] - A[1]) * melhor.t });
+    const np = { d: Math.round((ate / (cum[cum.length - 1] || 1)) * totalM), lat: A[0] + (B[0] - A[0]) * melhor.t, lon: A[1] + (B[1] - A[1]) * melhor.t, hdg: Math.round(((Math.atan2((B[1] - A[1]) * k, (B[0] - A[0]) * kk) * 180) / Math.PI + 360) % 360) };
+    if (moverPc) { const r = onMoverPcPara && onMoverPcPara(moverPc, np.lat, np.lon, np.d, np.hdg); setMoverPc(null); return avisar(r || 'PC movido para o km ' + (np.d / 1000).toFixed(3) + '.'); }
+    setMenuPt(false); setPonto(np);
+  };
+  // Anda o ponto escolhido ao longo do rastro (passos de alguns metros).
+  const passoPonto = (dm) => {
+    if (!ponto) return;
+    const d = Math.max(0, Math.min(totalM, ponto.d + dm));
+    const q = pontoEm(coords, cum, totalM, d), q2 = pontoEm(coords, cum, totalM, Math.min(totalM, d + 3)), q1 = pontoEm(coords, cum, totalM, Math.max(0, d - 3));
+    if (!q) return;
+    const kx = Math.cos(rad(q[0])) * 111320;
+    const h = q1 && q2 ? Math.round(((Math.atan2((q2[1] - q1[1]) * kx, (q2[0] - q1[0]) * 110540) * 180) / Math.PI + 360) % 360) : ponto.hdg;
+    setPonto({ d: Math.round(d), lat: q[0], lon: q[1], hdg: h });
   };
   // Depois de criar um trecho num ponto, abre a referência dele para ajustar a média.
   useEffect(() => {
@@ -347,7 +425,7 @@ export default function EditorDividido({ st, nome, tul, coords, wps, totalM, gru
     const cls = i === focI ? 'r' : e.t === 'L' ? 'l' : e.t === 'C' ? 'c' : e.t === 'P' ? 's' : 'k';
     return { id: i, lat: pos[i][0], lon: pos[i][1], txt: e.t === 'P' ? 'PC' + (e.pn ?? e.n) : String(i + 1), cls };
   }).filter(Boolean), [sig, pos, focI]);
-  const marksP = ponto ? [...marks, { id: null, lat: ponto.lat, lon: ponto.lon, txt: 'km ' + (ponto.d / 1000).toFixed(3), cls: 'r' }] : marks;
+  const marksP = ponto ? [...marks, { id: null, lat: ponto.lat, lon: ponto.lon, txt: '', cls: 'pt' }] : marks;
   const foc = focI >= 0 && pos[focI] ? pos[focI] : null;
 
   const avisar = (m) => { setAviso(m); setTimeout(() => setAviso(''), 5000); };
@@ -435,7 +513,33 @@ export default function EditorDividido({ st, nome, tul, coords, wps, totalM, gru
               <MapaWeb kr wps={wps} coords={coords} marks={marksP} sat editable={coords.length > 1 || (editable && modoPc)} onTap={tapMapa} onMark={(id) => { setSel(id); setFocI(id); rolarPara(id); }} foc={foc} focn={focn} me={eu} ctr={ctr} height="100%" mb={0} />
             </div>
             <div title="Localizar (precisa do GPS do computador)" onClick={localizar} style={{ position: 'absolute', right: 10, top: 110, width: 40, height: 40, borderRadius: 20, background: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', zIndex: 800, boxShadow: '0 1px 4px rgba(0,0,0,.4)', fontSize: 22 }}>◎</div>
-            {ponto && <div style={{ position: 'absolute', left: 50, top: 10, background: '#ff1744', color: '#fff', borderRadius: 6, padding: '6px 12px', fontSize: 14, zIndex: 800, display: 'flex', gap: 10, alignItems: 'center' }}>Ponto no km {(ponto.d / 1000).toFixed(3)}: toque em REF, TRC ou PC <span style={{ cursor: 'pointer', fontWeight: 700 }} onClick={() => setPonto(null)}>✕</span></div>}
+            {moverPc && <div style={{ position: 'absolute', left: 50, top: 10, background: '#ef5350', color: '#fff', borderRadius: 6, padding: '6px 12px', fontSize: 14, zIndex: 800, display: 'flex', gap: 10 }}>Clique no rastro onde ficará o PC <span style={{ cursor: 'pointer', fontWeight: 700 }} onClick={() => setMoverPc(null)}>✕</span></div>}
+            {ponto && !moverPc && (() => {
+              const ant = [...lista].filter((x) => !x.cont && (x.d || 0) <= ponto.d).pop();
+              const ib = { cursor: 'pointer', fontSize: 22, color: '#fff', padding: '0 10px', userSelect: 'none' };
+              const act = (rot, fn) => <div key={rot} style={{ padding: '10px 18px', cursor: 'pointer', color: '#222', fontSize: 15, whiteSpace: 'nowrap' }} onClick={() => { setMenuPt(false); fn(); }}>{rot}</div>;
+              return (
+                <div style={{ position: 'absolute', left: 0, right: 0, bottom: 0, background: 'rgba(44,48,56,.94)', color: '#fff', zIndex: 800, fontFamily: FONTE, padding: '8px 10px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                    <div style={{ flex: 1, fontSize: 13, color: '#cfd3da' }}>Ponto do rastro</div>
+                    <span style={ib} onClick={() => passoPonto(-5)}>‹</span>
+                    <span style={ib} onClick={() => passoPonto(5)}>›</span>
+                    <span style={{ ...ib, position: 'relative' }} onClick={() => setMenuPt((x) => !x)}>⋮
+                      {menuPt && <div style={{ position: 'absolute', right: 0, bottom: 34, background: '#fff', borderRadius: 4, boxShadow: '0 2px 10px rgba(0,0,0,.4)', zIndex: 900 }} onClick={(ev) => ev.stopPropagation()}>
+                        {act('Adicionar referência', () => { setNovoD(ponto.d); setDlg(-1); setPonto(null); })}
+                        {act('Adicionar PC', () => { const r = onAddPcEm && onAddPcEm(ponto.lat, ponto.lon, ponto.d, ponto.hdg); if (r) return avisar(r); setPonto(null); avisar('PC criado no km ' + (ponto.d / 1000).toFixed(3) + '.'); })}
+                      </div>}
+                    </span>
+                    <span style={ib} onClick={() => { setPonto(null); setMenuPt(false); }}>✕</span>
+                  </div>
+                  <div style={{ display: 'flex', gap: 22, marginTop: 4 }}>
+                    <div><div style={{ fontSize: 11, color: '#9aa0aa' }}>Direção</div><div style={{ fontSize: 18, fontWeight: 700 }}>{ponto.hdg != null ? ponto.hdg + '°' : '-'}</div></div>
+                    <div><div style={{ fontSize: 11, color: '#9aa0aa' }}>Odômetro</div><div style={{ fontSize: 18, fontWeight: 700 }}>{((ponto.d - (ant ? ant.d || 0 : 0)) / 1000).toFixed(3)}</div></div>
+                    <div><div style={{ fontSize: 11, color: '#9aa0aa' }}>Odôm. total</div><div style={{ fontSize: 18, fontWeight: 700 }}>{(ponto.d / 1000).toFixed(3)}</div></div>
+                  </div>
+                </div>
+              );
+            })()}
             {modoPc && <div style={{ position: 'absolute', left: 50, top: 10, background: '#ef5350', color: '#fff', borderRadius: 6, padding: '6px 12px', fontSize: 14, zIndex: 800 }}>Marcando PCs: clique no mapa</div>}
           </div>
           <div style={{ height: 56, display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', flexShrink: 0 }}>
@@ -455,12 +559,21 @@ export default function EditorDividido({ st, nome, tul, coords, wps, totalM, gru
               if (m) return m === 'Cancelado.' ? null : avisar(m);
               setSel(i); setTimeout(() => abrirRef(i), 60);
             })}
-            {BTN('#f26f6f', 'PC', () => { if (ponto && onAddPcEm) { const r = onAddPcEm(ponto.lat, ponto.lon, ponto.d); if (r) return avisar(r); setPonto(null); return avisar('PC criado no km ' + (ponto.d / 1000).toFixed(3) + '.'); } if (!editable) return avisar(manual ? 'Percurso congelado: no menu ⋮ use "Voltar ao percurso automático" para marcar PCs.' : 'Não dá para editar o percurso agora.'); setModoPc((x) => !x); }, modoPc ? { outline: '4px solid #fff', outlineOffset: -4 } : null)}
+            {BTN('#f26f6f', 'PC', () => { if (ponto && onAddPcEm) { const r = onAddPcEm(ponto.lat, ponto.lon, ponto.d, ponto.hdg); if (r) return avisar(r); setPonto(null); return avisar('PC criado no km ' + (ponto.d / 1000).toFixed(3) + '.'); } if (!editable) return avisar(manual ? 'Percurso congelado: no menu ⋮ use "Voltar ao percurso automático" para marcar PCs.' : 'Não dá para editar o percurso agora.'); setModoPc((x) => !x); }, modoPc ? { outline: '4px solid #fff', outlineOffset: -4 } : null)}
             {BTN('#f5a623', 'REG', () => avisar('REG ainda não está disponível.'))}
           </div>
         </div>
       </div>
-      {(dlg >= 0 && dE) || novoD != null ? (
+      {dlg >= 0 && dE && novoD == null && dE.t === 'P' && !dE.neu ? (
+        <PcPainel key={'pc' + dlg} e={dE} n={dE.pn || dE.n} atualKm={atualKm} onFechar={() => setDlg(-1)}
+          onEstouAqui={() => { setAtual(dlg); setFocI(dlg); setFocn((n) => n + 1); }}
+          onMostrar={() => { setFocI(dlg); setFocn((n) => n + 1); }}
+          onMoverKm={(m) => { const q = pontoEm(coords, cum, totalM, m); if (!q) return 'Sem rastro.'; const q2 = pontoEm(coords, cum, totalM, Math.min(totalM, m + 3)), q1 = pontoEm(coords, cum, totalM, Math.max(0, m - 3)); const kx = Math.cos(rad(q[0])) * 111320; const h = Math.round(((Math.atan2((q2[1] - q1[1]) * kx, (q2[0] - q1[0]) * 110540) * 180) / Math.PI + 360) % 360); return onMoverPcPara ? onMoverPcPara(dE, q[0], q[1], m, h) : null; }}
+          onDeletar={() => (onExcluirPc ? onExcluirPc(dE) : null)}
+          onSalvarPc={(p) => onSalvarPc && onSalvarPc(dE, p)}
+          onMoverPc={() => { setMoverPc(dE); setPonto(null); avisar('Clique no rastro onde ficará o PC.'); }} />
+      ) : null}
+      {(dlg >= 0 && dE && !(dE.t === 'P' && !dE.neu)) || novoD != null ? (
         <Referencia key={novoD != null ? 'novo' : dlg} e={novoD != null ? { t: 'T', d: novoD, novo: true } : dE} n={dlg + 1} grupos={grupos} bi={bi} manual={manual} atualKm={atualKm}
           tr={novoD != null ? null : (trAqui ? trAqui(dE.d) : null)}
           onFechar={() => { setDlg(-1); setNovoD(null); }} onSalvar={onSalvarRef} onNav={navRef}

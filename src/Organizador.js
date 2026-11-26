@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Alert, Modal, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
 import { VERSAO } from './versao';
+import { dist as distM, rumo, linhaPc } from './osm';
 import MapaWeb from './MapaWeb';
 import EditorDividido from './EditorDividido';
 import { calcularRota } from './osrm';
@@ -245,9 +246,16 @@ export default function Organizador({ onMenu, st, prova, provaMap: pmRaw, last, 
   const trsNum = trs.map((t) => ({ t: t.t, bs: num(t.bs ?? t.v[bi], 30), v: t.v.map((x) => num(x, 30)), min: num(t.min, 15), d0: Math.round(t.d0 || 0), zr: !!t.zr, fx: !!t.fx }));
   const trechos = trsNum.length ? trechosEq(trs, legs, rota.legs, ng) : toTrechos(legs, rota.legs);
   const edKey = (e) => e.t + Math.round(e.d || 0);
+  // Direção e raio do PC, lidos da linha de passagem (pcl) do levantamento.
+  const pcExtra = (e) => {
+    if (e.t !== 'P') return {};
+    const q = pcl.slice(e.n * 4, e.n * 4 + 4);
+    if (q.length < 4 || !(q[0] || q[1] || q[2] || q[3])) return {};
+    return { hdg: Math.round((rumo([q[0], q[1]], [q[2], q[3]]) + 270) % 360), raio: Math.round(distM([q[0], q[1]], [q[2], q[3]]) / 2) };
+  };
   const tulBase = (() => {
     const mexeu = Object.keys(edTul).length > 0 || extras.length > 0;
-    let out = rota.tul.map((e) => { const p = edTul[edKey(e)]; return { ...e, ...(p || {}), ok: edKey(e) }; }).filter((e) => !e.del);
+    let out = rota.tul.map((e) => { const p = edTul[edKey(e)]; return { ...e, ...pcExtra(e), ...(p || {}), ok: edKey(e) }; }).filter((e) => !e.del);
     extras.forEach((x) => out.push({ ...x, t: 'T', ex: true, ok: 'X' + x.id }));
     if (!mexeu) return out;
     out = out.map((e, i) => ({ e, i })).sort((a, b) => ((a.e.d || 0) - (b.e.d || 0)) || (a.i - b.i)).map((x) => x.e);
@@ -372,7 +380,7 @@ export default function Organizador({ onMenu, st, prova, provaMap: pmRaw, last, 
   };
   const addPc = (la, lo, idx) => { if (manual) return 'Percurso congelado: volte ao automático para marcar PCs.'; setWps((w) => [...w.slice(0, idx), [la, lo], ...w.slice(idx)]); return null; };
   // Novo PC no ponto do rastro escolhido (d em metros do percurso). No modo congelado divide o trecho do levantamento e renumera os PCs.
-  const addPcEm = (la, lo, d) => {
+  const addPcEm = (la, lo, d, hdg) => {
     if (!rota.legs.length) return 'Marque o percurso primeiro.';
     const cumL = [0]; rota.legs.forEach((x) => cumL.push(cumL[cumL.length - 1] + x * 1000));
     let k = 0; while (k < rota.legs.length - 1 && cumL[k + 1] <= d) k++;
@@ -381,7 +389,7 @@ export default function Organizador({ onMenu, st, prova, provaMap: pmRaw, last, 
     if (!manual) return null;
     const a = (d - cumL[k]) / 1000, b = rota.legs[k] - a;
     setLegs((o) => (o[k] ? [...o.slice(0, k + 1), { ...o[k] }, ...o.slice(k + 1)] : o));
-    setPcl((o) => (o.length >= (k + 1) * 4 ? [...o.slice(0, (k + 1) * 4), 0, 0, 0, 0, ...o.slice((k + 1) * 4)] : o));
+    setPcl((o) => { const ln = linhaPc({ lat: la, lon: lo, hdg: hdg || 0, lw: 30 }); const b0 = o.length >= (k + 1) * 4 ? o : [...o, ...Array((k + 1) * 4 - o.length).fill(0)]; return [...b0.slice(0, (k + 1) * 4), ...ln, ...b0.slice((k + 1) * 4)]; });
     setRota((r) => {
       const legs = [...r.legs.slice(0, k), Math.round(a * 1000) / 1000, Math.round(b * 1000) / 1000, ...r.legs.slice(k + 1)];
       let ins = r.tul.findIndex((e) => (e.d || 0) > d); if (ins < 0) ins = r.tul.length;
@@ -393,6 +401,50 @@ export default function Organizador({ onMenu, st, prova, provaMap: pmRaw, last, 
       const depois = r.tul.slice(ins).map((e) => (e.t === 'P' ? { ...e, n: e.n + 1, ...(e.neu ? {} : { pn: e.pn + 1 }) } : e.t === 'C' ? { ...e, n: e.n + 1 } : e));
       return { ...r, legs, tul: [...antes, novo, ...depois] };
     });
+    return null;
+  };
+  // Edição do PC (painel Kraken): direção, raio, observação, tipo e nº da passagem.
+  const salvarPc = (e, p) => {
+    const patch = { nm: p.nm, ob: p.ob, tpc: p.tpc, pass: p.pass, hdg: p.hdg, raio: p.raio };
+    setEdTul((o) => ({ ...o, [e.ok]: limpo({ ...(o[e.ok] || {}), ...patch }) }));
+    if (manual && wps[e.n]) {
+      const ln = linhaPc({ lat: wps[e.n][0], lon: wps[e.n][1], hdg: p.hdg ?? e.hdg ?? 0, lw: (p.raio ?? e.raio ?? 15) * 2 });
+      setPcl((o) => { const b0 = o.length >= (e.n + 1) * 4 ? [...o] : [...o, ...Array((e.n + 1) * 4 - o.length).fill(0)]; ln.forEach((v, i) => { b0[e.n * 4 + i] = v; }); return b0; });
+    }
+    return null;
+  };
+  const recalcP = (tul) => { let prev = 0; return tul.map((x) => { if (x.d == null) return x; const r = { ...x, p: Math.max(0, x.d - prev) }; prev = x.d; return r; }); };
+  // Mover o PC para outro ponto do rastro (d em metros), entre o PC anterior e o seguinte.
+  const moverPcPara = (e, la, lo, d, hdg) => {
+    if (!wps[e.n]) return 'PC não encontrado.';
+    const cumL = [0]; rota.legs.forEach((x) => cumL.push(cumL[cumL.length - 1] + x * 1000));
+    if (manual) {
+      if (d < cumL[e.n - 1] + 8 || d > cumL[e.n + 1] - 8) return 'Escolha um ponto entre o PC anterior e o seguinte.';
+    }
+    setWps((w) => w.map((x, i) => (i === e.n ? [la, lo] : x)));
+    if (!manual) return null;
+    setRota((r) => {
+      const legs = r.legs.map((x, i) => (i === e.n - 1 ? Math.round(((d - cumL[e.n - 1]) / 1000) * 1000) / 1000 : i === e.n ? Math.round(((cumL[e.n + 1] - d) / 1000) * 1000) / 1000 : x));
+      return { ...r, legs, tul: recalcP(r.tul.map((x) => (x.t === 'P' && x.n === e.n ? { ...x, d } : x)).sort((a, b) => (a.d || 0) - (b.d || 0) || 0)) };
+    });
+    const nk = 'P' + Math.round(d);
+    setEdTul((o) => { if (!o[e.ok]) return o; const { [e.ok]: v, ...resto } = o; return { ...resto, [nk]: v }; });
+    const ln = linhaPc({ lat: la, lon: lo, hdg: hdg ?? e.hdg ?? 0, lw: (e.raio || 15) * 2 });
+    setPcl((o) => { const b0 = o.length >= (e.n + 1) * 4 ? [...o] : [...o, ...Array((e.n + 1) * 4 - o.length).fill(0)]; ln.forEach((v, i) => { b0[e.n * 4 + i] = v; }); return b0; });
+    return null;
+  };
+  const excluirPc = (e) => {
+    if (!wps[e.n] || e.n <= 0 || e.n >= wps.length - 1) return 'Largada e Chegada não podem ser apagadas.';
+    setWps((w) => w.filter((_, i) => i !== e.n));
+    if (!manual) return null;
+    setLegs((o) => (o[e.n] ? o.filter((_, i) => i !== e.n) : o));
+    setPcl((o) => (o.length >= (e.n + 1) * 4 ? [...o.slice(0, e.n * 4), ...o.slice((e.n + 1) * 4)] : o));
+    setRota((r) => {
+      const legs = [...r.legs.slice(0, e.n - 1), Math.round((r.legs[e.n - 1] + r.legs[e.n]) * 1000) / 1000, ...r.legs.slice(e.n + 1)];
+      const tul = r.tul.filter((x) => !(x.t === 'P' && x.n === e.n)).map((x) => (x.t === 'P' && x.n > e.n ? { ...x, n: x.n - 1, ...(x.neu || e.neu ? {} : { pn: x.pn - 1 }) } : x.t === 'C' ? { ...x, n: x.n - 1 } : x));
+      return { ...r, legs, tul: recalcP(tul) };
+    });
+    setEdTul((o) => { const { [e.ok]: v, ...resto } = o; return resto; });
     return null;
   };
   const voltarAuto = () => { if (typeof window !== 'undefined' && !window.confirm('Voltar ao percurso automático (pelas ruas)? Os trechos e tulipas do levantamento serão substituídos.')) return; setManual(false); setTrs([]); };
@@ -467,7 +519,7 @@ export default function Organizador({ onMenu, st, prova, provaMap: pmRaw, last, 
           onTap={(la, lo) => { if (editaMapa && !manual) setWps((w) => [...w, [la, lo]]); }}
           onDesfazer={() => setWps((w) => w.slice(0, -1))} onLimpar={() => { setWps([]); setLegs([]); }}
           trs={trs} bi={bi} manual={manual} totalSec={null}
-          onNovoTrecho={novoTrecho} onSalvarRef={salvarRef} onSalvarDw={salvarDw} onExcluirRef={excluirRef} onSalvarTr={salvarTr} onLimparTr={limparTr} onAddPc={addPc} onAddPcEm={addPcEm} onAuto={voltarAuto} trAqui={trAqui}
+          onNovoTrecho={novoTrecho} onSalvarRef={salvarRef} onSalvarDw={salvarDw} onExcluirRef={excluirRef} onSalvarTr={salvarTr} onLimparTr={limparTr} onAddPc={addPc} onAddPcEm={addPcEm} onSalvarPc={salvarPc} onMoverPcPara={moverPcPara} onExcluirPc={excluirPc} onAuto={voltarAuto} trAqui={trAqui}
           onPublicar={publicar} onSimular={() => setSimOpen(true)} onPdf={pdf} onAtualizar={() => { carregado.current = 0; onProva && onProva(prova, true); }}
           onLista={() => setCheia(false)} onVoltar={() => setSec('geral')} />
       ) : (

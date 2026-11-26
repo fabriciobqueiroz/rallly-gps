@@ -49,6 +49,7 @@ function setData(d){
   (d.lines||[]).forEach(function(l){L.polyline([[l[0],l[1]],[l[2],l[3]]],{color:'#ff1744',weight:4,opacity:1}).addTo(layer);});
   (d.marks||[]).forEach(function(w){
     var mk;
+    if(w.cls=='pt'){L.circleMarker([w.lat,w.lon],{radius:16,color:'#2979ff',weight:2,fillColor:'#2979ff',fillOpacity:.35,interactive:false}).addTo(layer);return;}
     if(d.kr&&w.cls=='s'){mk=pcMark(w.lat,w.lon,(String(w.txt).indexOf('PC')==0?'PC '+String(w.txt).slice(2):w.txt)).addTo(layer);}
     else{var cl=w.cls||'';if(d.kr&&cl=='r'&&String(w.txt).indexOf('km')!=0)cl='rn';
       mk=L.marker([w.lat,w.lon],{icon:L.divIcon({className:'',html:'<div class="pin '+cl+'">'+w.txt+'</div>',iconSize:[0,0]}),zIndexOffset:w.cls=='r'?1000:0}).addTo(layer);}
