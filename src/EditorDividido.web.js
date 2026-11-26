@@ -281,7 +281,7 @@ function Referencia({ e, n, grupos, bi, manual, tr, atualKm, onFechar, onSalvar,
   );
 }
 
-export default function EditorDividido({ st, nome, tul, coords, wps, totalM, grupos, bi, trs, manual, editable, busy, onTap, onDesfazer, onLimpar, onNovoTrecho, onSalvarRef, onSalvarDw, onExcluirRef, onSalvarTr, onLimparTr, onAddPc, onAuto, trAqui, onPublicar, onSimular, onPdf, onAtualizar, onLista, onVoltar }) {
+export default function EditorDividido({ st, nome, tul, coords, wps, totalM, grupos, bi, trs, manual, editable, busy, onTap, onDesfazer, onLimpar, onNovoTrecho, onSalvarRef, onSalvarDw, onExcluirRef, onSalvarTr, onLimparTr, onAddPc, onAddPcEm, onAuto, trAqui, onPublicar, onSimular, onPdf, onAtualizar, onLista, onVoltar }) {
   const [frac, setFrac] = useState(0.5);
   const [sel, setSel] = useState(-1);
   const [tulEd, setTulEd] = useState(null);
@@ -292,6 +292,8 @@ export default function EditorDividido({ st, nome, tul, coords, wps, totalM, gru
   const [menu, setMenu] = useState(false);
   const [dlg, setDlg] = useState(-1);
   const [novoD, setNovoD] = useState(null);
+  const [ponto, setPonto] = useState(null); // ponto escolhido no rastro: { d (m), lat, lon }
+  const [abrirEm, setAbrirEm] = useState(null);
   const [aviso, setAviso] = useState('');
   const [eu, setEu] = useState(null);
   const [ctr, setCtr] = useState(0);
@@ -315,7 +317,7 @@ export default function EditorDividido({ st, nome, tul, coords, wps, totalM, gru
     return c;
   }, [coords]);
   const pos = useMemo(() => lista.map((e) => (e.cont ? null : pontoEm(coords, cum, totalM, e.d))), [sig, cum, totalM]);
-  // Clique no mapa: no modo PC marca o percurso; fora dele, clicar em cima do rastro abre uma nova referência naquele ponto.
+  // Clique no mapa: no modo PC (montando o percurso) marca o percurso; fora dele, clicar em cima do rastro escolhe o ponto e depois se toca em REF, TRC ou PC.
   const tapMapa = (lat, lon) => {
     if (modoPc) { if (editable && onTap) onTap(lat, lon); return; }
     if (coords.length < 2 || !totalM) return;
@@ -328,16 +330,24 @@ export default function EditorDividido({ st, nome, tul, coords, wps, totalM, gru
       const dist = Math.hypot(ax + t * dx, ay + t * dy);
       if (!melhor || dist < melhor.dist) melhor = { dist, i, t };
     }
-    if (!melhor || melhor.dist > 40) return avisar('Clique em cima da linha do rastro para criar a referência.');
+    if (!melhor || melhor.dist > 40) return avisar('Clique em cima da linha do rastro para escolher o ponto.');
+    const A = coords[melhor.i - 1], B = coords[melhor.i];
     const ate = cum[melhor.i - 1] + melhor.t * (cum[melhor.i] - cum[melhor.i - 1]);
-    setNovoD(Math.round((ate / (cum[cum.length - 1] || 1)) * totalM));
-    setDlg(-1);
+    setPonto({ d: Math.round((ate / (cum[cum.length - 1] || 1)) * totalM), lat: A[0] + (B[0] - A[0]) * melhor.t, lon: A[1] + (B[1] - A[1]) * melhor.t });
   };
+  // Depois de criar um trecho num ponto, abre a referência dele para ajustar a média.
+  useEffect(() => {
+    if (abrirEm == null) return;
+    const i = lista.findIndex((e) => !e.cont && Math.abs((e.d || 0) - abrirEm) <= 3);
+    setAbrirEm(null);
+    if (i >= 0) { setSel(i); setFocI(i); setNovoD(null); setDlg(i); }
+  }, [abrirEm, lista]);
   const marks = useMemo(() => lista.map((e, i) => {
     if (!pos[i]) return null;
     const cls = i === focI ? 'r' : e.t === 'L' ? 'l' : e.t === 'C' ? 'c' : e.t === 'P' ? 's' : 'k';
     return { id: i, lat: pos[i][0], lon: pos[i][1], txt: e.t === 'P' ? 'PC' + (e.pn ?? e.n) : String(i + 1), cls };
   }).filter(Boolean), [sig, pos, focI]);
+  const marksP = ponto ? [...marks, { id: null, lat: ponto.lat, lon: ponto.lon, txt: 'km ' + (ponto.d / 1000).toFixed(3), cls: 'r' }] : marks;
   const foc = focI >= 0 && pos[focI] ? pos[focI] : null;
 
   const avisar = (m) => { setAviso(m); setTimeout(() => setAviso(''), 5000); };
@@ -422,21 +432,30 @@ export default function EditorDividido({ st, nome, tul, coords, wps, totalM, gru
         <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
           <div style={{ flex: 1, position: 'relative', minHeight: 0 }}>
             <div style={{ position: 'absolute', inset: 0 }}>
-              <MapaWeb wps={wps} coords={coords} marks={marks} sat editable={coords.length > 1 || (editable && modoPc)} onTap={tapMapa} onMark={(id) => { setSel(id); setFocI(id); rolarPara(id); }} foc={foc} focn={focn} me={eu} ctr={ctr} height="100%" mb={0} />
+              <MapaWeb wps={wps} coords={coords} marks={marksP} sat editable={coords.length > 1 || (editable && modoPc)} onTap={tapMapa} onMark={(id) => { setSel(id); setFocI(id); rolarPara(id); }} foc={foc} focn={focn} me={eu} ctr={ctr} height="100%" mb={0} />
             </div>
             <div title="Localizar (precisa do GPS do computador)" onClick={localizar} style={{ position: 'absolute', right: 10, top: 110, width: 40, height: 40, borderRadius: 20, background: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', zIndex: 800, boxShadow: '0 1px 4px rgba(0,0,0,.4)', fontSize: 22 }}>◎</div>
+            {ponto && <div style={{ position: 'absolute', left: 50, top: 10, background: '#ff1744', color: '#fff', borderRadius: 6, padding: '6px 12px', fontSize: 14, zIndex: 800, display: 'flex', gap: 10, alignItems: 'center' }}>Ponto no km {(ponto.d / 1000).toFixed(3)}: toque em REF, TRC ou PC <span style={{ cursor: 'pointer', fontWeight: 700 }} onClick={() => setPonto(null)}>✕</span></div>}
             {modoPc && <div style={{ position: 'absolute', left: 50, top: 10, background: '#ef5350', color: '#fff', borderRadius: 6, padding: '6px 12px', fontSize: 14, zIndex: 800 }}>Marcando PCs: clique no mapa</div>}
           </div>
           <div style={{ height: 56, display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', flexShrink: 0 }}>
-            {BTN('#ffee00', 'REF', () => { if (!totalM) return avisar('Marque o percurso primeiro (botão PC e cliques no mapa).'); setNovoD(Math.round(atualKm * 1000)); setDlg(-1); })}
+            {BTN('#ffee00', 'REF', () => { if (ponto) { setNovoD(ponto.d); setDlg(-1); setPonto(null); return; } if (!totalM) return avisar('Marque o percurso primeiro (botão PC e cliques no mapa).'); setNovoD(Math.round(atualKm * 1000)); setDlg(-1); })}
             {BTN('#00d56b', 'TRC', () => {
+              if (ponto) {
+                const d = ponto.d;
+                const m = onNovoTrecho(d);
+                if (m) return m === 'Cancelado.' ? null : avisar(m);
+                if (!lista.some((e) => !e.cont && Math.abs((e.d || 0) - d) <= 3)) onSalvarRef({ e: { novo: true, d }, patch: { d } });
+                setPonto(null); setAbrirEm(d);
+                return;
+              }
               const i = sel >= 0 ? sel : atual; // a linha clicada manda; a "posição atual" só vale se nenhuma estiver selecionada
               if (i < 0 || !lista[i]) return avisar('Clique numa linha do roadbook e toque em TRC.');
               const m = onNovoTrecho(lista[i].d);
               if (m) return m === 'Cancelado.' ? null : avisar(m);
               setSel(i); setTimeout(() => abrirRef(i), 60);
             })}
-            {BTN('#ef5350', 'PC', () => { if (!editable) return avisar(manual ? 'Percurso congelado: no menu ⋮ use "Voltar ao percurso automático" para marcar PCs.' : 'Não dá para editar o percurso agora.'); setModoPc((x) => !x); }, modoPc ? { outline: '4px solid #fff', outlineOffset: -4 } : null)}
+            {BTN('#ef5350', 'PC', () => { if (ponto && onAddPcEm) { const r = onAddPcEm(ponto.lat, ponto.lon, ponto.d); if (r) return avisar(r); setPonto(null); return avisar('PC criado no km ' + (ponto.d / 1000).toFixed(3) + '.'); } if (!editable) return avisar(manual ? 'Percurso congelado: no menu ⋮ use "Voltar ao percurso automático" para marcar PCs.' : 'Não dá para editar o percurso agora.'); setModoPc((x) => !x); }, modoPc ? { outline: '4px solid #fff', outlineOffset: -4 } : null)}
             {BTN('#ff6d00', 'REG', () => avisar('REG ainda não está disponível.'), { opacity: 0.45 })}
           </div>
         </div>

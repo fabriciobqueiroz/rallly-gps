@@ -371,6 +371,30 @@ export default function Organizador({ onMenu, st, prova, provaMap: pmRaw, last, 
     else if (e.t === 'T') setEdTul((o) => ({ ...o, [e.ok]: { ...(o[e.ok] || {}), del: true } }));
   };
   const addPc = (la, lo, idx) => { if (manual) return 'Percurso congelado: volte ao automático para marcar PCs.'; setWps((w) => [...w.slice(0, idx), [la, lo], ...w.slice(idx)]); return null; };
+  // Novo PC no ponto do rastro escolhido (d em metros do percurso). No modo congelado divide o trecho do levantamento e renumera os PCs.
+  const addPcEm = (la, lo, d) => {
+    if (!rota.legs.length) return 'Marque o percurso primeiro.';
+    const cumL = [0]; rota.legs.forEach((x) => cumL.push(cumL[cumL.length - 1] + x * 1000));
+    let k = 0; while (k < rota.legs.length - 1 && cumL[k + 1] <= d) k++;
+    if (Math.abs(d - cumL[k]) < 8 || Math.abs(cumL[k + 1] - d) < 8) return 'Já existe Largada, PC ou Chegada neste ponto.';
+    setWps((w) => [...w.slice(0, k + 1), [la, lo], ...w.slice(k + 1)]);
+    if (!manual) return null;
+    const a = (d - cumL[k]) / 1000, b = rota.legs[k] - a;
+    setLegs((o) => (o[k] ? [...o.slice(0, k + 1), { ...o[k] }, ...o.slice(k + 1)] : o));
+    setPcl((o) => (o.length >= (k + 1) * 4 ? [...o.slice(0, (k + 1) * 4), 0, 0, 0, 0, ...o.slice((k + 1) * 4)] : o));
+    setRota((r) => {
+      const legs = [...r.legs.slice(0, k), Math.round(a * 1000) / 1000, Math.round(b * 1000) / 1000, ...r.legs.slice(k + 1)];
+      let ins = r.tul.findIndex((e) => (e.d || 0) > d); if (ins < 0) ins = r.tul.length;
+      const antes = r.tul.slice(0, ins);
+      const n = antes.filter((e) => e.t === 'P').length + 1;
+      const pn = antes.filter((e) => e.t === 'P' && !e.neu).length + 1;
+      const ult = [...antes].reverse().find((e) => e.t !== 'P' || e.neu);
+      const novo = { t: 'P', n, pn, d, p: Math.max(0, d - (ult ? ult.d || 0 : 0)), man: true };
+      const depois = r.tul.slice(ins).map((e) => (e.t === 'P' ? { ...e, n: e.n + 1, ...(e.neu ? {} : { pn: e.pn + 1 }) } : e.t === 'C' ? { ...e, n: e.n + 1 } : e));
+      return { ...r, legs, tul: [...antes, novo, ...depois] };
+    });
+    return null;
+  };
   const voltarAuto = () => { if (typeof window !== 'undefined' && !window.confirm('Voltar ao percurso automático (pelas ruas)? Os trechos e tulipas do levantamento serão substituídos.')) return; setManual(false); setTrs([]); };
   const grupoAtual = MENU.find((g) => g.secs.some(([k]) => k === sec)) || MENU[0];
   const nomeProva = (loadJson('lev_index', []).find((x) => x.code === org.prova) || {}).nome || '';
@@ -443,7 +467,7 @@ export default function Organizador({ onMenu, st, prova, provaMap: pmRaw, last, 
           onTap={(la, lo) => { if (editaMapa && !manual) setWps((w) => [...w, [la, lo]]); }}
           onDesfazer={() => setWps((w) => w.slice(0, -1))} onLimpar={() => { setWps([]); setLegs([]); }}
           trs={trs} bi={bi} manual={manual} totalSec={null}
-          onNovoTrecho={novoTrecho} onSalvarRef={salvarRef} onSalvarDw={salvarDw} onExcluirRef={excluirRef} onSalvarTr={salvarTr} onLimparTr={limparTr} onAddPc={addPc} onAuto={voltarAuto} trAqui={trAqui}
+          onNovoTrecho={novoTrecho} onSalvarRef={salvarRef} onSalvarDw={salvarDw} onExcluirRef={excluirRef} onSalvarTr={salvarTr} onLimparTr={limparTr} onAddPc={addPc} onAddPcEm={addPcEm} onAuto={voltarAuto} trAqui={trAqui}
           onPublicar={publicar} onSimular={() => setSimOpen(true)} onPdf={pdf} onAtualizar={() => { carregado.current = 0; onProva && onProva(prova, true); }}
           onLista={() => setCheia(false)} onVoltar={() => setSec('geral')} />
       ) : (
