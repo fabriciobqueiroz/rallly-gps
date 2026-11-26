@@ -201,17 +201,19 @@ export default function Organizador({ onMenu, st, prova, provaMap: pmRaw, last, 
   // Recalcula a rota pelas ruas sempre que os pontos mudam.
   useEffect(() => {
     if (manual) return;
-    if (wps.length < 2) { setRota({ coords: [], legs: [], tul: [] }); setLegs([]); return; }
+    if (wps.length < 2) { setRota({ coords: [], legs: [], tul: [] }); setLegs([]); setBusy(''); return; }
+    let cancelado = false; // se a prova mudou durante o cálculo, descarta o resultado (evita mostrar o traço da prova anterior)
     const t = setTimeout(async () => {
       setBusy('Calculando rota…');
       try {
         const r = await calcularRota(wps);
+        if (cancelado) return;
         setRota(r);
         setLegs((old) => r.legs.map((_, i) => old[i] || novoLeg(dvs, bi, nPend.current.has(i) ? 60 : 0)));
         setBusy('');
-      } catch (e) { setBusy('Rota: ' + String(e?.message || e)); }
+      } catch (e) { if (!cancelado) setBusy('Rota: ' + String(e?.message || e)); }
     }, 700);
-    return () => clearTimeout(t);
+    return () => { cancelado = true; clearTimeout(t); };
   }, [wps, manual]);
 
   // Mudou a diferença de alguma categoria (ou a lista): recalcula a média de todas a partir da média do Graduado de cada trecho.
