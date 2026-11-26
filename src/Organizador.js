@@ -163,6 +163,7 @@ export default function Organizador({ onMenu, st, prova, provaMap: pmRaw, last, 
   const mk = (base) => vs(base, dvs, bi);
   const carregado = useRef(0);
   const levAutoKey = useRef('');
+  const [tentAuto, setTentAuto] = useState(0);
   const logado = org && org.prova === prova.trim().toUpperCase();
 
   useEffect(() => {
@@ -185,6 +186,12 @@ export default function Organizador({ onMenu, st, prova, provaMap: pmRaw, last, 
     }
   }, [logado, provaMap]);
 
+  // Segurança: se a planilha abriu e continua vazia, apesar de haver levantamento fechado na nuvem, tenta aplicar de novo (até 3 vezes).
+  useEffect(() => {
+    if (Platform.OS !== 'web' || !logado || sec !== 'planilha' || wps.length || provaMap.wps.length || !provaMap.lev || !(provaMap.lev.marks || []).some((m) => m.k === 'C') || tentAuto >= 3) return undefined;
+    const t = setTimeout(() => { levAutoKey.current = ''; setTentAuto((n) => n + 1); }, 2500);
+    return () => clearTimeout(t);
+  }, [sec, logado, wps.length, provaMap, tentAuto]);
   useEffect(() => {
     setInscritos([]);
     if (!logado || !prova.trim()) return;
@@ -234,7 +241,7 @@ export default function Organizador({ onMenu, st, prova, provaMap: pmRaw, last, 
       onProva && onProva(code, true);
       const o = { prova: code.trim().toUpperCase() };
       saveJson('org', o); setOrg(o); onOrg && onOrg(o);
-      carregado.current = 0; setLevPub(null); setEdTul({}); setExtras([]); setCheia(true);
+      carregado.current = 0; levAutoKey.current = ''; setTentAuto(0); setLevPub(null); setEdTul({}); setExtras([]); setCheia(true);
       setWps([]); setRota({ coords: [], legs: [], tul: [] }); setLegs([]); setTrs([]); setRefs([]); setPcl([]); setManual(false); setInscritos([]);
       setSec('geral'); setAberta(true);
     } catch (e) { Alert.alert('Sem conexão', String(e?.message || e)); }
@@ -509,7 +516,7 @@ export default function Organizador({ onMenu, st, prova, provaMap: pmRaw, last, 
       {sec === 'resultados' && <OrgResultados st={st} prova={org.prova} provaMap={provaMap} grupos={grupos} inscritos={inscritos} categorias={cats} />}
       {sec === 'planilha' && web && cheia && !wps.length && !provaMap.wps.length && provaMap.lev && (provaMap.lev.marks || []).some((m) => m.k === 'C') && levAutoKey.current !== org.prova + '_' + (provaMap.lev.em || 1) && (
         <View style={{ display: 'none' }}>
-          <Levantamento key={'auto_' + org.prova} st={stDark} prova={org.prova} last={last} autoAplicar levNuvem={provaMap.lev}
+          <Levantamento key={'auto_' + org.prova + '_' + tentAuto} st={stDark} prova={org.prova} last={last} autoAplicar levNuvem={provaMap.lev}
             trailNuvem={provaMap.lev.trail && provaMap.lev.trail.length >= 4 ? Array.from({ length: provaMap.lev.trail.length >> 1 }, (_, i) => [provaMap.lev.trail[2 * i], provaMap.lev.trail[2 * i + 1]]) : provaMap.coords}
             onAplicar={(d) => { levAutoKey.current = org.prova + '_' + (provaMap.lev.em || 1); aplicarLevantamento(d); }} />
         </View>
