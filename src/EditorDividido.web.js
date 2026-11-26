@@ -343,7 +343,8 @@ export default function EditorDividido({ st, nome, tul, coords, wps, totalM, gru
     );
   };
 
-  const numT = (() => { let c = 0; return lista.map((e) => (e.t === 'T' && !e.cont ? ++c : 0)); })();
+  // O número da tulipa é o mesmo do marcador no mapa (a Largada é a nº 1).
+  const numT = lista.map((e, i) => ((e.t === 'T' || e.t === 'L') && !e.cont ? i + 1 : 0));
   const abrirRef = (i) => { const e = lista[i]; if (!e || e.cont) return avisar('Esta é a continuação do neutro: edite a linha do neutro.'); setNovoD(null); setDlg(i); };
   const navRef = (d) => { let j = dlg + d; while (j >= 0 && j < lista.length && lista[j].cont) j += d; if (j >= 0 && j < lista.length) { setDlg(j); setSel(j); setFocI(j); setFocn((n) => n + 1); rolarPara(j); } };
   const atualKm = atual >= 0 && lista[atual] ? (lista[atual].dz ?? lista[atual].d) / 1000 : 0;
