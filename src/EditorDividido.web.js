@@ -315,6 +315,24 @@ export default function EditorDividido({ st, nome, tul, coords, wps, totalM, gru
     return c;
   }, [coords]);
   const pos = useMemo(() => lista.map((e) => (e.cont ? null : pontoEm(coords, cum, totalM, e.d))), [sig, cum, totalM]);
+  // Clique no mapa: no modo PC marca o percurso; fora dele, clicar em cima do rastro abre uma nova referência naquele ponto.
+  const tapMapa = (lat, lon) => {
+    if (modoPc) { if (editable && onTap) onTap(lat, lon); return; }
+    if (coords.length < 2 || !totalM) return;
+    const k = Math.cos(rad(lat)) * 111320, kk = 110540;
+    let melhor = null;
+    for (let i = 1; i < coords.length; i++) {
+      const ax = (coords[i - 1][1] - lon) * k, ay = (coords[i - 1][0] - lat) * kk, bx = (coords[i][1] - lon) * k, by = (coords[i][0] - lat) * kk;
+      const dx = bx - ax, dy = by - ay, l2 = dx * dx + dy * dy;
+      const t = l2 > 0 ? Math.max(0, Math.min(1, -(ax * dx + ay * dy) / l2)) : 0;
+      const dist = Math.hypot(ax + t * dx, ay + t * dy);
+      if (!melhor || dist < melhor.dist) melhor = { dist, i, t };
+    }
+    if (!melhor || melhor.dist > 40) return avisar('Clique em cima da linha do rastro para criar a referência.');
+    const ate = cum[melhor.i - 1] + melhor.t * (cum[melhor.i] - cum[melhor.i - 1]);
+    setNovoD(Math.round((ate / (cum[cum.length - 1] || 1)) * totalM));
+    setDlg(-1);
+  };
   const marks = useMemo(() => lista.map((e, i) => {
     if (!pos[i]) return null;
     const cls = i === focI ? 'r' : e.t === 'L' ? 'l' : e.t === 'C' ? 'c' : e.t === 'P' ? 's' : 'k';
@@ -404,7 +422,7 @@ export default function EditorDividido({ st, nome, tul, coords, wps, totalM, gru
         <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
           <div style={{ flex: 1, position: 'relative', minHeight: 0 }}>
             <div style={{ position: 'absolute', inset: 0 }}>
-              <MapaWeb wps={wps} coords={coords} marks={marks} sat editable={editable && modoPc} onTap={onTap} onMark={(id) => { setSel(id); setFocI(id); rolarPara(id); }} foc={foc} focn={focn} me={eu} ctr={ctr} height="100%" mb={0} />
+              <MapaWeb wps={wps} coords={coords} marks={marks} sat editable={coords.length > 1 || (editable && modoPc)} onTap={tapMapa} onMark={(id) => { setSel(id); setFocI(id); rolarPara(id); }} foc={foc} focn={focn} me={eu} ctr={ctr} height="100%" mb={0} />
             </div>
             <div title="Localizar (precisa do GPS do computador)" onClick={localizar} style={{ position: 'absolute', right: 10, top: 110, width: 40, height: 40, borderRadius: 20, background: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', zIndex: 800, boxShadow: '0 1px 4px rgba(0,0,0,.4)', fontSize: 22 }}>◎</div>
             {modoPc && <div style={{ position: 'absolute', left: 50, top: 10, background: '#ef5350', color: '#fff', borderRadius: 6, padding: '6px 12px', fontSize: 14, zIndex: 800 }}>Marcando PCs: clique no mapa</div>}
