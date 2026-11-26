@@ -28,6 +28,33 @@ export function projetaGps(l) {
 const WEB = Platform.OS === 'web'; // no computador: sem GPS; o percurso vem do mapa ou da nuvem e as marcas são editadas à mão
 import { detectarCruzamento, dist, linhaPc, rumo, satUrl } from './osm';
 
+// Limpa o rastro do GPS: tira os pontos amontoados (carro parado) e os "espinhos" de ida e volta que o GPS desenha
+// num semáforo (sai da rua, volta ao mesmo lugar e segue no mesmo rumo). Um retorno de verdade (meia-volta) é mantido,
+// porque depois dele o carro segue no rumo contrário.
+export function limparRastro(c0, { perto = 10, maxExc = 80, K = 15, minPasso = 2 } = {}) {
+  if (!c0 || c0.length < 4) return c0 || [];
+  const c = [c0[0]];
+  for (let i = 1; i < c0.length; i++) if (dist(c[c.length - 1], c0[i]) >= minPasso || i === c0.length - 1) c.push(c0[i]);
+  const rumoLonge = (i, dir) => { let j = i; while (j + dir >= 0 && j + dir < c.length && dist(c[i], c[j]) < 12) j += dir; return j === i ? null : (dir < 0 ? rumo(c[j], c[i]) : rumo(c[i], c[j])); };
+  const out = [];
+  let i = 0;
+  while (i < c.length) {
+    out.push(c[i]);
+    let prox = i + 1;
+    if (i > 0) {
+      for (let j = Math.min(c.length - 2, i + K); j >= i + 2; j--) {
+        if (dist(c[i], c[j]) > perto) continue;
+        let exc = 0; for (let k = i + 1; k < j; k++) exc = Math.max(exc, dist(c[i], c[k]));
+        if (exc <= perto * 1.5 || exc > maxExc) continue;
+        const h0 = rumoLonge(i, -1), h1 = rumoLonge(j, 1);
+        if (h0 == null || h1 == null || Math.abs(((h1 - h0 + 540) % 360) - 180) > 60) continue;
+        prox = j; break;
+      }
+    }
+    i = prox;
+  }
+  return out;
+}
 const km2 = (m) => (m / 1000).toFixed(3).replace('.', ',');
 const CORES = ['#ff7a2e', '#ffe600', '#00e5ff', '#ff1744', '#76ff03'];
 const KIND = { L: 'Largada', T: 'Referência', S: 'Trecho', P: 'PC', N: 'Neutro', C: 'Chegada', R: 'REF' };
@@ -127,7 +154,22 @@ export default function Levantamento({ st, prova, last, onAplicar, onProva, levN
   const slug0 = String(prova).trim().toUpperCase().replace(/[^A-Z0-9]+/g, '');
   const chave = 'lev_' + slug0;
   const chaveW = 'levw_' + slug0;
-  const [trailW, setTrailW] = useState(() => (WEB && levNuvem ? trailNuvem || [] : []));
+  // No computador o rastro pode ser corrigido à mão; a correção fica salva neste navegador até aplicar à planilha.
+  const [trailW, setTrailWRaw] = useState(() => {
+    if (!WEB || !levNuvem) return [];
+    const sv = loadJson('levwt_' + slug0, null);
+    if (sv && sv.base === (levNuvem.em || 0) && Array.isArray(sv.trail) && sv.trail.length > 1) return sv.trail;
+    return trailNuvem || [];
+  });
+  const histW = useRef([]);
+  const setTrailW = (v, guardar = true) => setTrailWRaw((o) => {
+    const n = typeof v === 'function' ? v(o) : v;
+    if (guardar && o.length) { histW.current.push(o); if (histW.current.length > 20) histW.current.shift(); }
+    if (WEB && levNuvem) saveJson('levwt_' + slug0, { base: levNuvem.em || 0, trail: n });
+    return n;
+  });
+  const [corte, setCorte] = useState(null); // null | { a: índice do início } | {} (esperando o 1º toque)
+  const [msgW, setMsgW] = useState('');
   const [wpsNovo, setWpsNovo] = useState([]);
   const [busyW, setBusyW] = useState('');
   const [lev, setLevRaw] = useState(() => {
@@ -268,9 +310,16 @@ export default function Levantamento({ st, prova, last, onAplicar, onProva, levN
   const trailC = useRef({ k: null, v: [] });
   const trailCalc = () => {
     if (iniIdx < 0) return [];
-    const seg = points.slice(iniIdx).filter((p) => !(p.acc != null && p.acc > 25));
+    if (WEB) return points.slice(iniIdx).map((p) => [p.lat, p.lon]); // no computador o rastro já vem limpo/corrigido
+    // Mesmo filtro do odômetro: com o carro parado (semáforo) o GPS "anda" sozinho; esses pontos não entram no desenho.
+    const seg = []; let ref = null;
+    for (let i = iniIdx; i < points.length; i++) {
+      const p = points[i];
+      if (p.acc != null && p.acc > 25) continue;
+      if (!ref || passoGps(ref, p).mover) { seg.push(p); ref = p; }
+    }
     const step = Math.max(1, Math.ceil(seg.length / 700));
-    return seg.filter((_, i) => i % step === 0 || i === seg.length - 1).map((p) => [p.lat, p.lon]);
+    return limparRastro(seg.filter((_, i) => i % step === 0 || i === seg.length - 1).map((p) => [p.lat, p.lon]));
   };
   const trail0 = (() => {
     if (trailC.current.k === trailKey) return trailC.current.v;
@@ -431,7 +480,26 @@ export default function Levantamento({ st, prova, last, onAplicar, onProva, levN
     const fim = lev.marks.find((x) => x.k === 'C');
     return { i: bi, lat: Math.round(p.lat * 1e6) / 1e6, lon: Math.round(p.lon * 1e6) / 1e6, hdg: Math.round(rumo([a.lat, a.lon], [b.lat, b.lon])), km: Math.min(Math.round((cum[bi] - cum[iniIdx]) * kmScale), fim ? fim.km : 1e12) };
   };
+  // Corrigir rastro (computador): 1º toque marca o início do trecho errado, 2º toque o fim; os pontos entre os dois saem
+  // e o rastro liga os dois toques em linha reta.
+  const cortaRastro = (lat, lon) => {
+    let bi = -1, bd = 1e9;
+    trailW.forEach((c, i) => { const d = dist([lat, lon], c); if (d < bd) { bd = d; bi = i; } });
+    if (bi < 0 || bd > 60) { setMsgW('Toque mais perto da linha do rastro.'); return; }
+    if (corte.a == null) { setCorte({ a: bi }); setMsgW('Agora toque no FIM do trecho errado (onde o rastro volta a ficar certo).'); return; }
+    const a = Math.min(corte.a, bi), b = Math.max(corte.a, bi);
+    if (b - a < 2) { setMsgW('Os dois toques estão no mesmo lugar. Toque no início e no fim do trecho errado.'); setCorte({}); return; }
+    setTrailW((o) => [...o.slice(0, a + 1), ...o.slice(b)]);
+    setCorte(null); setMsgW(`Rastro corrigido: ${b - a - 1} ponto(s) removido(s). Confira e toque em "Aplicar à planilha".`);
+  };
+  const limparAuto = () => {
+    const n = limparRastro(trailW);
+    if (n.length === trailW.length) { setMsgW('Nenhum zigue-zague encontrado. Use "Apagar trecho do rastro" para corrigir à mão.'); return; }
+    setTrailW(n); setMsgW(`${trailW.length - n.length} ponto(s) de parada/zigue-zague removido(s). Confira no mapa e toque em "Aplicar à planilha".`);
+  };
+  const desfazerW = () => { const o = histW.current.pop(); if (o) { setTrailW(o, false); setMsgW('Desfeito.'); } };
   const tocaTrilha = (lat, lon) => {
+    if (WEB && corte) return cortaRastro(lat, lon);
     if (!fechado || iniIdx < 0) return;
     let bi = -1, bd = 1e9;
     for (let i = iniIdx; i < points.length; i++) {
@@ -488,7 +556,8 @@ export default function Levantamento({ st, prova, last, onAplicar, onProva, levN
   const nTr = (i) => ordenadas.slice(0, i + 1).filter((x) => x.k === 'S').length;
   const rotulo = (m, i) => (m.k === 'T' ? 'Referência ' + nTul(i) : m.k === 'S' ? 'Trecho ' + (nTr(i) + 1) + ' · referência ' + nTul(i) : m.k === 'P' ? 'PC ' + nPc(i) : m.k === 'N' ? 'Neutro' : m.k === 'L' ? 'Largada · trecho 1 · referência ' + nTul(i) : m.k === 'C' ? 'Chegada · referência ' + nTul(i) : KIND[m.k]);
   const pinosBase = ordenadas.map((m, i) => ({ lat: m.lat, lon: m.lon, txt: m.k === 'T' ? 'R' + nTul(i) : m.k === 'S' ? 'R' + nTul(i) + ' · T' + (nTr(i) + 1) : m.k === 'P' ? 'PC' + nPc(i) : m.k === 'N' ? 'N' : m.k === 'L' ? 'Largada · T1' : KIND[m.k], cls: m.k === 'L' ? 'l' : m.k === 'C' ? 'c' : m.k === 'S' ? 's' : '' }));
-  const pinos = cand ? [...pinosBase, { lat: cand.lat, lon: cand.lon, txt: 'NOVO', cls: 'c' }] : pinosBase;
+  const pinos0 = cand ? [...pinosBase, { lat: cand.lat, lon: cand.lon, txt: 'NOVO', cls: 'c' }] : pinosBase;
+  const pinos = WEB && corte && corte.a != null && trailW[corte.a] ? [...pinos0, { lat: trailW[corte.a][0], lon: trailW[corte.a][1], txt: 'INÍCIO', cls: 'c' }] : pinos0;
   const linhas = ordenadas.filter((m) => m.k === 'P' || m.k === 'N').map(linhaPc).concat(cand ? [linhaPc({ lat: cand.lat, lon: cand.lon, hdg: cand.hdg })] : []);
   const Sep = () => <View style={{ height: 2, backgroundColor: K.linha, marginTop: 6 }} />;
   const trAskV = trAsk != null ? trAtual(lev)[trAsk] : null;
@@ -515,7 +584,7 @@ export default function Levantamento({ st, prova, last, onAplicar, onProva, levN
           <View style={{ flex: 1, flexDirection: WEB ? 'row' : 'column' }}>
           <View style={WEB ? { flex: 1.3 } : null}>
           <View style={{ paddingHorizontal: 10 }}>
-            <MapaWeb wps={novoPercurso ? wpsNovo : []} coords={trail} marks={pinos} lines={linhas} sat={!novoPercurso} editable={fechado || novoPercurso} onTap={novoPercurso ? addWp : tocaTrilha} follow={!WEB && seguir && !fechado} rw={rw} dash={dash} rc={rc} ctr={ctr} me={last ? [last.lat, last.lon] : null} height={Math.round(winH * (WEB ? 0.78 : 0.28))} />
+            <MapaWeb wps={novoPercurso ? wpsNovo : []} coords={trail} marks={pinos} lines={linhas} sat={!novoPercurso} editable={fechado || novoPercurso || !!corte} onTap={novoPercurso ? addWp : tocaTrilha} follow={!WEB && seguir && !fechado} rw={rw} dash={dash} rc={rc} ctr={ctr} me={last ? [last.lat, last.lon] : null} height={Math.round(winH * (WEB ? 0.78 : 0.28))} />
           </View>
           {menuMapa && (
             <View style={[st.row, { paddingHorizontal: 10, marginBottom: 6, flexWrap: 'wrap' }]}>
@@ -564,7 +633,19 @@ export default function Levantamento({ st, prova, last, onAplicar, onProva, levN
                 <B cor="#c0392b" fg="#fff" tx="CHEGADA" on={() => marcar('C')} />
               </View>
             )}
-            {fechado && !cand && <Text style={st.tipTx}>Toque no traçado do mapa, no ponto certo, para incluir referência, trecho, PC ou neutro.</Text>}
+            {fechado && !cand && !corte && <Text style={st.tipTx}>Toque no traçado do mapa, no ponto certo, para incluir referência, trecho, PC ou neutro.</Text>}
+            {WEB && trailW.length > 3 && !novoPercurso && (
+              <View style={st.card}>
+                <Text style={st.tip}>Corrigir rastro</Text>
+                <Text style={st.tipTx}>{corte ? (corte.a == null ? 'Toque no mapa no INÍCIO do trecho errado (onde o rastro começa a sair da rua).' : 'Agora toque no FIM do trecho errado.') : 'Rastro com zigue-zague (parada em semáforo, sinal ruim)? Limpe automaticamente ou apague o trecho errado tocando no início e no fim dele: o rastro passa a ligar os dois pontos em linha reta.'}</Text>
+                <View style={[st.row, { marginTop: 6, marginBottom: 0, flexWrap: 'wrap' }]}>
+                  {!corte && <TouchableOpacity style={st.btn2} onPress={limparAuto}><Text style={st.btn2Tx}>Limpar zigue-zagues</Text></TouchableOpacity>}
+                  <TouchableOpacity style={[st.btn2, corte && { backgroundColor: K.azulTx }]} onPress={() => { setCand(null); setMsgW(''); setCorte(corte ? null : {}); }}><Text style={[st.btn2Tx, corte && { color: '#fff' }]}>{corte ? 'Cancelar' : 'Apagar trecho do rastro'}</Text></TouchableOpacity>
+                  {!corte && histW.current.length > 0 && <TouchableOpacity style={st.btn2} onPress={desfazerW}><Text style={st.btn2Tx}>Desfazer</Text></TouchableOpacity>}
+                </View>
+                {msgW ? <Text style={[st.tipTx, { marginTop: 6 }]}>{msgW}</Text> : null}
+              </View>
+            )}
 {cand && (
           <View style={st.card}>
             <Text style={st.tip}>Novo ponto · km {km2(cand.km)}</Text>
