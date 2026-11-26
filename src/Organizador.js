@@ -22,7 +22,7 @@ import ListaProvas, { slugProva } from './Provas';
 import { CATS_PADRAO, OrgCategorias, OrgInscricoes, OrgVisaoGeral, OrgCriterios, OrgResultados } from './OrgExtras';
 import { compartilharPdf } from './pdf';
 import Planilhas from './OrgPlanilhas';
-import { st as stDark } from './estilos';
+import { st as stDark, stClaro } from './estilos';
 
 const num = (v, d = 0) => { const n = parseFloat(String(v).replace(',', '.')); return isNaN(n) ? d : n; };
 // Média de cada categoria = média do Graduado (base) + diferença da categoria (dvs[g], em km/h).
@@ -332,7 +332,7 @@ export default function Organizador({ onMenu, st, prova, provaMap: pmRaw, last, 
     { id: 'insc', nome: 'Inscrições', ic: '👥', secs: [['inscricoes', 'Inscrições']] },
     { id: 'dl', nome: 'Dataloggers', ic: '📈', secs: [['tracklog', 'Track log']] },
     { id: 'res', nome: 'Resultados', ic: '🏆', secs: [['resultados', 'Resultado oficial'], ['ranking', 'Ranking ao vivo']] },
-    { id: 'pl', nome: 'Planilhas', ic: '🗺', secs: web ? [['planilhas', 'Planilhas'], ['planilha', 'Abrir planilha'], ['levantar', 'Levantar no carro']] : [['planilhas', 'Planilhas'], ['levantar', 'Levantar no carro'], ['planilha', 'Editar trechos']] },
+    { id: 'pl', nome: 'Planilhas', ic: '🗺', secs: web ? [['planilhas', 'Planilhas'], ['planilha', 'Abrir planilha'], ['levantar', 'Levantar prova']] : [['planilhas', 'Planilhas'], ['levantar', 'Levantar prova'], ['planilha', 'Editar trechos']] },
     { id: 'tr', nome: 'Transmissão', ic: '📡', secs: [['transmissao', 'Transmissão'], ['aovivo', 'Ao vivo']] },
   ];
   const irSec = (k) => { if (k === 'planilha') setCheia(true); setSec(k); };
@@ -509,7 +509,7 @@ export default function Organizador({ onMenu, st, prova, provaMap: pmRaw, last, 
       <View>
       {sec === 'planilhas' && <Planilhas code={org.prova} nome={nomeProva} grupos={grupos} pub={provaMap.pub} levEm={provaMap.lev ? provaMap.lev.salvoEm : 0} aviso={erroProva ? 'Erro ao ler a nuvem: ' + erroProva : ''}
         onCriar={() => irSec(web ? 'planilha' : 'levantar')} onEditar={() => irSec(web ? 'planilha' : 'planilha')} onBaixar={() => { carregado.current = 0; onProva && onProva(prova, true); }} onSimular={() => { setSec('planilha'); setSimOpen(true); }} onTracklogs={() => irSec('tracklog')} />}
-      {sec === 'levantar' && <View style={{ backgroundColor: '#0c1014', borderRadius: 10, padding: 10 }}><Levantamento key={org.prova + '_' + (Platform.OS === 'web' ? (provaMap.lev ? provaMap.lev.em || 1 : 0) : '')} st={stDark} prova={org.prova} last={last} onAplicar={aplicarLevantamento} levNuvem={provaMap.lev} trailNuvem={provaMap.lev && provaMap.lev.trail && provaMap.lev.trail.length >= 4 ? Array.from({ length: provaMap.lev.trail.length >> 1 }, (_, i) => [provaMap.lev.trail[2 * i], provaMap.lev.trail[2 * i + 1]]) : provaMap.coords} /></View>}
+      {sec === 'levantar' && <View style={{ backgroundColor: '#f3f6f8', borderRadius: 10, padding: 10 }}><Levantamento key={org.prova + '_' + (Platform.OS === 'web' ? (provaMap.lev ? provaMap.lev.em || 1 : 0) : '')} st={stClaro} onFechar={() => irSec('planilhas')} prova={org.prova} last={last} onAplicar={aplicarLevantamento} levNuvem={provaMap.lev} trailNuvem={provaMap.lev && provaMap.lev.trail && provaMap.lev.trail.length >= 4 ? Array.from({ length: provaMap.lev.trail.length >> 1 }, (_, i) => [provaMap.lev.trail[2 * i], provaMap.lev.trail[2 * i + 1]]) : provaMap.coords} /></View>}
       {sec === 'aovivo' && <View style={{ backgroundColor: '#0c1014', borderRadius: 10, padding: 10 }}><PainelAoVivo st={stDark} kind="prova" id={org.prova} rota={provaMap.rota ? pairs(provaMap.rota) : rota.coords} /></View>}
       {sec === 'transmissao' && <View style={{ backgroundColor: '#0c1014', borderRadius: 10, padding: 10 }}><PainelTransmissao st={stDark} prova={org.prova} lib={provaMap.lib || {}} /></View>}
       {sec === 'ranking' && <OrgRankingLive st={st} prova={org.prova} />}
@@ -520,7 +520,7 @@ export default function Organizador({ onMenu, st, prova, provaMap: pmRaw, last, 
       {sec === 'resultados' && <OrgResultados st={st} prova={org.prova} provaMap={provaMap} grupos={grupos} inscritos={inscritos} categorias={cats} />}
       {sec === 'planilha' && web && cheia && !wps.length && !provaMap.wps.length && provaMap.lev && (provaMap.lev.marks || []).some((m) => m.k === 'C') && levAutoKey.current !== org.prova + '_' + (provaMap.lev.em || 1) && (
         <View style={{ display: 'none' }}>
-          <Levantamento key={'auto_' + org.prova + '_' + tentAuto} st={stDark} prova={org.prova} last={last} autoAplicar levNuvem={provaMap.lev}
+          <Levantamento key={'auto_' + org.prova + '_' + tentAuto} st={stClaro} prova={org.prova} last={last} autoAplicar levNuvem={provaMap.lev}
             trailNuvem={provaMap.lev.trail && provaMap.lev.trail.length >= 4 ? Array.from({ length: provaMap.lev.trail.length >> 1 }, (_, i) => [provaMap.lev.trail[2 * i], provaMap.lev.trail[2 * i + 1]]) : provaMap.coords}
             onAplicar={(d) => { levAutoKey.current = org.prova + '_' + (provaMap.lev.em || 1); aplicarLevantamento(d); }} />
         </View>

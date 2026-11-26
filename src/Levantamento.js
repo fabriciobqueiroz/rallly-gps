@@ -31,7 +31,9 @@ import { detectarCruzamento, dist, linhaPc, rumo, satUrl } from './osm';
 const km2 = (m) => (m / 1000).toFixed(3).replace('.', ',');
 const CORES = ['#ff7a2e', '#ffe600', '#00e5ff', '#ff1744', '#76ff03'];
 const KIND = { L: 'Largada', T: 'Referência', S: 'Trecho', P: 'PC', N: 'Neutro', C: 'Chegada', R: 'REF' };
-const COR = { L: '#4caf50', T: '#ff7a2e', S: '#7b1fa2', P: '#ff5a1f', N: '#ff5252', C: '#c0392b', R: '#ffe600' };
+const COR = { L: '#2e7d32', T: '#00a3c4', S: '#7b1fa2', P: '#ff5a1f', N: '#c62828', C: '#c0392b', R: '#f9a825' };
+// Cores claras do Kraken (fundo cinza-claro, cabeçalho azul, destaque azul).
+const K = { fundo: '#f3f6f8', azul: '#00b3d6', azulTx: '#00a3c4', tx: '#222a31', linha: '#dde3e8' };
 const PRESETS = [
   ['Em T', [90, 270]], ['Cruzamento', [0, 90, 270]], ['Y', [45, 315]], ['Só reta', [0]],
 ];
@@ -54,8 +56,8 @@ function B({ cor, tx, on, fg }) {
 }
 function ChipT({ st, on, tx, onPress, cor }) {
   return (
-    <TouchableOpacity style={[st.chip, { paddingHorizontal: 10, paddingVertical: 6 }, on && { backgroundColor: cor || '#ff7a2e' }]} onPress={onPress}>
-      <Text style={[st.btn2Tx, on && { color: '#0c1014' }]}>{tx}</Text>
+    <TouchableOpacity style={[st.chip, { paddingHorizontal: 10, paddingVertical: 6 }, on && { backgroundColor: cor || K.azulTx, borderColor: cor || K.azulTx }]} onPress={onPress}>
+      <Text style={[st.btn2Tx, on && { color: cor === '#ffe600' ? K.tx : '#fff' }]}>{tx}</Text>
     </TouchableOpacity>
   );
 }
@@ -90,7 +92,7 @@ function EditorTulipa({ st, m, onChange, onDesenhar, onDetectar }) {
       </View>
       <Text style={st.tipTx}>2) Por qual rua você sai (seta)?</Text>
       <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
-        {[...arms].sort((a, b) => a - b).map((a) => <ChipT st={st} key={a} cor="#4caf50" on={m.out === a} tx={ANG.find((x) => x[0] === a)?.[1] || a} onPress={() => onChange({ out: a })} />)}
+        {[...arms].sort((a, b) => a - b).map((a) => <ChipT st={st} key={a} cor="#2e7d32" on={m.out === a} tx={ANG.find((x) => x[0] === a)?.[1] || a} onPress={() => onChange({ out: a })} />)}
         {arms.length === 0 && <Text style={st.tipTx}>Marque ao menos uma rua.</Text>}
       </View>
       <View style={[st.row, { marginTop: 8, marginBottom: 0 }]}>
@@ -121,7 +123,7 @@ function NtEdit({ st, nt, on }) {
   );
 }
 
-export default function Levantamento({ st, prova, last, onAplicar, onProva, levNuvem, trailNuvem, autoAplicar }) {
+export default function Levantamento({ st, prova, last, onAplicar, onProva, levNuvem, trailNuvem, autoAplicar, onFechar }) {
   const slug0 = String(prova).trim().toUpperCase().replace(/[^A-Z0-9]+/g, '');
   const chave = 'lev_' + slug0;
   const chaveW = 'levw_' + slug0;
@@ -143,6 +145,10 @@ export default function Levantamento({ st, prova, last, onAplicar, onProva, levN
   });
   const [aberta, setAberta] = useState(null);
   const [tela, setTela] = useState(true);
+  // Fechar a tela cheia volta para quem abriu (menu Planilhas); sem isso, mostra o cartão do levantamento.
+  const fechar = () => { setTela(false); if (onFechar) onFechar(); };
+  const hBtn = { borderWidth: 1, borderColor: '#fff', borderRadius: 10, paddingVertical: 8, paddingHorizontal: 12 };
+  const hBtnTx = { color: '#fff', fontWeight: '700', fontSize: 13 };
   const [menuMapa, setMenuMapa] = useState(false);
   const [trAsk, setTrAsk] = useState(null);
   const [ntAsk, setNtAsk] = useState(null);
@@ -484,7 +490,7 @@ export default function Levantamento({ st, prova, last, onAplicar, onProva, levN
   const pinosBase = ordenadas.map((m, i) => ({ lat: m.lat, lon: m.lon, txt: m.k === 'T' ? 'R' + nTul(i) : m.k === 'S' ? 'R' + nTul(i) + ' · T' + (nTr(i) + 1) : m.k === 'P' ? 'PC' + nPc(i) : m.k === 'N' ? 'N' : m.k === 'L' ? 'Largada · T1' : KIND[m.k], cls: m.k === 'L' ? 'l' : m.k === 'C' ? 'c' : m.k === 'S' ? 's' : '' }));
   const pinos = cand ? [...pinosBase, { lat: cand.lat, lon: cand.lon, txt: 'NOVO', cls: 'c' }] : pinosBase;
   const linhas = ordenadas.filter((m) => m.k === 'P' || m.k === 'N').map(linhaPc).concat(cand ? [linhaPc({ lat: cand.lat, lon: cand.lon, hdg: cand.hdg })] : []);
-  const Sep = () => <View style={{ height: 2, backgroundColor: '#444', marginTop: 6 }} />;
+  const Sep = () => <View style={{ height: 2, backgroundColor: K.linha, marginTop: 6 }} />;
   const trAskV = trAsk != null ? trAtual(lev)[trAsk] : null;
   const statusTxt = (iniIdx >= 0 ? `${km2(kmAqui)} km percorridos · ${ordenadas.filter((m) => m.k === 'T').length} referência(s) · trecho ${nTrechos(lev)} em andamento · ${ordenadas.filter((m) => m.k === 'N').length} neutro(s)` : 'Levantamento ainda não iniciado: ligue o GPS, espere ficar verde e toque LARGADA.') + (last?.acc != null ? ` · GPS ${last.acc.toFixed(0)} m` : '') + (!WEB && sync === 'pend' ? ' · ☁ aguardando internet' : '');
 
@@ -495,13 +501,16 @@ export default function Levantamento({ st, prova, last, onAplicar, onProva, levN
         <Text style={st.tipTx}>{statusTxt}</Text>
         <TouchableOpacity style={[st.btn, { marginBottom: 0 }]} onPress={() => setTela(true)}><Text style={st.btnTx}>Abrir levantamento</Text></TouchableOpacity>
       </View>
-      <Tela visible={tela} onRequestClose={() => setTela(false)}>
-        <View style={{ flex: 1 }}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 10, paddingVertical: 6, gap: 8 }}>
-            <Text style={{ flex: 1, color: '#f5f5f5', fontSize: 12 }} numberOfLines={2}>{statusTxt}</Text>
-            <TouchableOpacity style={st.btn2} onPress={() => { setCtr((c) => c + 1); setSeguir(true); }}><Text style={st.btn2Tx}>◎</Text></TouchableOpacity>
-            <TouchableOpacity style={st.btn2} onPress={() => setMenuMapa((v) => !v)}><Text style={st.btn2Tx}>⚙ Mapa</Text></TouchableOpacity>
-            <TouchableOpacity style={st.btn2} onPress={() => setTela(false)}><Text style={st.btn2Tx}>✕</Text></TouchableOpacity>
+      <Tela visible={tela} onRequestClose={fechar} fundo={K.fundo}>
+        <View style={{ flex: 1, backgroundColor: K.fundo }}>
+          <View style={{ backgroundColor: K.azul, paddingHorizontal: 6, paddingTop: 6, paddingBottom: 8, marginBottom: 8 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+              <TouchableOpacity onPress={fechar} style={{ paddingHorizontal: 10, paddingVertical: 2 }}><Text style={{ color: '#fff', fontSize: 30, lineHeight: 32 }}>‹</Text></TouchableOpacity>
+              <Text style={{ flex: 1, color: '#fff', fontSize: 18, fontWeight: '500' }}>Levantar prova</Text>
+              <TouchableOpacity style={hBtn} onPress={() => { setCtr((c) => c + 1); setSeguir(true); }}><Text style={hBtnTx}>◎</Text></TouchableOpacity>
+              <TouchableOpacity style={hBtn} onPress={() => setMenuMapa((v) => !v)}><Text style={hBtnTx}>⚙ Mapa</Text></TouchableOpacity>
+            </View>
+            <Text style={{ color: '#fff', fontSize: 12, marginTop: 2, paddingHorizontal: 10 }} numberOfLines={2}>{statusTxt}</Text>
           </View>
           <View style={{ flex: 1, flexDirection: WEB ? 'row' : 'column' }}>
           <View style={WEB ? { flex: 1.3 } : null}>
@@ -534,16 +543,16 @@ export default function Levantamento({ st, prova, last, onAplicar, onProva, levN
             {!fechado && !WEB && (
               <>
               <View style={[st.row, { marginBottom: 6 }]}>
-                {lev.marks.length === 0 ? <B cor="#4caf50" tx="LARGADA" on={() => marcar('L')} /> : (
+                {lev.marks.length === 0 ? <B cor="#2e7d32" fg="#fff" tx="LARGADA" on={() => marcar('L')} /> : (
                   <>
-                    <B cor="#ff7a2e" tx="REFERÊNCIA" on={() => marcar('T')} />
+                    <B cor={K.azul} fg="#fff" tx="REFERÊNCIA" on={() => marcar('T')} />
                     <B cor="#7b1fa2" fg="#fff" tx="TRECHO" on={() => marcar('S')} />
                   </>
                 )}
               </View>
               {lev.marks.length > 0 && (
                 <View style={[st.row, { marginBottom: 6 }]}>
-                  <B cor="#ff5a1f" tx="PC" on={() => marcar('P')} />
+                  <B cor="#ff5a1f" fg="#fff" tx="PC" on={() => marcar('P')} />
                   <B cor="#c0392b" fg="#fff" tx="NEUTRO" on={() => marcar('N')} />
                 </View>
               )}
@@ -551,7 +560,7 @@ export default function Levantamento({ st, prova, last, onAplicar, onProva, levN
             )}
             {lev.marks.length > 0 && !fechado && !WEB && (
               <View style={[st.row, { marginBottom: 6 }]}>
-                <B cor="#1565c0" fg="#fff" tx="FOTO" on={fotoRapida} />
+                <B cor="#546e7a" fg="#fff" tx="FOTO" on={fotoRapida} />
                 <B cor="#c0392b" fg="#fff" tx="CHEGADA" on={() => marcar('C')} />
               </View>
             )}
@@ -566,11 +575,11 @@ export default function Levantamento({ st, prova, last, onAplicar, onProva, levN
             </View>
             <Text style={st.tipTx}>O que é este ponto?</Text>
             <View style={[st.row, { marginTop: 4, marginBottom: 6 }]}>
-              <B cor="#ff7a2e" tx="REFERÊNCIA" on={() => inserir('T')} />
+              <B cor={K.azul} fg="#fff" tx="REFERÊNCIA" on={() => inserir('T')} />
               <B cor="#7b1fa2" fg="#fff" tx="TRECHO" on={() => inserir('S')} />
             </View>
             <View style={[st.row, { marginBottom: 6 }]}>
-              <B cor="#ff5a1f" tx="PC" on={() => inserir('P')} />
+              <B cor="#ff5a1f" fg="#fff" tx="PC" on={() => inserir('P')} />
               <B cor="#c0392b" fg="#fff" tx="NEUTRO" on={() => inserir('N')} />
             </View>
             <TouchableOpacity style={st.btn2} onPress={() => setCand(null)}><Text style={st.btn2Tx}>Cancelar</Text></TouchableOpacity>
@@ -592,11 +601,11 @@ export default function Levantamento({ st, prova, last, onAplicar, onProva, levN
               const kmT = ini ? (fim ? fim.km : kmAqui) - ini.km : 0;
               const atual = !fechado && i === trs.length - 1;
               return (
-                <View key={i} style={{ borderTopWidth: i ? 1 : 0, borderTopColor: '#262b32', paddingVertical: 6 }}>
-                  <Text style={[st.v, atual && { color: '#ff7a2e' }]}>Trecho {i + 1}{atual ? ' · em andamento' : ''} · {km2(Math.max(0, kmT))} km</Text>
+                <View key={i} style={{ borderTopWidth: i ? 1 : 0, borderTopColor: K.linha, paddingVertical: 6 }}>
+                  <Text style={[st.v, atual && { color: K.azulTx }]}>Trecho {i + 1}{atual ? ' · em andamento' : ''} · {km2(Math.max(0, kmT))} km</Text>
                   <View style={[st.row, { marginVertical: 4, alignItems: 'center' }]}>
-                    <TouchableOpacity style={[st.btn2, t.t === 'V' && { backgroundColor: '#ff7a2e' }]} onPress={() => setTr(i, { t: 'V' })}><Text style={[st.btn2Tx, t.t === 'V' && { color: '#0c1014' }]}>Média</Text></TouchableOpacity>
-                    <TouchableOpacity style={[st.btn2, t.t === 'D' && { backgroundColor: '#ff7a2e' }]} onPress={() => setTr(i, { t: 'D' })}><Text style={[st.btn2Tx, t.t === 'D' && { color: '#0c1014' }]}>Deslocamento</Text></TouchableOpacity>
+                    <TouchableOpacity style={[st.btn2, t.t === 'V' && { backgroundColor: K.azulTx }]} onPress={() => setTr(i, { t: 'V' })}><Text style={[st.btn2Tx, t.t === 'V' && { color: '#fff' }]}>Média</Text></TouchableOpacity>
+                    <TouchableOpacity style={[st.btn2, t.t === 'D' && { backgroundColor: K.azulTx }]} onPress={() => setTr(i, { t: 'D' })}><Text style={[st.btn2Tx, t.t === 'D' && { color: '#fff' }]}>Deslocamento</Text></TouchableOpacity>
                     {t.t === 'V' ? <TextInput style={[st.input, { minWidth: 70 }]} value={String(t.v ?? '')} onChangeText={(v) => setTr(i, { v })} keyboardType="decimal-pad" placeholder="0" placeholderTextColor="#666" />
                       : <TextInput style={[st.input, { minWidth: 70 }]} value={String(t.min ?? '')} onChangeText={(v) => setTr(i, { min: v })} keyboardType="decimal-pad" placeholder="0" placeholderTextColor="#666" />}
                     <Text style={st.k}>{t.t === 'V' ? 'km/h' : 'min'}</Text>
@@ -628,7 +637,7 @@ export default function Levantamento({ st, prova, last, onAplicar, onProva, levN
                     <Text style={st.v}>{aberto ? '▲' : '▼'}</Text>
                   </TouchableOpacity>
                   {aberto && (
-                    <View style={{ borderTopWidth: 1, borderTopColor: '#262b32', marginTop: 6, paddingTop: 6 }}>
+                    <View style={{ borderTopWidth: 1, borderTopColor: K.linha, marginTop: 6, paddingTop: 6 }}>
                       <View style={[st.row, { marginBottom: 6, flexWrap: 'wrap' }]}>
                         <ChipT st={st} cor="#ffe600" on={!!m.afer} tx={m.afer ? '✓ Aferição neste ponto' : 'Aferição neste ponto'} onPress={() => upd(m.id, { afer: !m.afer })} />
                         {m.k === 'S' && (() => { const tz = trAtual(lev)[nTr(i)]; const on = !!(tz && tz.zr); return <ChipT st={st} cor="#ffe600" on={on} tx={on ? '✓ Zera o hodômetro' : 'Zerar hodômetro'} onPress={() => setTr(nTr(i), { zr: !on })} />; })()}
@@ -636,8 +645,8 @@ export default function Levantamento({ st, prova, last, onAplicar, onProva, levN
                       {(m.k === 'S' || m.k === 'L') && (() => { const ti = m.k === 'L' ? 0 : nTr(i); const t = trAtual(lev)[ti]; if (!t) return null; return (
                         <View style={[st.row, { marginBottom: 6, alignItems: 'center', flexWrap: 'wrap' }]}>
                           <Text style={st.k}>Trecho {ti + 1}:</Text>
-                          <TouchableOpacity style={[st.btn2, t.t === 'V' && { backgroundColor: '#ff7a2e' }]} onPress={() => setTr(ti, { t: 'V' })}><Text style={[st.btn2Tx, t.t === 'V' && { color: '#0c1014' }]}>Média</Text></TouchableOpacity>
-                          <TouchableOpacity style={[st.btn2, t.t === 'D' && { backgroundColor: '#ff7a2e' }]} onPress={() => setTr(ti, { t: 'D' })}><Text style={[st.btn2Tx, t.t === 'D' && { color: '#0c1014' }]}>Deslocamento</Text></TouchableOpacity>
+                          <TouchableOpacity style={[st.btn2, t.t === 'V' && { backgroundColor: K.azulTx }]} onPress={() => setTr(ti, { t: 'V' })}><Text style={[st.btn2Tx, t.t === 'V' && { color: '#fff' }]}>Média</Text></TouchableOpacity>
+                          <TouchableOpacity style={[st.btn2, t.t === 'D' && { backgroundColor: K.azulTx }]} onPress={() => setTr(ti, { t: 'D' })}><Text style={[st.btn2Tx, t.t === 'D' && { color: '#fff' }]}>Deslocamento</Text></TouchableOpacity>
                           <TextInput style={[st.input, { minWidth: 70 }]} value={String(t.t === 'V' ? (t.v ?? '') : (t.min ?? ''))} onChangeText={(v) => setTr(ti, t.t === 'V' ? { v } : { min: v })} keyboardType="decimal-pad" placeholder="0" placeholderTextColor="#666" />
                           <Text style={st.k}>{t.t === 'V' ? 'km/h' : 'min'}</Text>
                         </View>); })()}
@@ -705,8 +714,8 @@ export default function Levantamento({ st, prova, last, onAplicar, onProva, levN
               <View style={st.card}>
                 <Text style={st.tip}>Trecho {trAsk + 1}</Text>
                 <View style={[st.row, { marginVertical: 8 }]}>
-                  <TouchableOpacity style={[st.btn2, trAskV.t === 'V' && { backgroundColor: '#ff7a2e' }]} onPress={() => setTr(trAsk, { t: 'V' })}><Text style={[st.btn2Tx, trAskV.t === 'V' && { color: '#0c1014' }]}>Média</Text></TouchableOpacity>
-                  <TouchableOpacity style={[st.btn2, trAskV.t === 'D' && { backgroundColor: '#ff7a2e' }]} onPress={() => setTr(trAsk, { t: 'D' })}><Text style={[st.btn2Tx, trAskV.t === 'D' && { color: '#0c1014' }]}>Deslocamento</Text></TouchableOpacity>
+                  <TouchableOpacity style={[st.btn2, trAskV.t === 'V' && { backgroundColor: K.azulTx }]} onPress={() => setTr(trAsk, { t: 'V' })}><Text style={[st.btn2Tx, trAskV.t === 'V' && { color: '#fff' }]}>Média</Text></TouchableOpacity>
+                  <TouchableOpacity style={[st.btn2, trAskV.t === 'D' && { backgroundColor: K.azulTx }]} onPress={() => setTr(trAsk, { t: 'D' })}><Text style={[st.btn2Tx, trAskV.t === 'D' && { color: '#fff' }]}>Deslocamento</Text></TouchableOpacity>
                 </View>
                 <View style={[st.row, { alignItems: 'center' }]}>
                   {trAskV.t === 'V'
