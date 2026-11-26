@@ -412,8 +412,8 @@ export default function EditorDividido({ st, nome, tul, coords, wps, totalM, gru
           <div style={{ height: 56, display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', flexShrink: 0 }}>
             {BTN('#ffee00', 'REF', () => { if (!totalM) return avisar('Marque o percurso primeiro (botão PC e cliques no mapa).'); setNovoD(Math.round(atualKm * 1000)); setDlg(-1); })}
             {BTN('#00d56b', 'TRC', () => {
-              const i = atual >= 0 ? atual : sel;
-              if (i < 0 || !lista[i]) return avisar('Clique numa linha do roadbook (posição atual) e toque em TRC.');
+              const i = sel >= 0 ? sel : atual; // a linha clicada manda; a "posição atual" só vale se nenhuma estiver selecionada
+              if (i < 0 || !lista[i]) return avisar('Clique numa linha do roadbook e toque em TRC.');
               const m = onNovoTrecho(lista[i].d);
               if (m) return m === 'Cancelado.' ? null : avisar(m);
               setSel(i); setTimeout(() => abrirRef(i), 60);
