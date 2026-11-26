@@ -15,9 +15,9 @@ export const HTML = `<!DOCTYPE html><html><head><meta charset="utf-8">
 .rb{width:46px;height:46px;border-radius:50%;background:#fff;box-shadow:0 1px 5px rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center;font:400 26px Arial;color:#333;cursor:pointer;margin-top:14px}
 </style></head>
 <body><div id="m"></div><script>
-var map=L.map('m',{zoomControl:true}).setView([-20.82,-49.38],13);
-var osm=L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'© OpenStreetMap'}).addTo(map);
-var satl=L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',{maxZoom:19,attribution:'Esri'});
+var map=L.map('m',{zoomControl:true,maxZoom:23}).setView([-20.82,-49.38],13);
+var osm=L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:23,maxNativeZoom:19,attribution:'© OpenStreetMap'}).addTo(map);
+var satl=L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',{maxZoom:23,maxNativeZoom:18,attribution:'Esri'});
 L.control.layers({'Mapa':osm,'Satélite':satl}).addTo(map);var satSet=false;
 var layer=L.layerGroup().addTo(map),me=null,editable=false,fitted=false,lastCtr=0,lastFoc=0;
 
