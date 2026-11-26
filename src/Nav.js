@@ -216,15 +216,21 @@ export function NavTela({ cfg, stage, rs, last, globalDist, odoM, tul, rot, trs,
             </View>
           ) : null}
         </View>
-        {fim && onEnviarDl ? (
-          <TouchableOpacity disabled={enviandoDl} style={{ position: 'absolute', left: 12, right: 12, bottom: 96, backgroundColor: '#1e8e5a', borderRadius: 12, paddingVertical: 18, alignItems: 'center', elevation: 6, opacity: enviandoDl ? 0.6 : 1 }} onPress={onEnviarDl}>
-            <Text style={{ color: '#fff', fontWeight: '900', fontSize: 20 }}>{enviandoDl ? 'ENVIANDO…' : 'ENVIAR DATALOGGER'}</Text>
-          </TouchableOpacity>
-        ) : null}
-        {fim && onEncerrar ? (
-          <TouchableOpacity style={{ position: 'absolute', left: 12, right: 12, bottom: 24, backgroundColor: '#c0392b', borderRadius: 12, paddingVertical: 18, alignItems: 'center', elevation: 6 }} onPress={() => confirma('Encerrar a prova', 'Confirma que você terminou a prova? O T.NAV para e você volta à tela da prova.', onEncerrar)}>
-            <Text style={{ color: '#fff', fontWeight: '900', fontSize: 20 }}>ENCERRAR PROVA</Text>
-          </TouchableOpacity>
+        {fim && (onEnviarDl || onEncerrar) ? (
+          <View style={{ position: 'absolute', left: 8, right: 8, bottom: 16, backgroundColor: '#14181d', borderRadius: 14, borderWidth: 2, borderColor: '#c0392b', padding: 12, elevation: 8 }}>
+            <Text style={{ color: '#fff', fontWeight: '900', fontSize: 20, textAlign: 'center' }}>🏁 Você chegou ao fim da prova!</Text>
+            <Text style={{ color: '#b9c0c8', fontSize: 13, textAlign: 'center', marginTop: 2, marginBottom: 10 }}>Envie o seu datalogger para o organizador apurar o resultado.</Text>
+            {onEnviarDl ? (
+              <TouchableOpacity disabled={enviandoDl} style={{ backgroundColor: '#1e8e5a', borderRadius: 10, paddingVertical: 14, alignItems: 'center', opacity: enviandoDl ? 0.6 : 1 }} onPress={onEnviarDl}>
+                <Text style={{ color: '#fff', fontWeight: '900', fontSize: 18 }}>{enviandoDl ? 'ENVIANDO…' : 'ENVIAR DATALOGGER'}</Text>
+              </TouchableOpacity>
+            ) : null}
+            {onEncerrar ? (
+              <TouchableOpacity style={{ backgroundColor: '#c0392b', borderRadius: 10, paddingVertical: 12, alignItems: 'center', marginTop: 8 }} onPress={() => confirma('Encerrar a prova', 'Confirma que você terminou a prova? O T.NAV para e você volta à tela da prova.', onEncerrar)}>
+                <Text style={{ color: '#fff', fontWeight: '900', fontSize: 16 }}>ENCERRAR PROVA</Text>
+              </TouchableOpacity>
+            ) : null}
+          </View>
         ) : null}
         {kp && (
           <View style={{ position: 'absolute', left: 0, right: 0, top: 0, bottom: 0, zIndex: 10, backgroundColor: '#0c1014', padding: 14, justifyContent: 'center' }}>

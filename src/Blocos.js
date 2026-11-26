@@ -59,7 +59,8 @@ export function LinhaRb({ e, pct, atual, w, hh, classe, grupos, trs, refs }) {
   const h = hh != null ? Math.max(20, Math.floor(hh)) : Math.round((w * 0.46 * pct) / 100), k = Math.max(0.6, Math.min(1.6, hh != null ? hh / (w * 0.46) : pct / 100));
   const bg = atual ? '#f5e50f' : neuDw ? '#e1bee7' : '#fff';
   const vel = velDoTrecho(e, trs, classe, grupos);
-  if (e.t !== 'T' && !neuDw) {
+  const lcDw = (e.t === 'L' || e.t === 'C') && !!(e.dw && e.dw.length); // largada/chegada com tulipa desenhada: mostra a tulipa
+  if (e.t !== 'T' && !neuDw && !lcDw) {
     const mm = (s) => `${Math.floor(s / 60)}:${String(Math.round(s % 60)).padStart(2, '0')}`;
     const txt = e.t === 'P' ? (e.nt > 0 ? `NEUTRO · PARE ${mm(e.nt)}` : `PC ${e.pn ?? e.n}`) : e.t === 'L' ? 'LARGADA' : 'CHEGADA';
     const nx = rotuloNx(e.nx, classe, grupos);
@@ -73,6 +74,7 @@ export function LinhaRb({ e, pct, atual, w, hh, classe, grupos, trs, refs }) {
   return (
     <View style={{ backgroundColor: bg, flexDirection: 'row', height: h, borderBottomWidth: 1, borderBottomColor: '#999' }}>
       <View style={{ flex: 1, paddingHorizontal: 4, paddingVertical: 2 }}>
+        {lcDw ? <Text style={{ color: '#fff', backgroundColor: e.t === 'C' ? '#c0392b' : '#37474f', fontSize: 13 * k, fontWeight: '900', paddingHorizontal: 6, alignSelf: 'flex-start', borderRadius: 4 }}>{e.t === 'C' ? 'CHEGADA' : 'LARGADA'}</Text> : null}
         {refs && refs.parcial === false ? null : <Text style={{ color: '#000', fontSize: 12 * k, textAlign: 'right' }}>{fmtParcial(e.p, refs)}</Text>}
         <Text style={{ color: '#000', fontSize: 26 * k, fontWeight: '800' }}>{fmtRefKm(e.d, refs)}</Text>
         {e.afer ? <Text style={{ color: '#fff', backgroundColor: '#000', fontSize: 16 * k, fontWeight: '900', fontStyle: 'italic', paddingHorizontal: 8, alignSelf: 'flex-start' }}>AFER</Text> : null}
