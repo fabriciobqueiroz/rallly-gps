@@ -39,7 +39,7 @@ export default function ListaProvas({ onTab, onMenu, st, org, onAbrir, onSairOrg
 
   const salva = (l) => { setIdx(l); saveJson('lev_index', l); };
   // A lista vem da nuvem (provas criadas na conta); o que o celular guarda (marcas, km) complementa.
-  const lista = nuvem.map((n) => { const l = idx.find((x) => x.code === n.code) || {}; return { ...l, code: n.code, nome: n.nome || l.nome || '', data: n.data, cidade: n.cidade }; });
+  const lista = nuvem.map((n) => { const l = idx.find((x) => x.code === n.code) || {}; return { ...l, code: n.code, nome: n.nome || l.nome || '', data: n.data, cidade: n.cidade, marcas: n.nMarcas || l.marcas || 0, km: n.kmM || l.km || 0 }; });
 
   // Provas antigas só tinham o nome no celular: copia para a nuvem para o site e os outros aparelhos verem.
   useEffect(() => {

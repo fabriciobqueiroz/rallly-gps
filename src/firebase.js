@@ -90,10 +90,18 @@ export async function criarProva(nome, cidade, data, dataTs) {
   }
   throw new Error('Não achei um código livre. Tente de novo.');
 }
+// Marcas e distância total da prova, lidas da nuvem (levantamento salvo e/ou planilha publicada).
+function resumoProva(d) {
+  const marks = (d.lev && d.lev.marks) || [];
+  const legsKm = Array.isArray(d.legs) ? d.legs.reduce((a, x) => a + (Number(x) || 0), 0) : 0;
+  const maxKm = marks.reduce((a, m) => Math.max(a, Number(m.km) || 0), 0);
+  const tul = Array.isArray(d.tul) ? d.tul.filter((e) => e && e.t !== 'L' && e.t !== 'C').length : 0;
+  return { nMarcas: marks.length || tul, kmM: legsKm > 0 ? Math.round(legsKm * 1000) : Math.round(maxKm) };
+}
 export function ouvirMinhasProvas(onData, onError) {
   const u = auth.currentUser;
   if (!u) return () => {};
-  return onSnapshot(query(collection(db, 'provas'), where('donoUid', '==', u.uid)), (snap) => onData(snap.docs.map((d) => ({ code: d.id, nome: d.data().nome || '', cidade: d.data().cidade || '', data: d.data().data || '', dataTs: d.data().dataTs ?? null }))), onError);
+  return onSnapshot(query(collection(db, 'provas'), where('donoUid', '==', u.uid)), (snap) => onData(snap.docs.map((d) => ({ code: d.id, nome: d.data().nome || '', cidade: d.data().cidade || '', data: d.data().data || '', dataTs: d.data().dataTs ?? null, ...resumoProva(d.data()) }))), onError);
 }
 export async function apagarProvaNuvem(prova) {
   const p = slug(prova);
