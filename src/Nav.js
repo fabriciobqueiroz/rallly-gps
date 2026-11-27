@@ -68,7 +68,7 @@ function montarRb(tul, iA, rb) {
   for (let k = 1; k <= rb.prox; k++) if (tul[iA + k]) out.push({ e: tul[iA + k], pct: rb.pProx[k - 1] ?? 40, key: 'p' + k });
   return out;
 }
-export function NavTela({ cfg, stage, rs, last, globalDist, odoM, tul, rot, trs, fim, classe, grupos, aviso, cont, onAdj, onPc, onZerar, onClose, onIniciarAgora, onEncerrar, onEnviarDl, enviandoDl, factor, aferRef, onAfer, podeDesfazer, onDesfazer, onW, onEstouAqui }) {
+export function NavTela({ cfg, stage, rs, last, globalDist, odoM, tul, rot, trs, fim, classe, grupos, aviso, cont, zerou, onAdj, onPc, onZerar, onClose, onIniciarAgora, onEncerrar, onEnviarDl, enviandoDl, factor, aferRef, onAfer, podeDesfazer, onDesfazer, onW, onEstouAqui }) {
   useKeepAwake();
   const { width } = useWindowDimensions();
   const [t, setT] = useState(Date.now());
@@ -91,7 +91,11 @@ export function NavTela({ cfg, stage, rs, last, globalDist, odoM, tul, rot, trs,
   const fz = useRef(null);
   if (fim && !fz.current) fz.current = { tnav: Number.isFinite(tnav0) ? tnav0 : null, elapsed: rs && Number.isFinite(rs.elapsed) ? rs.elapsed : null };
   if (!fim) fz.current = null;
-  const tnav = fim && fz.current ? fz.current.tnav : (Number.isFinite(tnav0) ? tnav0 : null);
+  // Antes da largada, depois de zerar o hodômetro: o T.NAV já corre. Parado no ponto, mostra quanto falta para largar;
+  // se o competidor andar, conta como "fazendo o traçado" (adiantado pela distância percorrida na média do 1º trecho).
+  const v0 = rot && rot.trechos && rot.trechos[0] && rot.trechos[0].kmh > 0 ? rot.trechos[0].kmh / 3.6 : 0;
+  const tnavPre = !rs && zerou && cont != null && cont > 0 ? cont + (v0 > 0 ? Math.max(0, odoM || 0) / v0 : 0) : null;
+  const tnav = fim && fz.current ? fz.current.tnav : (Number.isFinite(tnav0) ? tnav0 : tnavPre);
   const bipeRef = useRef(0);
   useEffect(() => {
     const t = cfg.tn;
@@ -160,7 +164,7 @@ export function NavTela({ cfg, stage, rs, last, globalDist, odoM, tul, rot, trs,
   const linhasRb = montarRb(tul, iShow, rb).map((l) => (trsN && l.e.d != null ? { ...l, e: { ...l.e, d: l.e.d - zeroOff(trsN, l.e.d) } } : l));
   const d = {
     cfg, spd, tnav, fx, odoM: odoM - zO, adj: stage && stage.adjust, factor, aferRef, onAfer: () => confirma('Aferir hodômetro', `Você está na referência ${aferRef ? aferRef.n : ''} (km ${aferRef ? aferRef.kmShow.toFixed(3) : ''}). Ajuste o hodômetro até bater com o km da tulipa e confirme. O app recalcula o W%.`, onAfer), regRef, regRef2, regTrc, pa: placa(trAtual), pp: placa(trProx), ntProx: (tul.find((e) => e.t === 'P' && e.nt > 0 && e.d >= globalDist - 15) || {}).nt || null, clock: last ? last.t : t, acc: last ? last.acc : null,
-    trN: trsN ? (stage.idx >= 0 && trIdx >= 0 ? `${trIdx + 1}/${trsN.length}` : null) : stage.idx >= 0 ? `${stage.idx + 1}/${rot.trechos.length}` : null, fim: !!fim, refN: iAtual >= 0 ? `${iAtual + 1}/${tul.length}` : null,
+    trN: trsN ? (stage.idx >= 0 && trIdx >= 0 ? `${trIdx + 1}/${trsN.length}` : null) : stage.idx >= 0 ? `${stage.idx + 1}/${rot.trechos.length}` : null, fim: !!fim, onEnviarDl, enviandoDl, refN: iAtual >= 0 ? `${iAtual + 1}/${tul.length}` : null,
     kmAcum: globalDist - zO, trs: trsN, rbBr: br != null,
     onRbTap: () => setBr(iAtual >= 0 ? iAtual : 0), onRbPrev: () => setBr((b) => Math.max(0, (b ?? 0) - 1)), onRbNext: () => setBr((b) => Math.min(tul.length - 1, (b ?? 0) + 1)), onRbSair: () => setBr(null),
     onRbAqui: () => { const e = tul[iShow]; if (e && onEstouAqui) onEstouAqui(e.d); setBr(null); }, bat: bat, elapsed: fim && fz.current ? fz.current.elapsed : rs && Number.isFinite(rs.elapsed) ? rs.elapsed : null, rbLinhas: iShow >= 0 ? linhasRb : null, classe, grupos, edit: false, onAdj, onPc,
@@ -216,21 +220,10 @@ export function NavTela({ cfg, stage, rs, last, globalDist, odoM, tul, rot, trs,
             </View>
           ) : null}
         </View>
-        {fim && (onEnviarDl || onEncerrar) ? (
-          <View style={{ position: 'absolute', left: 8, right: 8, bottom: 16, backgroundColor: '#14181d', borderRadius: 14, borderWidth: 2, borderColor: '#c0392b', padding: 12, elevation: 8 }}>
-            <Text style={{ color: '#fff', fontWeight: '900', fontSize: 20, textAlign: 'center' }}>🏁 Você chegou ao fim da prova!</Text>
-            <Text style={{ color: '#b9c0c8', fontSize: 13, textAlign: 'center', marginTop: 2, marginBottom: 10 }}>Envie o seu datalogger para o organizador apurar o resultado.</Text>
-            {onEnviarDl ? (
-              <TouchableOpacity disabled={enviandoDl} style={{ backgroundColor: '#1e8e5a', borderRadius: 10, paddingVertical: 14, alignItems: 'center', opacity: enviandoDl ? 0.6 : 1 }} onPress={onEnviarDl}>
-                <Text style={{ color: '#fff', fontWeight: '900', fontSize: 18 }}>{enviandoDl ? 'ENVIANDO…' : 'ENVIAR DATALOGGER'}</Text>
-              </TouchableOpacity>
-            ) : null}
-            {onEncerrar ? (
-              <TouchableOpacity style={{ backgroundColor: '#c0392b', borderRadius: 10, paddingVertical: 12, alignItems: 'center', marginTop: 8 }} onPress={() => confirma('Encerrar a prova', 'Confirma que você terminou a prova? O T.NAV para e você volta à tela da prova.', onEncerrar)}>
-                <Text style={{ color: '#fff', fontWeight: '900', fontSize: 16 }}>ENCERRAR PROVA</Text>
-              </TouchableOpacity>
-            ) : null}
-          </View>
+        {fim && onEncerrar ? (
+          <TouchableOpacity style={{ position: 'absolute', left: 12, right: 12, bottom: 16, backgroundColor: '#c0392b', borderRadius: 12, paddingVertical: 16, alignItems: 'center', elevation: 6 }} onPress={() => confirma('Encerrar a prova', 'Confirma que você terminou a prova? O T.NAV para e você volta à tela da prova.', onEncerrar)}>
+            <Text style={{ color: '#fff', fontWeight: '900', fontSize: 18 }}>ENCERRAR PROVA</Text>
+          </TouchableOpacity>
         ) : null}
         {kp && (
           <View style={{ position: 'absolute', left: 0, right: 0, top: 0, bottom: 0, zIndex: 10, backgroundColor: '#0c1014', padding: 14, justifyContent: 'center' }}>

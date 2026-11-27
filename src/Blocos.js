@@ -193,13 +193,21 @@ export function Bloco({ tipo, d, w, h }) {
       <TouchableOpacity activeOpacity={1} disabled={d.edit || !d.onRbTap || d.rbBr} onPress={d.onRbTap} style={{ width: w, height: h, overflow: 'hidden', backgroundColor: '#000' }}>
         {d.fim ? <View style={{ backgroundColor: '#c0392b', paddingVertical: 6, alignItems: 'center' }}><Text style={{ color: '#fff', fontWeight: '900', fontSize: 18 }}>FIM DA PROVA</Text></View> : null}
         {d.rbLinhas ? (() => {
-          const ehTul = (e) => e.t === 'T' || (e.t === 'P' && e.nt > 0 && e.dw && e.dw.length);
-          const avail = Math.max(40, h - (d.fim ? 36 : 0));
+          const ehTul = (e) => e.t === 'T' || ((e.t === 'P' || e.t === 'L' || e.t === 'C') && e.dw && e.dw.length && (e.t !== 'P' || e.nt > 0));
+          const avail = Math.max(40, h - (d.fim ? 36 + (d.onEnviarDl ? 118 : 0) : 0));
           const wt = d.rbLinhas.map((l) => (ehTul(l.e) ? l.pct : l.pct * 0.3));
           const soma = wt.reduce((a, b) => a + b, 0) || 1;
           return d.rbLinhas.map((l, i) => <LinhaRb key={l.key} e={l.e} pct={l.pct} atual={l.atual} w={w} hh={(avail * wt[i]) / soma} classe={d.classe} grupos={d.grupos} trs={d.trs} refs={cfg.refs} />);
         })()
           : <View style={{ flex: 1, backgroundColor: '#fff', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#999' }}><Text style={{ color: '#000', fontWeight: '800', fontSize: 16 }}>ROADBOOK</Text><Text style={{ color: '#555', fontSize: 12 }}>as tulipas aparecem aqui</Text></View>}
+        {d.fim && d.onEnviarDl ? (
+          <View style={{ position: 'absolute', left: 0, right: 0, bottom: 0, backgroundColor: '#14181d', borderTopWidth: 2, borderColor: '#c0392b', padding: 8 }}>
+            <Text style={{ color: '#fff', fontWeight: '900', fontSize: 16, textAlign: 'center' }}>🏁 Você chegou ao fim da prova!</Text>
+            <TouchableOpacity disabled={d.enviandoDl} style={{ backgroundColor: '#1e8e5a', borderRadius: 8, paddingVertical: 12, alignItems: 'center', marginTop: 6, opacity: d.enviandoDl ? 0.6 : 1 }} onPress={d.onEnviarDl}>
+              <Text style={{ color: '#fff', fontWeight: '900', fontSize: 17 }}>{d.enviandoDl ? 'ENVIANDO…' : 'ENVIAR DATALOGGER'}</Text>
+            </TouchableOpacity>
+          </View>
+        ) : null}
         {d.rbBr ? (
           <View style={{ position: 'absolute', left: 0, right: 0, bottom: 0, flexDirection: 'row', backgroundColor: 'rgba(0,0,0,0.85)', padding: 4, gap: 4 }}>
             <TouchableOpacity style={{ flex: 1, backgroundColor: '#9e9e9e', borderRadius: 6, paddingVertical: 12, alignItems: 'center' }} onPress={d.onRbPrev}><Text style={{ fontWeight: '900', fontSize: 16 }}>▲ ANT</Text></TouchableOpacity>

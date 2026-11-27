@@ -75,6 +75,8 @@ export default function App() {
   const [navOpen, setNavOpen] = useState(false);
   const [cfgOpen, setCfgOpen] = useState(false);
   const [odoBase, setOdoBase] = useState(0);
+  const zeroCum = useRef(null); // distância do GPS (m) no momento em que o competidor zerou o hodômetro
+  const [zerou, setZerou] = useState(false);
   const [odoAdj, setOdoAdj] = useState(0);
   const [aferBase, setAferBase] = useState(null); // {cum, km}: ponto da última aferição (cum = GPS bruto em m, km = posição oficial em km)
   const odoAtual = () => { const v = (points.length ? cum[points.length - 1] * factor : 0) + odoAdj; return Number.isFinite(v) ? v : 0; };
@@ -215,6 +217,14 @@ export default function App() {
   };
   const onLargada = (v) => { setLargadaTxt(v); saveJson('largada', { h: v, iv: intervalo }); pushProva({ largada: v }); };
   const onInterv = (v) => { setIntervalo(v); saveJson('largada', { h: largadaTxt, iv: v }); pushProva({ intervalo: v }); };
+  // Zerar o hodômetro: marca o ponto de largada. Antes da largada o T.NAV passa a contar; depois dela (1º trecho), ressincroniza.
+  const zerarHodometro = () => {
+    setOdoBase(odoAtual());
+    const dz = cum.length ? cum[cum.length - 1] * factor : 0;
+    zeroCum.current = dz;
+    if (stage.active && stage.idx <= 0) setStage((s) => ({ ...s, d0: dz, adjust: 0 }));
+    else if (!stage.active) setZerou(true);
+  };
   const onStage = () => {
     if (!points.length) return needPoints();
     setHist([]);
@@ -309,7 +319,10 @@ export default function App() {
       armed.current = false;
       Vibration.vibrate([0, 700, 200, 700]);
       setHist([]);
-      setStage(rot.trechos.length ? goTrecho(stage, 0, false, tStart) : startStage(stage, points, cum, factor, { tAt: tStart }));
+      const st0 = rot.trechos.length ? goTrecho(stage, 0, false, tStart) : startStage(stage, points, cum, factor, { tAt: tStart });
+      // A distância do trecho conta de onde o hodômetro foi zerado (e não de onde o carro estava na hora da largada).
+      setStage(zeroCum.current != null ? { ...st0, d0: zeroCum.current } : st0);
+      zeroCum.current = null; setZerou(false);
     }
   }, [now]);
   // Minha largada definida pelo organizador (horário HH:MM:SS na inscrição).
@@ -573,7 +586,7 @@ export default function App() {
                 <Text style={{ color: '#1c1c1c', fontSize: 15, fontWeight: '600', marginLeft: 16, flex: 1 }}>{t}</Text>
               </TouchableOpacity>
             ))}
-            <Text style={{ color: '#9aa5ae', fontSize: 11, textAlign: 'center', paddingVertical: 4 }}>Rally GPS · passo138</Text>
+            <Text style={{ color: '#9aa5ae', fontSize: 11, textAlign: 'center', paddingVertical: 4 }}>Rally GPS · passo139</Text>
           </View>
         </TouchableOpacity>
       </Modal>
@@ -642,7 +655,7 @@ export default function App() {
         <Erro onClose={() => setNavOpen(false)}><NavTela cfg={loadNav()} stage={stage} rs={rs} last={last} globalDist={rs || stage.idx >= 0 ? globalDist : Math.max(0, odoAtual() - odoBase)}
           odoM={odoAtual() - odoBase} tul={tulVis} rot={rot} trs={provaMap.trs} fim={fimProva} cont={remLarg} classe={piloto.classe} grupos={grupos}
           aviso={fimProva ? 'FIM DA PROVA' : remLarg != null && remLarg > 0 ? `Largada em ${fmtDur(remLarg)}` : neutroRest != null ? `NEUTRO · PARE · ${fmtDur(neutroRest)}` : null}
-          onAdj={adjAll} onIniciarAgora={onStage} onEncerrar={encerrarProva} onEnviarDl={enviarDlChegada} enviandoDl={enviandoDl} onZerar={() => setOdoBase(odoAtual())} factor={factor} aferRef={aferRef} onAfer={onAfer} podeDesfazer={!!aferUndo} onDesfazer={desfazerAfer} onW={ajustarW} onEstouAqui={estouAqui} onClose={() => setNavOpen(false)} /></Erro>
+          onAdj={adjAll} onIniciarAgora={onStage} onEncerrar={encerrarProva} onEnviarDl={enviarDlChegada} enviandoDl={enviandoDl} onZerar={zerarHodometro} zerou={zerou} factor={factor} aferRef={aferRef} onAfer={onAfer} podeDesfazer={!!aferUndo} onDesfazer={desfazerAfer} onW={ajustarW} onEstouAqui={estouAqui} onClose={() => setNavOpen(false)} /></Erro>
       )}
       {navOpen && <InfoProva visible={infoOpen} info={infoProva} onOk={() => setInfoOpen(false)} />}
       <NavConfig st={st} visible={cfgOpen} onClose={() => setCfgOpen(false)} />
